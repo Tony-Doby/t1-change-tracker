@@ -64,7 +64,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Only react to meaningful auth events to avoid excessive re-fetches
+      if (!['SIGNED_IN', 'SIGNED_OUT', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)) {
+        return
+      }
       setSession(session)
       if (session?.user) {
         fetchProfile(session.user.id).then(setUser)
@@ -100,7 +104,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.updateUser({ password: newPassword })
     if (error) return { error: error.message }
     if (user) {
-      await supabase.from('user_profiles').update({ must_change_password: false }).eq('id', user.id)
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .update({ must_change_password: false })
+        .eq('id', user.id)
+        .select()
+        .single()
+      if (profileError) {
+        console.error('Failed to update must_change_password flag:', profileError)
+        return { error: 'Đổi mật khẩu thành công nhưng không thể cập nhật trạng thái. Vui lòng liên hệ admin.' }
+      }
       setUser({ ...user, must_change_password: false })
     }
     return {}

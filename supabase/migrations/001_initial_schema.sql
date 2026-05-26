@@ -292,11 +292,13 @@ CREATE POLICY "m1_transition_read" ON public.m1_transition_tasks FOR SELECT TO a
 CREATE POLICY "m1_transition_operator_update" ON public.m1_transition_tasks FOR UPDATE TO authenticated
   USING (public.get_my_role() IN ('admin', 'operator'));
 
--- user_profiles: admin full, user sees own
+-- user_profiles: admin full, user sees own and can update own profile
 CREATE POLICY "user_profiles_admin" ON public.user_profiles FOR ALL TO authenticated
   USING (public.get_my_role() = 'admin');
 CREATE POLICY "user_profiles_own" ON public.user_profiles FOR SELECT TO authenticated
   USING (id = auth.uid());
+CREATE POLICY "user_profiles_own_update" ON public.user_profiles FOR UPDATE TO authenticated
+  USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
 -- ============================================
 -- RPC Functions
