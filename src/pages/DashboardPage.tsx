@@ -20,9 +20,9 @@ const statusColors: Record<string, string> = {
 interface TransitionTask {
   id: string
   m1_agent_id: string
-  m1_agent: { full_name: string; agent_code: string } | null
+  m1_agent: { full_name: string; staff_id: string } | null
   temp_t1_id: string
-  temp_t1: { full_name: string; agent_code: string } | null
+  temp_t1: { full_name: string; staff_id: string } | null
   deadline_date: string
   status: string
   daysLeft: number
@@ -65,7 +65,7 @@ export default function DashboardPage() {
         // Load transition tasks
         const { data: tasks } = await supabase
           .from('m1_transition_tasks')
-          .select('*, m1_agent: m1_agent_id(full_name, agent_code), temp_t1: temp_t1_id(full_name, agent_code)')
+          .select('*, m1_agent: m1_agent_id(full_name, staff_id), temp_t1: temp_t1_id(full_name, staff_id)')
           .in('status', ['pending', 'expired'])
           .order('deadline_date', { ascending: true })
 
@@ -178,7 +178,7 @@ export default function DashboardPage() {
               <div key={t.id} className={`flex items-center justify-between p-3 rounded-md ${t.status === 'expired' ? 'bg-danger-light/30' : 'bg-neutral-50'}`}>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-neutral-900 truncate">
-                    {t.m1_agent?.full_name ?? '—'} ({t.m1_agent?.agent_code ?? '—'})
+                    {t.m1_agent?.full_name ?? '—'} ({t.m1_agent?.staff_id ?? '—'})
                   </p>
                   <p className="text-xs text-neutral-500">
                     T2 tạm: {t.temp_t1?.full_name ?? '—'} •
@@ -212,7 +212,7 @@ export default function DashboardPage() {
               <Link key={a.id} to={`/agents/${a.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-neutral-50 transition-colors">
                 <div>
                   <p className="text-sm font-medium text-neutral-900">{a.full_name}</p>
-                  <p className="text-xs text-neutral-500">{a.agent_code}</p>
+                  <p className="text-xs text-neutral-500">{a.staff_id}</p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-neutral-300" />
               </Link>

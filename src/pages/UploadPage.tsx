@@ -3,7 +3,7 @@ import { UploadCloud, X, CheckCircle, AlertTriangle, FileSpreadsheet } from 'luc
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 
-const EXPECTED_HEADERS = ['staff_id', 'agent_code', 'full_name', 'email', 'phone', 'rank_name', 'contract_signing_date', 'current_t1_id', 'introducing_agent_id', 'status']
+const EXPECTED_HEADERS = ['staff_id', 'full_name', 'email', 'phone', 'rank_name', 'contract_signing_date', 'current_t1_id', 'introducing_agent_id', 'status']
 
 interface ParsedRow {
   row: number
@@ -102,7 +102,6 @@ export default function UploadPage() {
 
       const errors: string[] = []
       if (!String(rowData['staff_id'] || '').trim()) errors.push('Thiếu mã NV')
-      if (!String(rowData['agent_code'] || '').trim()) errors.push('Thiếu mã Agent')
       if (!String(rowData['full_name'] || '').trim()) errors.push('Thiếu họ tên')
 
       if (errors.length > 0) errorCount++
@@ -130,16 +129,15 @@ export default function UploadPage() {
     }
     setImporting(true)
 
-    // Get existing agent_codes to determine new vs update
-    const codes = validRows.map((r) => String(r.data['agent_code']).trim())
-    const { data: existing } = await supabase.from('agents').select('agent_code').in('agent_code', codes)
-    const existingSet = new Set((existing ?? []).map((e) => e.agent_code))
+    // Get existing staff_ids to determine new vs update
+    const codes = validRows.map((r) => String(r.data['staff_id']).trim())
+    const { data: existing } = await supabase.from('agents').select('staff_id').in('staff_id', codes)
+    const existingSet = new Set((existing ?? []).map((e) => e.staff_id))
 
     const payload = validRows.map((r) => {
       const d = r.data
       return {
         staff_id: String(d['staff_id'] || '').trim(),
-        agent_code: String(d['agent_code'] || '').trim(),
         full_name: String(d['full_name'] || '').trim(),
         email: d['email'] ? String(d['email']).trim() : null,
         phone: d['phone'] ? String(d['phone']).trim() : null,
@@ -151,15 +149,15 @@ export default function UploadPage() {
       }
     })
 
-    const { error } = await supabase.from('agents').upsert(payload, { onConflict: 'agent_code' })
+    const { error } = await supabase.from('agents').upsert(payload, { onConflict: 'staff_id' })
     if (error) {
       show('Lỗi import: ' + error.message, 'error')
       setImporting(false)
       return
     }
 
-    const newCount = payload.filter((p) => !existingSet.has(p.agent_code)).length
-    const updateCount = payload.filter((p) => existingSet.has(p.agent_code)).length
+    const newCount = payload.filter((p) => !existingSet.has(p.staff_id)).length
+    const updateCount = payload.filter((p) => existingSet.has(p.staff_id)).length
 
     setReport((prev) => prev ? { ...prev, newCount, updateCount } : prev)
     setImporting(false)
@@ -190,7 +188,7 @@ export default function UploadPage() {
 
   const downloadTemplate = async (format: 'csv' | 'xlsx') => {
     const XLSX = await import('xlsx')
-    const rows = [EXPECTED_HEADERS, ['NV001', 'A001', 'Nguyễn Văn A', 'a@era.vn', '0901234567', 'Consultant Specialist', '2026-01-01', '', '', 'active']]
+    const rows = [EXPECTED_HEADERS, ['NV001', 'Nguyễn Văn A', 'a@era.vn', '0901234567', 'Consultant Specialist', '2026-01-01', '', '', 'active']]
     const ws = XLSX.utils.aoa_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Agents')

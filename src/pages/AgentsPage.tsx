@@ -63,7 +63,6 @@ export default function AgentsPage() {
     const q = search.toLowerCase()
     return (
       a.full_name?.toLowerCase().includes(q) ||
-      a.agent_code?.toLowerCase().includes(q) ||
       a.staff_id?.toLowerCase().includes(q) ||
       a.email?.toLowerCase().includes(q)
     )
@@ -121,7 +120,6 @@ export default function AgentsPage() {
               <th className="px-4 py-3 text-left w-10"><input type="checkbox" className="rounded border-neutral-300" onChange={(e) => setSelected(e.target.checked ? paged.map((a) => a.id) : [])} checked={paged.length > 0 && paged.every((a) => selected.includes(a.id))} /></th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500 w-10"></th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Mã NV</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Mã Agent</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Họ tên</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Cấp bậc</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Ngày ký HĐ</th>
@@ -131,7 +129,7 @@ export default function AgentsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="px-4 py-12 text-center text-neutral-500">Đang tải...</td></tr>
+              <tr><td colSpan={8} className="px-4 py-12 text-center text-neutral-500">Đang tải...</td></tr>
             ) : (
               paged.map((agent) => {
                 const isBookmarked = bookmarks.includes(agent.id)
@@ -139,8 +137,7 @@ export default function AgentsPage() {
                   <tr key={agent.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
                     <td className="px-4 py-3"><input type="checkbox" className="rounded border-neutral-300" checked={selected.includes(agent.id)} onChange={() => setSelected((prev) => prev.includes(agent.id) ? prev.filter((x) => x !== agent.id) : [...prev, agent.id])} /></td>
                     <td className="px-4 py-3"><button onClick={(e) => { e.stopPropagation(); toggleBookmark(agent.id) }} className={isBookmarked ? 'text-warning' : 'text-neutral-300 hover:text-warning'}><Star className="w-4 h-4" fill={isBookmarked ? 'currentColor' : 'none'} /></button></td>
-                    <td className="px-4 py-3 text-neutral-700">{agent.staff_id}</td>
-                    <td className="px-4 py-3"><Link to={`/agents/${agent.id}`} className="text-primary hover:underline font-medium">{agent.agent_code}</Link></td>
+                    <td className="px-4 py-3"><Link to={`/agents/${agent.id}`} className="text-primary hover:underline font-medium">{agent.staff_id}</Link></td>
                     <td className="px-4 py-3 text-neutral-900">{agent.full_name}</td>
                     <td className="px-4 py-3 text-neutral-700">{agent.rank_name ?? '—'}</td>
                     <td className="px-4 py-3 text-neutral-700">{agent.contract_signing_date}</td>
@@ -150,7 +147,7 @@ export default function AgentsPage() {
                 )
               })
             )}
-            {!loading && paged.length === 0 && <tr><td colSpan={9} className="px-4 py-12 text-center text-neutral-500">Không có dữ liệu</td></tr>}
+            {!loading && paged.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-neutral-500">Không có dữ liệu</td></tr>
           </tbody>
         </table>
         {filtered.length > 0 && (
@@ -167,7 +164,7 @@ export default function AgentsPage() {
         )}
       </div>
 
-      {showExport && <ExportModal title="Xuất danh sách Agent" onClose={() => setShowExport(false)} data={filtered.map((a) => ({ 'Mã NV': a.staff_id, 'Mã Agent': a.agent_code, 'Họ tên': a.full_name, 'Cấp bậc': a.rank_name, 'Ngày ký HĐ': a.contract_signing_date, 'T1 hiện tại': a.current_t1_id ?? '—', 'Trạng thái': a.status }))} filename="agents" hasFilter={quickFilter !== 'all' || !!search} />}
+      {showExport && <ExportModal title="Xuất danh sách Agent" onClose={() => setShowExport(false)} data={filtered.map((a) => ({ 'Mã NV': a.staff_id, 'Họ tên': a.full_name, 'Cấp bậc': a.rank_name, 'Ngày ký HĐ': a.contract_signing_date, 'T1 hiện tại': a.current_t1_id ?? '—', 'Trạng thái': a.status }))} filename="agents" hasFilter={quickFilter !== 'all' || !!search} />}
       {showCompose && selected.length === 1 && <ComposeTemplateModal agentId={selected[0]} onClose={() => setShowCompose(false)} />}
     </div>
   )

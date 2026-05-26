@@ -73,7 +73,7 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
   const rendered = useMemo(() => {
     return template.body
       .replace(/{{agentName}}/g, agent?.full_name ?? '')
-      .replace(/{{agentCode}}/g, agent?.agent_code ?? '')
+      .replace(/{{staffId}}/g, agent?.staff_id ?? '')
       .replace(/{{oldT1Name}}/g, t1Old?.full_name ?? '')
       .replace(/{{oldT1Email}}/g, t1Old?.email ?? '')
       .replace(/{{newT1Name}}/g, 'Lê Thị D')
@@ -114,7 +114,7 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
         </div>
 
         <div className="p-5 space-y-5">
-          <div className="text-sm"><span className="text-neutral-500">Agent:</span>{' '}<span className="font-medium text-neutral-900">{agent.full_name} ({agent.agent_code})</span></div>
+          <div className="text-sm"><span className="text-neutral-500">Agent:</span>{' '}<span className="font-medium text-neutral-900">{agent.full_name} ({agent.staff_id})</span></div>
 
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">Chọn loại mẫu <span className="text-danger">*</span></label>

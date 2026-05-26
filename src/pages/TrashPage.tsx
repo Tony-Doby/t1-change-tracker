@@ -25,13 +25,13 @@ export default function TrashPage() {
   async function loadItems() {
     setLoading(true)
     const [agentsRes, requestsRes] = await Promise.all([
-      supabase.from('agents').select('id, full_name, agent_code, deleted_at').not('deleted_at', 'is', null),
-      supabase.from('t1_requests').select('id, agent:agent_id(full_name, agent_code), deleted_at').not('deleted_at', 'is', null),
+      supabase.from('agents').select('id, full_name, staff_id, deleted_at').not('deleted_at', 'is', null),
+      supabase.from('t1_requests').select('id, agent:agent_id(full_name, staff_id), deleted_at').not('deleted_at', 'is', null),
     ])
 
     const agents: TrashItem[] = (agentsRes.data ?? []).map((a: any) => ({
       type: 'agent', id: a.id,
-      name: `${a.full_name} (${a.agent_code})`,
+      name: `${a.full_name} (${a.staff_id})`,
       deletedAt: a.deleted_at,
     }))
     const requests: TrashItem[] = (requestsRes.data ?? []).map((r: any) => ({

@@ -12,7 +12,6 @@ export interface UserProfile {
 export interface Agent {
   id: string
   staff_id: string
-  agent_code: string
   full_name: string
   email: string | null
   phone: string | null

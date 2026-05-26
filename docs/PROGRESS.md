@@ -20,11 +20,11 @@
 ### Phase 2: Agent Management, Upload & Templates
 - [x] **Agents List**: Query từ Supabase, Search, 7 quick filter presets, bookmark ⭐ (localStorage), pagination
 - [x] **Agent Detail**: Query `agents` + `t1_changes` từ Supabase. Tabs: Lịch sử T1, M1 list, Lịch sử làm T1
-- [x] **Upload Data**: Drag & drop, parse `.xlsx/.csv` (SheetJS), validate, preview, `upsert` vào bảng `agents` (onConflict `agent_code`)
+- [x] **Upload Data**: Drag & drop, parse `.xlsx/.csv` (SheetJS), validate, preview, `upsert` vào bảng `agents` (onConflict `staff_id`)
 - [x] **Email Templates**: Query từ `email_templates`, chỉnh sửa, lưu DB, preview modal
 
 ### Phase 3: Eligibility & Request Creation
-- [x] Eligibility engine (`src/lib/eligibility.ts`) — kiểm tra 91 ngày, 180 ngày, quota 3 lần, cấp bậc >= CS (đã refactor để nhận data từ bên ngoài)
+- [x] Eligibility engine (`src/lib/eligibility.ts`) — kiểm tra 91 ngày, 180 ngày, quota 3 lần, cấp bậc không phải ASC (đã refactor để nhận data từ bên ngoài)
 - [x] Create Request Modal: Searchable dropdown chọn T1 mới, eligibility real-time, T1 Capacity indicator
 - [x] Insert `t1_requests` vào DB khi tạo đề xuất
 - [x] PostgreSQL Function `check_eligibility`, `get_t1_capacity`, `get_my_role` trong schema

@@ -1,26 +1,8 @@
 import type { EligibilityResult } from '../types'
 
-const CS_RANKS = [
-  'consultant specialist',
-  'senior consultant',
-  'director',
-  'senior director',
-  'executive director',
-  'managing director',
-  'cấp 1',
-  'cấp 2',
-  'cấp 3',
-  'cấp 4',
-  'cấp 5',
-  'dd',
-  'sd',
-  'ed',
-  'md',
-]
-
-function isCSOrAbove(rank: string | null): boolean {
+function isNotASC(rank: string | null): boolean {
   if (!rank) return false
-  return CS_RANKS.includes(rank.toLowerCase().trim())
+  return rank.toLowerCase().trim() !== 'asc'
 }
 
 function daysSince(dateStr: string | null): number {
@@ -93,8 +75,8 @@ export function checkEligibility(
       reasons.push(`✅ Đã đổi T1 ${changeCount}/3 lần`)
     }
 
-    if (!isCSOrAbove(agent.rank_name)) {
-      reasons.push(`❌ Cấp bậc hiện tại "${agent.rank_name ?? '—'}" không đạt yêu cầu (cần >= CS/Cấp 1)`)
+    if (!isNotASC(agent.rank_name)) {
+      reasons.push(`❌ Cấp bậc hiện tại "${agent.rank_name ?? '—'}" không đạt yêu cầu (không được là ASC)`)
     } else {
       reasons.push(`✅ Cấp bậc: ${agent.rank_name} (đạt yêu cầu)`)
     }

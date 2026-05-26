@@ -51,7 +51,7 @@ export default function AgentDetailPage() {
 
   const getAgentName = (agentId: string | null) => {
     if (!agentId) return '—'
-    if (agentId === agent.id) return `${agent.full_name} (${agent.agent_code})`
+    if (agentId === agent.id) return `${agent.full_name} (${agent.staff_id})`
     return agentId.slice(0, 8)
   }
 
@@ -62,7 +62,7 @@ export default function AgentDetailPage() {
           <Link to="/agents" className="p-1.5 rounded-md hover:bg-neutral-200 text-neutral-700">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <h1 className="text-2xl font-bold text-neutral-900">Agent: {agent.full_name} ({agent.agent_code})</h1>
+          <h1 className="text-2xl font-bold text-neutral-900">Agent: {agent.full_name} ({agent.staff_id})</h1>
         </div>
         <div className="flex items-center gap-2">
           <button className="p-2 rounded-md hover:bg-neutral-100 text-neutral-300">
@@ -79,7 +79,6 @@ export default function AgentDetailPage() {
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Thông tin Agent</h2>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between"><span className="text-neutral-500">Mã NV</span><span className="text-neutral-900 font-medium">{agent.staff_id}</span></div>
-            <div className="flex justify-between"><span className="text-neutral-500">Mã Agent</span><span className="text-neutral-900 font-medium">{agent.agent_code}</span></div>
             <div className="flex justify-between"><span className="text-neutral-500">Cấp bậc</span><span className="text-neutral-900 font-medium">{agent.rank_name ?? '—'}</span></div>
             <div className="flex justify-between"><span className="text-neutral-500">Ngày ký HĐ</span><span className="text-neutral-900 font-medium">{agent.contract_signing_date}</span></div>
             <div className="flex justify-between"><span className="text-neutral-500">Trạng thái</span><span className={`font-medium ${agent.status === 'active' ? 'text-success' : 'text-neutral-500'}`}>{agent.status === 'active' ? 'Active' : 'Inactive'}</span></div>
@@ -138,7 +137,7 @@ export default function AgentDetailPage() {
             m1List.length > 0 ? (
               <table className="w-full text-sm">
                 <thead><tr className="bg-neutral-50 border-b border-neutral-200"><th className="px-3 py-2 text-left text-xs font-medium text-neutral-500">Mã</th><th className="px-3 py-2 text-left text-xs font-medium text-neutral-500">Họ tên</th><th className="px-3 py-2 text-left text-xs font-medium text-neutral-500">Cấp bậc</th><th className="px-3 py-2 text-left text-xs font-medium text-neutral-500">Ngày ký HĐ</th></tr></thead>
-                <tbody>{m1List.map((m) => (<tr key={m.id} className="border-b border-neutral-100 hover:bg-neutral-50"><td className="px-3 py-2"><Link to={`/agents/${m.id}`} className="text-primary hover:underline">{m.agent_code}</Link></td><td className="px-3 py-2 text-neutral-900">{m.full_name}</td><td className="px-3 py-2 text-neutral-700">{m.rank_name ?? '—'}</td><td className="px-3 py-2 text-neutral-700">{m.contract_signing_date}</td></tr>))}</tbody>
+                <tbody>{m1List.map((m) => (<tr key={m.id} className="border-b border-neutral-100 hover:bg-neutral-50"><td className="px-3 py-2"><Link to={`/agents/${m.id}`} className="text-primary hover:underline">{m.staff_id}</Link></td><td className="px-3 py-2 text-neutral-900">{m.full_name}</td><td className="px-3 py-2 text-neutral-700">{m.rank_name ?? '—'}</td><td className="px-3 py-2 text-neutral-700">{m.contract_signing_date}</td></tr>))}</tbody>
               </table>
             ) : <p className="text-sm text-neutral-500 italic">Không có M1 nào</p>
           )}

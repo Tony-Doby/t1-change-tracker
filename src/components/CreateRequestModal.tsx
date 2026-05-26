@@ -51,7 +51,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
         a.id !== agent?.current_t1_id &&
         !a.deleted_at &&
         (a.full_name.toLowerCase().includes(search.toLowerCase()) ||
-          a.agent_code.toLowerCase().includes(search.toLowerCase()))
+          a.staff_id.toLowerCase().includes(search.toLowerCase()))
     )
   }, [agents, agentId, agent, search])
 
@@ -94,7 +94,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
   const getAgentName = (id: string | null) => {
     if (!id) return '—'
     const a = agents.find((x) => x.id === id)
-    return a ? `${a.full_name} (${a.agent_code})` : id.slice(0, 8)
+    return a ? `${a.full_name} (${a.staff_id})` : id.slice(0, 8)
   }
 
   if (loading) {
@@ -117,7 +117,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
 
         <div className="p-5 space-y-5">
           <div className="bg-neutral-50 rounded-lg p-3 text-sm space-y-1">
-            <p><span className="text-neutral-500">Agent:</span> <span className="font-medium text-neutral-900">{agent.full_name} ({agent.agent_code})</span></p>
+            <p><span className="text-neutral-500">Agent:</span> <span className="font-medium text-neutral-900">{agent.full_name} ({agent.staff_id})</span></p>
             <p><span className="text-neutral-500">T1 hiện tại:</span> <span className="font-medium text-neutral-900">{getAgentName(agent.current_t1_id)}</span></p>
           </div>
 
@@ -140,7 +140,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
                     <button key={c.id} onClick={() => { setSelectedT1Id(c.id); setShowDropdown(false); setSearch('') }}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-bold">{c.full_name.charAt(0)}</div>
-                      <div><p className="font-medium text-neutral-900">{c.full_name}</p><p className="text-xs text-neutral-500">{c.agent_code} • {c.rank_name ?? '—'}</p></div>
+                      <div><p className="font-medium text-neutral-900">{c.full_name}</p><p className="text-xs text-neutral-500">{c.staff_id} • {c.rank_name ?? '—'}</p></div>
                     </button>
                   ))}
                 </div>

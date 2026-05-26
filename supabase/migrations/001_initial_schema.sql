@@ -43,7 +43,6 @@ CREATE TRIGGER on_auth_user_created
 CREATE TABLE IF NOT EXISTS public.agents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   staff_id TEXT NOT NULL UNIQUE,
-  agent_code TEXT NOT NULL,
   full_name TEXT NOT NULL,
   email TEXT,
   phone TEXT,
@@ -315,13 +314,14 @@ DECLARE
   v_days_since_last INTEGER;
   v_reasons TEXT[] := '{}';
   v_eligible BOOLEAN := true;
-  v_cs_ranks TEXT[] := ARRAY['consultant specialist', 'senior consultant', 'director', 'senior director', 'executive director', 'managing director', 'cấp 1', 'cấp 2', 'cấp 3', 'cấp 4', 'cấp 5', 'dd', 'sd', 'ed', 'md'];
+  v_rank_lower TEXT;
 BEGIN
   -- Get agent info
   SELECT * INTO v_agent FROM public.agents WHERE id = p_agent_id AND deleted_at IS NULL;
   IF v_agent IS NULL THEN
     RETURN jsonb_build_object('eligible', false, 'reasons', ARRAY['Agent không tồn tại']);
   END IF;
+  v_rank_lower := LOWER(COALESCE(v_agent.rank_name, ''));
 
   -- Basic validation
   IF p_proposed_t1_id IS NULL THEN
@@ -368,13 +368,11 @@ BEGIN
       v_reasons := array_append(v_reasons, format('✅ Đã đổi T1 %s/3 lần', v_change_count));
     END IF;
 
-    IF LOWER(COALESCE(v_agent.rank_name, '')) = ALL(v_cs_ranks) OR NOT (LOWER(COALESCE(v_agent.rank_name, '')) = ANY(v_cs_ranks)) THEN
-      IF NOT (LOWER(COALESCE(v_agent.rank_name, '')) = ANY(v_cs_ranks)) THEN
-        v_reasons := array_append(v_reasons, format('❌ Cấp bậc hiện tại "%s" không đạt yêu cầu (cần >= CS/Cấp 1)', COALESCE(v_agent.rank_name, '—')));
-        v_eligible := false;
-      ELSE
-        v_reasons := array_append(v_reasons, format('✅ Cấp bậc: %s (đạt yêu cầu)', v_agent.rank_name));
-      END IF;
+    IF v_rank_lower = 'asc' THEN
+      v_reasons := array_append(v_reasons, format('❌ Cấp bậc hiện tại "%s" không đạt yêu cầu (không được là ASC)', COALESCE(v_agent.rank_name, '—')));
+      v_eligible := false;
+    ELSE
+      v_reasons := array_append(v_reasons, format('✅ Cấp bậc: %s (đạt yêu cầu)', v_agent.rank_name));
     END IF;
 
     IF v_days_since_last IS NOT NULL AND v_days_since_last < 180 THEN
