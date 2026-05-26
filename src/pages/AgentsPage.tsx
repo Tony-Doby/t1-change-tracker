@@ -147,7 +147,7 @@ export default function AgentsPage() {
                 )
               })
             )}
-            {!loading && paged.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-neutral-500">Không có dữ liệu</td></tr>
+            {!loading && paged.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-neutral-500">Không có dữ liệu</td></tr>}
           </tbody>
         </table>
         {filtered.length > 0 && (
