@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS public.t1_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id UUID NOT NULL REFERENCES public.agents(id),
   proposed_new_t1_id UUID NOT NULL REFERENCES public.agents(id),
-  old_t1_id UUID NOT NULL REFERENCES public.agents(id),
+  old_t1_id UUID REFERENCES public.agents(id),
   status TEXT NOT NULL DEFAULT 'step1' CHECK (status IN ('step1', 'step2', 'step3', 'step4', 'step5', 'completed', 'cancelled')),
   step1_sent_at TIMESTAMPTZ,
   step2_confirmed_at TIMESTAMPTZ,
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS public.t1_requests (
 CREATE TABLE IF NOT EXISTS public.t1_changes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id UUID NOT NULL REFERENCES public.agents(id),
-  old_t1_id UUID NOT NULL REFERENCES public.agents(id),
+  old_t1_id UUID REFERENCES public.agents(id),
   new_t1_id UUID NOT NULL REFERENCES public.agents(id),
   request_id UUID REFERENCES public.t1_requests(id) ON DELETE SET NULL,
   change_date DATE NOT NULL,

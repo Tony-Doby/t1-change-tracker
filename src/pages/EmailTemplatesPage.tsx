@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 
@@ -11,7 +11,7 @@ interface Template {
 }
 
 const defaultPlaceholders = [
-  '{{agentName}}', '{{agentCode}}', '{{oldT1Name}}', '{{oldT1Email}}',
+  '{{agentName}}', '{{staffId}}', '{{oldT1Name}}', '{{oldT1Email}}',
   '{{newT1Name}}', '{{newT1Email}}', '{{date}}', '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}',
 ]
 
@@ -20,6 +20,7 @@ export default function EmailTemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
   const [previewId, setPreviewId] = useState<string | null>(null)
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
 
   useEffect(() => {
     loadTemplates()
@@ -52,7 +53,7 @@ export default function EmailTemplatesPage() {
   const getPreview = (template: Template) => {
     return template.body
       .replace(/{{agentName}}/g, 'Nguyễn Văn A')
-      .replace(/{{agentCode}}/g, 'A001')
+      .replace(/{{staffId}}/g, 'ERA001')
       .replace(/{{oldT1Name}}/g, 'Trần Văn B')
       .replace(/{{oldT1Email}}/g, 'tvb@era.com')
       .replace(/{{newT1Name}}/g, 'Lê Thị D')
@@ -83,11 +84,34 @@ export default function EmailTemplatesPage() {
 
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Nội dung</label>
-            <textarea value={template.body} onChange={(e) => updateTemplate(template.id, 'body', e.target.value)} rows={8}
-              className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm font-mono focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" />
+            <textarea
+              ref={(el) => { textareaRefs.current[template.id] = el }}
+              value={template.body}
+              onChange={(e) => updateTemplate(template.id, 'body', e.target.value)}
+              rows={8}
+              className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm font-mono focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+            />
             <div className="mt-2 flex flex-wrap gap-1.5">
               {defaultPlaceholders.map((p) => (
-                <span key={p} className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-500 rounded">{p}</span>
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => {
+                    const ta = textareaRefs.current[template.id]
+                    if (!ta) return
+                    ta.focus()
+                    const start = ta.selectionStart
+                    const end = ta.selectionEnd
+                    const newBody = template.body.slice(0, start) + p + template.body.slice(end)
+                    updateTemplate(template.id, 'body', newBody)
+                    requestAnimationFrame(() => {
+                      ta.selectionStart = ta.selectionEnd = start + p.length
+                    })
+                  }}
+                  className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-500 rounded hover:bg-primary-light hover:text-primary cursor-pointer transition-colors"
+                >
+                  {p}
+                </button>
               ))}
             </div>
           </div>

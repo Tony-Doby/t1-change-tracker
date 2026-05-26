@@ -34,7 +34,7 @@ export interface T1Request {
   id: string
   agent_id: string
   proposed_new_t1_id: string
-  old_t1_id: string
+  old_t1_id: string | null
   status: RequestStatus
   step1_sent_at: string | null
   step2_confirmed_at: string | null
@@ -52,7 +52,7 @@ export interface T1Request {
 export interface T1Change {
   id: string
   agent_id: string
-  old_t1_id: string
+  old_t1_id: string | null
   new_t1_id: string
   request_id: string | null
   change_date: string
