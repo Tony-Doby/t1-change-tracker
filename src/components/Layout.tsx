@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import {
   LayoutDashboard,
@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import type { UserRole } from '../types'
 
 interface NavItem {
@@ -25,25 +26,39 @@ interface NavItem {
   badge?: number
 }
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/', roles: ['admin', 'operator', 'viewer'] },
-  { label: 'Agents', icon: Users, path: '/agents', roles: ['admin', 'operator', 'viewer'] },
-  { label: 'Requests', icon: ClipboardList, path: '/requests', roles: ['admin', 'operator', 'viewer'], badge: 8 },
-  { label: 'Activity Log', icon: Activity, path: '/activity', roles: ['admin', 'operator', 'viewer'] },
-  { label: 'Email Templates', icon: Mail, path: '/templates', roles: ['admin'] },
-  { label: 'Upload Data', icon: Upload, path: '/upload', roles: ['admin', 'operator'] },
-  { label: 'Trash', icon: Trash2, path: '/trash', roles: ['admin'], badge: 0 },
-  { label: 'Holidays', icon: Calendar, path: '/holidays', roles: ['admin'] },
-]
-
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [requestCount, setRequestCount] = useState(0)
+
+  useEffect(() => {
+    async function fetchRequestCount() {
+      const { count, error } = await supabase
+        .from('t1_requests')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .not('status', 'in', '("completed","cancelled")')
+      if (!error) setRequestCount(count ?? 0)
+    }
+    fetchRequestCount()
+  }, [])
 
   const role = user?.role ?? 'viewer'
+
+  const navItems: NavItem[] = [
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/', roles: ['admin', 'operator', 'viewer'] },
+    { label: 'Agents', icon: Users, path: '/agents', roles: ['admin', 'operator', 'viewer'] },
+    { label: 'Requests', icon: ClipboardList, path: '/requests', roles: ['admin', 'operator', 'viewer'], badge: requestCount },
+    { label: 'Activity Log', icon: Activity, path: '/activity', roles: ['admin', 'operator', 'viewer'] },
+    { label: 'Email Templates', icon: Mail, path: '/templates', roles: ['admin'] },
+    { label: 'Upload Data', icon: Upload, path: '/upload', roles: ['admin', 'operator'] },
+    { label: 'Trash', icon: Trash2, path: '/trash', roles: ['admin'] },
+    { label: 'Holidays', icon: Calendar, path: '/holidays', roles: ['admin'] },
+  ]
+
   const visibleNav = navItems.filter((n) => n.roles.includes(role))
 
   return (
