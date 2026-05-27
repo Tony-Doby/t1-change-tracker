@@ -123,3 +123,59 @@ ALTER TABLE public.t1_changes ALTER COLUMN old_t1_id DROP NOT NULL;
 **Files sửa:**
 - `webapp/src/components/CreateRequestModal.tsx`
 - `webapp/src/lib/eligibility.ts`
+
+### 8. Fix M1 không tự động chuyển T1 khi request hoàn tất
+
+**Vấn đề:** Khi admin xác nhận hoàn tất đổi T1, agent chính được cập nhật `current_t1_id` sang T1 mới, nhưng các M1 dưới line vẫn giữ `current_t1_id` = agent cũ → tab M1 của agent cũ vẫn hiển thị họ.
+
+**Giải pháp:** Trong `completeRequestAction`, sau khi tạo `m1_transition_tasks`, cập nhật `agents.current_t1_id = old_t1_id` (T2 tạm) cho toàn bộ M1.
+
+**Files sửa:**
+- `webapp/src/lib/request-actions.ts`
+
+### 9. Định dạng ngày giờ dd/mm/yyyy, GMT+7
+
+**Thay đổi:** Toàn bộ app hiển thị ngày theo định dạng `dd/mm/yyyy` (2 chữ số ngày/tháng), timezone `Asia/Ho_Chi_Minh`.
+
+**Files sửa:**
+- `webapp/src/lib/date-utils.ts` — Tạo mới (`formatDate`, `formatDateTime`, `formatTime`)
+- `webapp/src/pages/AgentsPage.tsx`
+- `webapp/src/pages/AgentDetailPage.tsx`
+- `webapp/src/pages/RequestsPage.tsx`
+- `webapp/src/pages/RequestDetailPage.tsx`
+- `webapp/src/pages/DashboardPage.tsx`
+- `webapp/src/pages/ActivityLogPage.tsx`
+- `webapp/src/pages/TrashPage.tsx`
+- `webapp/src/pages/HolidaysPage.tsx`
+- `webapp/src/components/ComposeTemplateModal.tsx`
+
+### 10. Fix hiển thị UUID thay vì tên + staff_id
+
+**Vấn đề:** Nhiều chỗ trong app hiển thị `current_t1_id`, `old_t1_id`, `proposed_new_t1_id` dưới dạng UUID cắt ngắn (vd: `939774a7`) thay vì tên ngưởi.
+
+**Giải pháp:** Load thêm thông tin agent liên quan (T1 cũ, T1 mới, ngưởi giới thiệu) qua join/query riêng, hiển thị `Họ tên - staff_id`.
+
+**Files sửa:**
+- `webapp/src/pages/AgentsPage.tsx` — Cột "T1 hiện tại"
+- `webapp/src/pages/RequestsPage.tsx` — Cột "T1 cũ → T1 mới", Export
+- `webapp/src/pages/AgentDetailPage.tsx` — Tab M1, Lịch sử T1, T1 Hiện tại, Ngưởi giới thiệu
+- `webapp/src/pages/RequestDetailPage.tsx` — Header T1 CŨ / T1 MỚI, Agent info
+- `webapp/src/pages/ActivityLogPage.tsx` — T1 cũ → T1 mới trong log item
+- `webapp/src/pages/DashboardPage.tsx` — Agent name, T1 name trong B2 cards
+
+### 11. Fix RLS — operator không thể insert t1_changes, activity_logs, m1_transition_tasks
+
+**Vấn đề:** Role `operator` bị RLS chặn khi bấm "Xác nhận thay đổi" từ Dashboard vì `completeRequestAction` insert vào 3 bảng này.
+
+**Giải pháp:** Thêm policy INSERT cho operator.
+
+**Files sửa:**
+- `webapp/supabase/migrations/003_fix_rls_policies.sql` — Tạo mới
+
+### 12. Schema cleanup — xóa cột agent_code thừa
+
+**Thay đổi:** Database production vẫn còn cột `agent_code` từ schema cũ. Xóa cột và đồng bộ file import.
+
+**Files sửa:**
+- `webapp/supabase/cleanup_agent_data.sql` — Tạo mới (script xóa data giữ schema)
+- `webapp/supabase/import_agents.sql` — Revert về không có `agent_code`

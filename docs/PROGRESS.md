@@ -51,8 +51,11 @@
 - [x] **Thùng rác**: Query `agents` + `t1_requests` có `deleted_at`, restore (set null), permanent delete
 - [x] **Holidays**: Query `holidays` từ DB, CRUD
 - [x] Export Excel modal (dùng chung Agents + Requests)
-- [x] Nút "Áp dụng T2 làm T1 chính thức" trên Dashboard (local state + toast)
+- [x] Nút "Áp dụng T2 làm T1 chính thức" trên Dashboard (update DB + task status + activity_logs)
 - [x] Soạn mẫu trên Agents Page (query agent từ DB, auto-fill placeholder, copy nội dung/email)
+- [x] **Định dạng ngày giờ dd/mm/yyyy GMT+7**: `date-utils.ts`, áp dụng toàn bộ app
+- [x] **Hiển thị tên thay vì UUID**: AgentsPage, RequestsPage, AgentDetailPage, RequestDetailPage, ActivityLogPage, DashboardPage — load related agents map, hiển thị `full_name - staff_id`
+- [x] **Fix RLS operator INSERT policies**: `t1_changes`, `activity_logs`, `m1_transition_tasks` cho phép operator insert
 
 ### Phase 6: Supabase Backend
 - [x] Tạo Supabase project `t1-change-tracker` (Singapore)
@@ -78,11 +81,11 @@
 - [ ] **Responsive mobile**: Chưa optimize cho màn hình nhỏ (bỏ qua theo yêu cầu)
 - [x] **Lazy-load `xlsx`**: Bundle giảm từ ~988KB → ~566KB main + ~425KB xlsx chunk
 - [x] **Config deploy**: `vercel.json` + `DEPLOY.md` hướng dẫn step-by-step
-- [ ] **Deploy production**: Vercel/Netlify/Firebase Hosting (user tự deploy)
+- [x] **Deploy production**: Vercel auto-deploy từ Git push — https://t1-change-tracker.vercel.app
 
 ### Dữ liệu & Test
-- [ ] **Sample data**: DB đang trống. Cần import agent mẫu hoặc dùng Upload để nhập
-- [ ] **Test RLS policies**: Chưa test đầy đủ với nhiều role khác nhau
+- [x] **Sample data**: Đã import ~2500 agents từ eravnTrans qua `import_agents.sql`
+- [x] **Test RLS policies**: Đã test với role operator (fix lỗi INSERT t1_changes, activity_logs, m1_transition_tasks)
 - [x] **Test RPC functions**: `process_expired_m1_transitions` đã được gọi từ Dashboard. `check_eligibility` chưa được gọi từ frontend (dùng JS engine local).
 
 ---
