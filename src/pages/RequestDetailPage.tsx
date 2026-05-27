@@ -1,14 +1,15 @@
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Circle, CircleDot } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Circle, CircleDot, Clock, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
 import { formatDateTime } from '../lib/date-utils'
+import { addBusinessDays } from '../lib/eligibility'
 import { completeRequestAction } from '../lib/request-actions'
+import CountdownConfirmModal from '../components/CountdownConfirmModal'
 
-const stepOrder = ['step1', 'step2', 'step3', 'step4', 'step5']
-const stepNames = ['B1', 'B2', 'B3', 'B4', 'B5']
+const stepNames = ['B1', 'B2', 'B3']
 
 export default function RequestDetailPage() {
   const { id } = useParams()
@@ -19,13 +20,19 @@ export default function RequestDetailPage() {
   const [newComment, setNewComment] = useState('')
   const [stepHistory, setStepHistory] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [showCancel, setShowCancel] = useState(false)
-  const [showComplete, setShowComplete] = useState(false)
   const [showStep2Date, setShowStep2Date] = useState(false)
   const [step2Date, setStep2Date] = useState('')
-  const [cancelReason, setCancelReason] = useState('')
   const [historyExpanded, setHistoryExpanded] = useState(false)
   const [notifications, setNotifications] = useState<Record<string, boolean>>({})
+
+  // B3 decision state
+  const [deadline3, setDeadline3] = useState<Date | null>(null)
+  const [isB3Ready, setIsB3Ready] = useState(false)
+  const [daysLeft, setDaysLeft] = useState(0)
+
+  // Modals
+  const [confirmModal, setConfirmModal] = useState<{ open: boolean }>({ open: false })
+  const [cancelModal, setCancelModal] = useState<{ open: boolean; reason: string }>({ open: false, reason: '' })
 
   useEffect(() => {
     if (!id) return
@@ -34,18 +41,40 @@ export default function RequestDetailPage() {
 
   async function loadData() {
     setLoading(true)
-    const { data: req } = await supabase
-      .from('t1_requests')
-      .select('*, agent: agent_id(full_name, staff_id), old_t1: old_t1_id(full_name, staff_id), new_t1: proposed_new_t1_id(full_name, staff_id)')
-      .eq('id', id)
-      .single()
-    setRequest(req)
+    try {
+      const { data: req } = await supabase
+        .from('t1_requests')
+        .select('*, agent: agent_id(full_name, staff_id), old_t1: old_t1_id(full_name, staff_id), new_t1: proposed_new_t1_id(full_name, staff_id)')
+        .eq('id', id)
+        .single()
+      setRequest(req)
 
-    const { data: cmts } = await supabase.from('request_comments').select('*').eq('request_id', id).order('created_at', { ascending: true })
-    setComments(cmts ?? [])
+      const { data: cmts } = await supabase.from('request_comments').select('*').eq('request_id', id).order('created_at', { ascending: true })
+      setComments(cmts ?? [])
 
-    const { data: logs } = await supabase.from('activity_logs').select('*').eq('request_id', id).eq('action_type', 'request_step_changed').order('created_at', { ascending: true })
-    setStepHistory(logs ?? [])
+      const { data: logs } = await supabase.from('activity_logs').select('*').eq('request_id', id).eq('action_type', 'request_step_changed').order('created_at', { ascending: true })
+      setStepHistory(logs ?? [])
+
+      // Load holidays for B3 deadline calculation
+      const { data: holidaysData } = await supabase.from('holidays').select('holiday_date')
+      const holidaySet = new Set<string>((holidaysData ?? []).map((h: any) => h.holiday_date.slice(0, 10)))
+
+      // Calculate B3 readiness
+      if (req?.step2_confirmed_at) {
+        const d3 = addBusinessDays(req.step2_confirmed_at, 3, holidaySet)
+        setDeadline3(d3)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        setIsB3Ready(today >= d3)
+        setDaysLeft(Math.ceil((d3.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)))
+      } else {
+        setDeadline3(null)
+        setIsB3Ready(false)
+        setDaysLeft(0)
+      }
+    } catch (e) {
+      console.error(e)
+    }
     setLoading(false)
   }
 
@@ -57,36 +86,29 @@ export default function RequestDetailPage() {
     return <div className="text-center py-12"><p className="text-neutral-500">Không tìm thấy đề xuất</p><Link to="/requests" className="text-primary hover:underline text-sm">Quay lại</Link></div>
   }
 
-  const currentStepIndex = stepOrder.indexOf(request.status)
   const isCompleted = request.status === 'completed'
   const isCancelled = request.status === 'cancelled'
-  const isAtStep5 = request.status === 'step5'
   const role = user?.role ?? 'viewer'
+
+  // Map DB status to UI step (0=B1, 1=B2, 2=B3)
+  const getUIStep = () => {
+    if (isCompleted || isCancelled) return 3
+    if (request.status === 'step1') return 0
+    if (request.status === 'step2') {
+      return request.step2_confirmed_at ? 2 : 1
+    }
+    // Legacy step3/4/5
+    return 2
+  }
+  const uiStep = getUIStep()
 
   const advanceStep = async () => {
     if (isCompleted || isCancelled) return
-    const nextIdx = currentStepIndex + 1
-    if (nextIdx >= stepOrder.length) return
-    const nextStatus = stepOrder[nextIdx]
+    // Only B1 → B2 now
+    if (request.status !== 'step1') return
 
-    if (nextStatus === 'step2') {
-      setStep2Date(new Date().toISOString().slice(0, 10))
-      setShowStep2Date(true)
-      return
-    }
-
-    const now = new Date().toISOString()
-    const updateData: any = { status: nextStatus, updated_at: now }
-    if (nextStatus === 'step3') updateData.step3_era_notified_at = now
-    if (nextStatus === 'step4') updateData.step4_agent_confirmed_at = now
-    if (nextStatus === 'step5') updateData.step5_completed_at = now
-
-    const { error } = await supabase.from('t1_requests').update(updateData).eq('id', request.id)
-    if (error) { show('Lỗi: ' + error.message, 'error'); return }
-
-    await supabase.from('activity_logs').insert({ request_id: request.id, action_type: 'request_step_changed', description: `Chuyển sang ${stepNames[nextIdx]}`, created_by: user?.id })
-    show(`Đã chuyển sang ${stepNames[nextIdx]}`, 'success')
-    loadData()
+    setStep2Date(new Date().toISOString().slice(0, 10))
+    setShowStep2Date(true)
   }
 
   const confirmStep2Date = async () => {
@@ -110,8 +132,7 @@ export default function RequestDetailPage() {
     loadData()
   }
 
-  const completeRequest = async () => {
-    if (!isAtStep5) return
+  const handleConfirmChange = async () => {
     try {
       await completeRequestAction(
         {
@@ -122,20 +143,31 @@ export default function RequestDetailPage() {
         },
         user?.id
       )
-      setShowComplete(false)
-      show('Đã hoàn tất đề xuất', 'success')
+      setConfirmModal({ open: false })
+      show('Đã đồng ý thay đổi T1', 'success')
       loadData()
     } catch (e: any) {
       show('Lỗi: ' + e.message, 'error')
     }
   }
 
-  const cancelRequest = async () => {
-    if (!cancelReason.trim()) return
+  const handleCancelRequest = async () => {
+    if (!cancelModal.reason.trim()) {
+      show('Vui lòng nhập lý do hủy', 'warning')
+      return
+    }
     const now = new Date().toISOString()
-    const { error } = await supabase.from('t1_requests').update({ status: 'cancelled', cancelled_by: user?.id, cancelled_reason: cancelReason, updated_at: now }).eq('id', request.id)
-    if (error) { show('Lỗi: ' + error.message, 'error'); return }
-    setShowCancel(false)
+    const { error } = await supabase.from('t1_requests').update({
+      status: 'cancelled',
+      cancelled_by: user?.id,
+      cancelled_reason: cancelModal.reason.trim(),
+      updated_at: now,
+    }).eq('id', request.id)
+    if (error) {
+      show('Lỗi: ' + error.message, 'error')
+      return
+    }
+    setCancelModal({ open: false, reason: '' })
     show('Đã hủy đề xuất', 'warning')
     loadData()
   }
@@ -148,6 +180,8 @@ export default function RequestDetailPage() {
     setNewComment('')
   }
 
+  const isAtB3 = (request.status === 'step2' && request.step2_confirmed_at) || ['step3', 'step4', 'step5'].includes(request.status)
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -155,14 +189,43 @@ export default function RequestDetailPage() {
           <Link to="/requests" className="p-1.5 rounded-md hover:bg-neutral-200 text-neutral-700"><ArrowLeft className="w-5 h-5" /></Link>
           <div>
             <h1 className="text-2xl font-bold text-neutral-900">Đề xuất #{request.id?.slice(0, 8)}</h1>
-            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${request.status === 'completed' ? 'bg-success-light text-success' : request.status === 'cancelled' ? 'bg-danger-light text-danger' : request.status === 'step5' ? 'bg-success-light text-success' : 'bg-primary-light text-primary'}`}>{request.status}</span>
+            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${request.status === 'completed' ? 'bg-success-light text-success' : request.status === 'cancelled' ? 'bg-danger-light text-danger' : request.status === 'step2' && !request.step2_confirmed_at ? 'bg-primary-light text-primary' : 'bg-success-light text-success'}`}>
+              {isCompleted ? 'Hoàn tất' : isCancelled ? 'Đã hủy' : request.status === 'step2' && !request.step2_confirmed_at ? 'B2 - Chờ ngày xác nhận' : 'B3 - Quyết định'}
+            </span>
           </div>
         </div>
         {role !== 'viewer' && !isCompleted && !isCancelled && (
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowCancel(true)} className="px-4 h-9 border border-danger text-danger rounded-md text-sm hover:bg-danger-light">Hủy</button>
-            {isAtStep5 ? <button onClick={() => setShowComplete(true)} className="px-4 h-9 bg-success text-white rounded-md text-sm hover:opacity-90">Hoàn tất</button>
-              : <button onClick={advanceStep} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">Chuyển sang {stepNames[currentStepIndex + 1]}</button>}
+            {/* B1 or B2 without date → show advance to B2 */}
+            {(request.status === 'step1' || (request.status === 'step2' && !request.step2_confirmed_at)) && (
+              <button onClick={advanceStep} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">
+                {request.status === 'step1' ? 'Chuyển sang B2' : 'Nhập ngày xác nhận B2'}
+              </button>
+            )}
+
+            {/* B2 with date or legacy B3-B5 → show decision buttons */}
+            {((request.status === 'step2' && request.step2_confirmed_at) || ['step3', 'step4', 'step5'].includes(request.status)) && (
+              <>
+                <button
+                  onClick={() => setConfirmModal({ open: true })}
+                  disabled={!isB3Ready && request.status === 'step2'}
+                  title={!isB3Ready ? `Còn ${Math.max(0, daysLeft)} ngày làm việc` : 'Xác nhận thay đổi T1'}
+                  className={`px-4 h-9 rounded-md text-sm ${
+                    isB3Ready
+                      ? 'bg-success text-white hover:opacity-90'
+                      : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  }`}
+                >
+                  {isB3Ready ? 'Đồng ý' : `Đồng ý (${Math.max(0, daysLeft)} ngày)`}
+                </button>
+                <button
+                  onClick={() => setCancelModal({ open: true, reason: '' })}
+                  className="px-4 h-9 border border-danger text-danger rounded-md text-sm hover:bg-danger-light"
+                >
+                  Hủy đề xuất
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -176,19 +239,53 @@ export default function RequestDetailPage() {
         </div>
       </div>
 
+      {/* Deadline info for B3 */}
+      {request.status === 'step2' && request.step2_confirmed_at && deadline3 && (
+        <div className="bg-white rounded-lg shadow-card p-4">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <div><span className="text-neutral-500">Ngày xác nhận B2:</span> <span className="font-medium">{new Date(request.step2_confirmed_at).toLocaleDateString('vi-VN')}</span></div>
+            <div><span className="text-neutral-500">Hết hạn 3 ngày LV:</span> <span className="font-medium">{deadline3.toLocaleDateString('vi-VN')}</span></div>
+            <div>
+              {isB3Ready ? (
+                <span className="text-success font-medium">✅ Đã đủ 3 ngày làm việc</span>
+              ) : (
+                <span className="text-warning font-medium">⏳ Còn {Math.max(0, daysLeft)} ngày làm việc</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-card p-5">
         <h2 className="text-lg font-semibold text-neutral-900 mb-4">Tiến trình</h2>
         <div className="flex items-center gap-1">
           {stepNames.map((name, idx) => {
-            const isDone = isCompleted || idx < currentStepIndex
-            const isCurrent = !isCompleted && !isCancelled && idx === currentStepIndex
+            const isDone = isCompleted || (uiStep > idx && !isCancelled)
+            const isCurrent = !isCompleted && !isCancelled && uiStep === idx
+            const isB3Locked = request.status === 'step2' && request.step2_confirmed_at && idx === 2 && !isB3Ready
+            const isCancelledStep = isCancelled && idx === 2
+
             return (
               <div key={name} className="flex items-center flex-1">
                 <div className="flex flex-col items-center flex-1">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${isDone ? 'bg-primary text-white' : isCurrent ? 'ring-2 ring-primary bg-white text-primary' : 'bg-neutral-100 text-neutral-400'}`}>
-                    {isDone ? <CheckCircle2 className="w-5 h-5" /> : isCurrent ? <CircleDot className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${
+                    isDone ? 'bg-primary text-white'
+                      : isCancelledStep ? 'bg-danger text-white'
+                        : isB3Locked ? 'bg-neutral-100 text-neutral-400 ring-2 ring-neutral-300'
+                          : isCurrent ? 'ring-2 ring-primary bg-white text-primary'
+                            : 'bg-neutral-100 text-neutral-400'
+                  }`}>
+                    {isDone ? <CheckCircle2 className="w-5 h-5" />
+                      : isCancelledStep ? <X className="w-5 h-5" />
+                        : isB3Locked ? <Clock className="w-5 h-5" />
+                          : isCurrent ? <CircleDot className="w-5 h-5" />
+                            : <Circle className="w-5 h-5" />}
                   </div>
-                  <span className={`text-xs mt-1.5 font-medium ${isCurrent ? 'text-primary' : isDone ? 'text-neutral-700' : 'text-neutral-400'}`}>{name}</span>
+                  <span className={`text-xs mt-1.5 font-medium ${
+                    isCancelledStep ? 'text-danger' : isCurrent ? 'text-primary' : isDone ? 'text-neutral-700' : 'text-neutral-400'
+                  }`}>
+                    {name}{isB3Locked ? ' (chờ)' : ''}
+                  </span>
                 </div>
                 {idx < stepNames.length - 1 && <div className={`flex-1 h-0.5 mx-1 ${isDone ? 'bg-primary' : 'bg-neutral-200'}`} />}
               </div>
@@ -235,47 +332,21 @@ export default function RequestDetailPage() {
         </div>
       )}
 
-      {isAtStep5 && (
+      {isAtB3 && (
         <div className="bg-white rounded-lg shadow-card p-5">
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Checklist thông báo hoàn tất</h2>
           <div className="space-y-2">
             {['agent', 'introducer', 'old_upline', 'new_upline', 'old_downline'].map((key) => (
               <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" checked={notifications[key] || false} onChange={(e) => setNotifications((prev) => ({ ...prev, [key]: e.target.checked }))} className="rounded border-neutral-300" />
-                <span className="text-neutral-700">{key === 'agent' ? 'Agent tự đề xuất' : key === 'introducer' ? 'Ngưởi giới thiệu' : key === 'old_upline' ? 'Tuyến trên cũ (T1, T2...)' : key === 'new_upline' ? 'Tuyến trên mới (T1, T2, T3)' : 'Tuyến dưới cũ (M1)'}</span>
+                <span className="text-neutral-700">{key === 'agent' ? 'Agent tự đề xuất' : key === 'introducer' ? 'Người giới thiệu' : key === 'old_upline' ? 'Tuyến trên cũ (T1, T2...)' : key === 'new_upline' ? 'Tuyến trên mới (T1, T2, T3)' : 'Tuyến dưới cũ (M1)'}</span>
               </label>
             ))}
           </div>
         </div>
       )}
 
-      {showCancel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-modal w-full max-w-md p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-neutral-900">Xác nhận hủy đề xuất</h3>
-            <p className="text-sm text-neutral-600">Bạn có chắc muốn hủy đề xuất này? Hành động này không thể hoàn tác.</p>
-            <div><label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Lý do hủy</label><textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={3} className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" /></div>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowCancel(false)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy thao tác</button>
-              <button onClick={cancelRequest} disabled={!cancelReason.trim()} className="px-4 h-9 bg-danger text-white rounded-md text-sm hover:bg-danger/90 disabled:opacity-50">Xác nhận hủy</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showComplete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-modal w-full max-w-md p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-neutral-900">Xác nhận hoàn tất</h3>
-            <p className="text-sm text-neutral-600">Xác nhận hoàn tất đề xuất? Hệ thống sẽ cập nhật T1 mới cho agent và ghi nhận lịch sử.</p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowComplete(false)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
-              <button onClick={completeRequest} className="px-4 h-9 bg-success text-white rounded-md text-sm hover:opacity-90">Xác nhận hoàn tất</button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Step 2 date modal */}
       {showStep2Date && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-modal w-full max-w-md p-6 space-y-4">
@@ -297,6 +368,39 @@ export default function RequestDetailPage() {
           </div>
         </div>
       )}
+
+      <CountdownConfirmModal
+        open={confirmModal.open}
+        title="Xác nhận thay đổi T1"
+        confirmText="Đồng ý"
+        confirmVariant="primary"
+        onConfirm={handleConfirmChange}
+        onCancel={() => setConfirmModal({ open: false })}
+      >
+        <p>Bạn đồng ý hoàn tất đổi T1 cho <strong>{request.agent?.full_name ?? '—'}</strong>?</p>
+        <p className="mt-1">{request.old_t1 ? `${request.old_t1.full_name} - ${request.old_t1.staff_id}` : '—'} → {request.new_t1 ? `${request.new_t1.full_name} - ${request.new_t1.staff_id}` : '—'}</p>
+        <p className="mt-2 text-neutral-500">Hành động này sẽ cập nhật T1 mới, ghi lịch sử và tạo M1 transition tasks (nếu có).</p>
+      </CountdownConfirmModal>
+
+      <CountdownConfirmModal
+        open={cancelModal.open}
+        title="Hủy đề xuất"
+        confirmText="Xác nhận hủy"
+        confirmVariant="danger"
+        onConfirm={handleCancelRequest}
+        onCancel={() => setCancelModal({ open: false, reason: '' })}
+      >
+        <p>Bạn muốn hủy đề xuất đổi T1 của <strong>{request.agent?.full_name ?? '—'}</strong>?</p>
+        <div className="mt-3">
+          <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Lý do hủy</label>
+          <textarea
+            value={cancelModal.reason}
+            onChange={(e) => setCancelModal((prev) => ({ ...prev, reason: e.target.value }))}
+            rows={3}
+            className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+          />
+        </div>
+      </CountdownConfirmModal>
     </div>
   )
 }

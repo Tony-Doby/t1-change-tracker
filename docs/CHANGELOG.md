@@ -5,6 +5,106 @@
 
 ---
 
+## 2026-05-28
+
+### 4. Fix BUG-002: Agent không tìm thấy do Supabase `max-rows` limit
+
+**Vấn đề:** Agent Lê Vạn Lý - LL60640 có trong DB nhưng không tìm thấy khi search trong AgentsPage. Supabase REST API mặc định giới hạn 1000 rows, query không có `.limit()` chỉ trả về ~1000 agents mới nhất. Search client-side chỉ tìm trên subset → agents cũ bị "mất".
+
+**Giải pháp (theo plan BUG-002):**
+- Chuyển search + pagination sang **server-side**:
+  - Search dùng `.or('full_name.ilike...staff_id.ilike...')` gọi trực tiếp Supabase.
+  - Pagination dùng `.range(from, to)` server-side.
+  - Count dùng `.select('*', { count: 'exact', head: true })`.
+- Search input debounce 300ms.
+- T1 info chỉ query cho 10 rows hiển thị (current page) thay vì toàn bộ.
+- Tạm ẩn các quick filter presets phức tạp (`near_91d`, `near_180d`, `quota_exceeded`) — cần eligibility engine server-side (Bước 2 plan).
+- ExportModal: thêm prop `fetchData` để loop query toàn bộ records (batch 1000 rows) khi export, bypass max-rows limit.
+
+**Files sửa:**
+- `webapp/src/pages/AgentsPage.tsx` — Refactor load/search/filter/pagination sang server-side
+- `webapp/src/components/ExportModal.tsx` — Thêm `fetchData` prop để export toàn bộ không bị giới hạn pagination
+- `webapp/docs/PLAN-bug-fixes.md` — Cập nhật status `fixed`
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+## 2026-05-27
+
+### 3. Fix M1 không được chuyển khi agent không có T1 cũ (old_t1_id = null)
+
+**Vấn đề:** Request #f7e77204 — Trần Vĩnh Phi Long (LT36739) có 191 M1, chuyển sang T1 mới, nhưng `old_t1_id = null` trong `t1_requests`. `completeRequestAction` wrap toàn bộ xử lý M1 trong `if (request.old_t1_id)` → block bị skip → 191 M1 vẫn kẹt dưới line cũ, không có transition task nào được tạo.
+
+**Business rule đã xác nhận:** Agent có thể không có T1. Khi chuyển đi, M1 không có T2 tạm nhưng vẫn được xử lý 30 ngày + eligibility. Lựa chọn của M1: không có T1 hoặc chọn T1 mới.
+
+**Giải pháp:**
+- Tách logic query M1 + tạo transition tasks + update M1s ra khỏi `if (request.old_t1_id)`.
+- `m1_transition_tasks.temp_t1_id` → nullable (`string | null`). Khi `old_t1_id = null`, task được tạo với `temp_t1_id = null`.
+- Update M1s `current_t1_id = request.old_t1_id` → `null` khi agent không có T1 cũ.
+- Dashboard hiển thị "Không có T1 tạm" khi `temp_t1_id = null`.
+
+**Files sửa:**
+- `webapp/supabase/migrations/004_fix_m1_null_temp_t1.sql` — `ALTER TABLE DROP NOT NULL` cho `temp_t1_id`
+- `webapp/src/types/index.ts` — `temp_t1_id: string | null`
+- `webapp/src/lib/request-actions.ts` — Tách M1 logic khỏi `if (old_t1_id)`
+- `webapp/src/pages/DashboardPage.tsx` — UI xử lý `temp_t1_id = null`, `applyT2` set `current_t1_id = null`
+- `webapp/docs/CHANGELOG.md` — File này
+
+**Lưu ý triển khai:** Schema local đã sửa nhưng DB production cần chạy thủ công trong Supabase SQL Editor:
+```sql
+ALTER TABLE public.m1_transition_tasks ALTER COLUMN temp_t1_id DROP NOT NULL;
+```
+
+---
+
+## 2026-05-27
+
+### 2. Fix lỗi hoàn tất request khi agent không có T1 cũ + ẩn B4/B5
+
+**Vấn đề 1:** Khi bấm "Đồng ý" hoàn tất đổi T1 cho agent **không có T1 cũ** (`old_t1_id = null`), `completeRequestAction` cố insert `m1_transition_tasks` với `temp_t1_id: null` → lỗi `violates not-null constraint`. Vì lỗi xảy ra ở bước cuối (sau khi đã update request + insert t1_changes + update agent), log báo thành công nhưng thực ra chưa hoàn tất. Bấm lại tạo duplicate `t1_changes` và `activity_logs`.
+
+**Giải pháp:**
+- Thêm **guard check** `status === 'completed'` ở đầu `completeRequestAction` → tránh bấm lại tạo duplicate
+- Nếu `old_t1_id = null` → **bỏ qua** hoàn toàn bước tạo `m1_transition_tasks` và move M1s (vì không có T2 tạm)
+- Đưa bước move M1s vào chung `if (request.old_t1_id)`
+
+**Vấn đề 2:** Dashboard và Requests List vẫn hiển thị **B4, B5** trong chart và Kanban cards (đã không còn trong workflow 3 bước).
+
+**Giải pháp:**
+- `DashboardPage.tsx`: Chart "Trạng thái đề xuất" từ 7 cột → 5 cột (B1, B2, B3, Hoàn tất, Đã hủy)
+- `RequestsPage.tsx`: Kanban summary từ 7 cards → 5 cards
+
+**Files sửa:**
+- `webapp/src/lib/request-actions.ts` — Fix null `temp_t1_id` + guard duplicate
+- `webapp/src/pages/DashboardPage.tsx` — Ẩn B4/B5 khỏi chart
+- `webapp/src/pages/RequestsPage.tsx` — Ẩn B4/B5 khỏi Kanban cards
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+### 1. Rút gọn quy trình Request từ 5 bước → 3 bước (B1→B2→B3)
+
+**Vấn đề:** Request Detail Page đang hiển thị quy trình cũ 5 bước (B1→B2→B3→B4→B5), không đúng với workflow thực tế đã thống nhất. Quy trình thực tế chỉ có 3 bước: B1 (tạo đề xuất) → B2 (T1 mới xác nhận, nhập ngày) → B3 (điểm quyết định sau 3 ngày làm việc).
+
+**Giải pháp:**
+- Progress bar: 5 bước → 3 bước (B1, B2, B3)
+- B3 là "điểm quyết định" với 2 nút: `Đồng ý` và `Hủy đề xuất`
+- `Đồng ý`: bị **khóa** trong 3 ngày làm việc đầu (agent có quyền đổi ý). Hiển thị countdown `Đồng ý (X ngày)`. Mở khóa khi đủ ngày.
+- `Hủy`: **luôn hiện** ngay từ sau B2 (agent có thể đổi ý & hủy bất cứ lúc nào)
+- Cả 2 nút đều dùng **CountdownConfirmModal 10 giây**
+- Thêm card hiển thị deadline: ngày xác nhận B2 + ngày hết hạn 3 ngày LV + trạng thái chờ
+- Xóa logic advance B3→B4→B5, xóa modal inline cũ
+- Xử lý backward-compatible cho request legacy đang ở step3/4/5 (map vào B3)
+
+**Files sửa:**
+- `webapp/src/pages/RequestDetailPage.tsx` — Refactor toàn bộ UI/UX + logic 3 bước
+- `webapp/docs/PLAN-t1-change-tracker.md` — Cập nhật quy trình 3 bước
+- `webapp/docs/PROGRESS.md` — Cập nhật mô tả Phase 4
+- `webapp/docs/UI-DESIGN.md` — Cập nhật mockup Request Detail (3 bước, B3 decision)
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
 ## 2026-05-26
 
 ### 1. Sửa điều kiện eligibility cấp bậc

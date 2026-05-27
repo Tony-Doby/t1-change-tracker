@@ -36,13 +36,13 @@
 ### Phase 4: Request Workflow
 - [x] Requests List: Query `t1_requests` (join `agents`) từ Supabase. Kanban summary + bảng theo status, search
 - [x] Request Detail: Query request + comments + step history từ DB
-- [x] Step progress bar (5 bước), **B2 bắt buộc nhập ngày xác nhận** (date picker), "Chuyển bước" cập nhật DB + ghi `activity_logs`
+- [x] Step progress bar (3 bước: B1→B2→B3), **B2 bắt buộc nhập ngày xác nhận** (date picker). B3 là điểm quyết định: "Đồng ý" (khóa trong 3 ngày LV) / "Hủy" (luôn hiện). Cập nhật DB + ghi `activity_logs`
 - [x] Thread comments: Query `request_comments`, insert mới vào DB
 - [x] Mini timeline Step History (expandable) từ `activity_logs`
-- [x] Notification checklist (Step 5) — UI
+- [x] Notification checklist (B3) — UI
 - [x] **Dashboard B2 Alerts**: Cảnh báo 3 ngày làm việc + card xác nhận thay đổi từ ngày thứ 4
-- [x] **Countdown 10s**: Modal xác nhận cho "Xác nhận thay đổi" và "Hủy đề xuất" trên Dashboard
-- [x] "Hoàn tất" request: từ B5 hoặc **từ Dashboard khi đã qua ngày thứ 4**, insert `t1_changes`, update `agents.current_t1_id`, ghi log
+- [x] **Countdown 10s**: Modal xác nhận cho "Xác nhận thay đổi" và "Hủy đề xuất" trên Dashboard và Request Detail
+- [x] "Hoàn tất" request: từ B3 (sau khi đủ 3 ngày LV) hoặc **từ Dashboard khi đã qua ngày thứ 4**, insert `t1_changes`, update `agents.current_t1_id`, ghi log
 - [x] "Hủy" request với reason → cập nhật DB
 
 ### Phase 5: Dashboard, Activity, Trash, Export

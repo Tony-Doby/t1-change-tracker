@@ -467,12 +467,10 @@ Same layout as Login, but:
 ```
 
 **3.7.1 Status Cards (Kanban summary)**
-- 7 cards horizontally, each represents a status:
-  - Step 1: bg primary-light, text primary
-  - Step 2: bg primary/10, text primary
-  - Step 3: bg warning-light, text warning
-  - Step 4: bg neutral-100, text neutral-700
-  - Step 5: bg success-light, text success
+- 5 cards horizontally, each represents a status:
+  - B1: bg primary-light, text primary
+  - B2: bg primary/10, text primary
+  - B3: bg warning-light, text warning
   - Completed: bg success-light/50, text success — click → filter completed
   - Cancelled: bg danger-light/50, text danger — click → filter cancelled
 - Click card → filter table to that status
@@ -490,25 +488,25 @@ Same layout as Login, but:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  ← Quay lại    Đề xuất #R001              [Hủy] [Hoàn tất] │
+│  ← Quay lại    Đề xuất #R001     [Hủy] [🔒Đồng ý (2 ngày)] │
 ├─────────────────────────────────────────────────────────────┤
 │  Agent: Nguyễn Văn A (A001)                                  │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │ T1 CŨ: Trần Văn B (B002)  →  T1 MỚI: Lê Thị D (D004)  ││
 │  └─────────────────────────────────────────────────────────┘│
 ├─────────────────────────────────────────────────────────────┤
-│  ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐      │
-│  │  B1    │───▶│  B2    │───▶│  B3    │───▶│  B4    │      │
-│  │   ✓    │    │   ✓    │    │ [Đang] │    │        │      │
-│  │01/05   │    │05/05   │    │        │    │        │      │
-│  └────────┘    └────────┘    └────────┘    └────────┘      │
+│  ┌────────┐    ┌────────┐    ┌─────────────────────────┐   │
+│  │  B1    │───▶│  B2    │───▶│  B3                     │   │
+│  │   ✓    │    │   ✓    │    │ [⏳ Chờ / 🔓 Quyết định]│   │
+│  │01/05   │    │05/05   │    │                         │   │
+│  └────────┘    └────────┘    └─────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────┤
-│  Ghi chú:                                                   │
+│  💬 Thảo luận:                                              │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │ Agent đã xác nhận qua email ngày 05/05                 │ │
 │  └────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────┤
-│  Checklist thông báo hoàn tất (hiện khi ở B5):              │
+│  Checklist thông báo hoàn tất (hiện khi ở B3):              │
 │  ☐ Agent tự đề xuất                                         │
 │  ☐ Ngưởi giới thiệu                                         │
 │  ☐ Tuyến trên cũ (T1, T2...)                                │
@@ -519,18 +517,20 @@ Same layout as Login, but:
 
 **3.8.1 Header**
 - Back button + "Đề xuất #[ID]"
-- Status badge: large, showing current step
+- Status badge: large, showing current step (B1 / B2 / B3 / Hoàn tất / Đã hủy)
 - Actions (chỉ admin/operator, viewer chỉ xem):
-  - "Chuyển sang B[X+1]" button (primary)
-    - Khi click: hiển thị **Confirmation Modal**:
-      - Title: "Xác nhận chuyển bước"
-      - Content: "Chuyển đề xuất #R001 sang Bước [X+1]? Thao tác này sẽ ghi nhận thờigian hoàn tất bước hiện tại."
-      - **Optional textarea:** "Ghi chú cho bước này" (placeholder). Nếu có nội dung → insert `request_comments` khi xác nhận.
+  - **B1 → B2:** "Chuyển sang B2" button (primary)
+    - Khi click: hiển thị **Modal nhập ngày**:
+      - Title: "Xác nhận chuyển sang B2"
+      - Content: "Vui lòng nhập ngày T1 mới xác nhận đồng ý tiếp nhận."
+      - Date picker input
       - Nút "Xác nhận" (primary) + "Hủy" (outline).
-  - "Hủy đề xuất" button (outline, danger)
-    - Khi click: hiển thị **Confirmation Modal**: "Xác nhận hủy đề xuất #R001? Lý do hủy:" + textarea nhập lý do. — Nút "Xác nhận hủy" (danger) + "Hủy" (outline).
-  - "Hoàn tất" button (success, only visible at Step 5)
-    - Khi click: hiển thị **Confirmation Modal**: "Xác nhận hoàn tất đề xuất #R001? Hệ thống sẽ cập nhật T1 mới cho agent và gửi thông báo." — Nút "Xác nhận" (success) + "Hủy" (outline).
+  - **B3 (Decision):**
+    - "Đồng ý" button (success, **disabled** nếu chưa đủ 3 ngày làm việc từ ngày xác nhận B2)
+      - Hiển thị countdown: "Đồng ý (X ngày)" khi chưa đủ ngày
+      - Khi click: hiển thị **CountdownConfirmModal** 10 giây
+    - "Hủy đề xuất" button (outline, danger, **luôn hiện**)
+      - Khi click: hiển thị **CountdownConfirmModal** 10 giây + textarea nhập lý do
 
 **3.8.2 Agent & T1 Info Bar**
 - Full width card, bg primary-light
@@ -539,9 +539,13 @@ Same layout as Login, but:
 - Arrow icon between them
 
 **3.8.3 Step Progress Bar**
-- Horizontal stepper with 5 steps
+- Horizontal stepper with 3 steps (B1 → B2 → B3)
 - Completed steps: filled circle ✓, line solid
 - Current step: outlined circle with pulse animation, label "Đang"
+- B3 special states:
+  - 🔒 Locked: khi chưa đủ 3 ngày làm việc (icon đồng hồ, màu xám, ring neutral)
+  - 🔓 Ready: khi đã đủ 3 ngày (icon sáng, ring primary)
+  - ❌ Cancelled: khi request bị hủy (icon X, màu đỏ)
 - Future steps: gray circle, dashed line
 - Each step shows date if completed
 - Click step? Maybe show details of that step
@@ -564,7 +568,7 @@ Same layout as Login, but:
   - Data từ `activity_logs` WHERE action_type = 'request_step_changed'
 - Click "Mở rộng" → hiện full timeline
 
-**3.8.6 Notification Checklist (visible at Step 5)**
+**3.8.6 Notification Checklist (visible at B3)**
 - Title: "Checklist thông báo hoàn tất"
 - 5 checkboxes with labels
 - When checked, insert into `request_notifications`

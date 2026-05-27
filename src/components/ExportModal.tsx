@@ -8,9 +8,10 @@ interface Props {
   data: Record<string, unknown>[]
   filename: string
   hasFilter?: boolean
+  fetchData?: () => Promise<Record<string, unknown>[]>
 }
 
-export default function ExportModal({ title, onClose, data, filename, hasFilter = false }: Props) {
+export default function ExportModal({ title, onClose, data, filename, hasFilter = false, fetchData }: Props) {
   const { show } = useToast()
   const [mode, setMode] = useState<'all' | 'filtered'>('all')
   const [exporting, setExporting] = useState(false)
@@ -19,7 +20,10 @@ export default function ExportModal({ title, onClose, data, filename, hasFilter 
     setExporting(true)
     try {
       const XLSX = await import('xlsx')
-      const exportData = mode === 'filtered' && hasFilter ? data : data
+      let exportData = data
+      if (fetchData) {
+        exportData = await fetchData()
+      }
       const ws = XLSX.utils.json_to_sheet(exportData)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')

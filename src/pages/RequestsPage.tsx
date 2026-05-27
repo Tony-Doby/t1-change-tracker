@@ -6,17 +6,16 @@ import { formatDate } from '../lib/date-utils'
 import ExportModal from '../components/ExportModal'
 import type { RequestStatus } from '../types'
 
-const allStatuses: RequestStatus[] = ['step1', 'step2', 'step3', 'step4', 'step5', 'completed', 'cancelled']
+const allStatuses: RequestStatus[] = ['step1', 'step2', 'step3', 'completed', 'cancelled']
 
 const statusLabels: Record<string, string> = {
-  step1: 'B1', step2: 'B2', step3: 'B3', step4: 'B4', step5: 'B5',
+  step1: 'B1', step2: 'B2', step3: 'B3',
   completed: 'Hoàn tất', cancelled: 'Đã hủy',
 }
 
 const statusColors: Record<string, string> = {
   step1: 'bg-primary-light text-primary', step2: 'bg-primary/10 text-primary',
-  step3: 'bg-warning-light text-warning', step4: 'bg-neutral-100 text-neutral-700',
-  step5: 'bg-success-light text-success', completed: 'bg-success-light/50 text-success',
+  step3: 'bg-warning-light text-warning', completed: 'bg-success-light/50 text-success',
   cancelled: 'bg-danger-light text-danger',
 }
 

@@ -13,6 +13,17 @@ export async function completeRequestAction(
 ) {
   const now = new Date().toISOString()
 
+  // 0. Guard: check if already completed to prevent duplicates
+  const { data: reqCheck } = await supabase
+    .from('t1_requests')
+    .select('status')
+    .eq('id', request.id)
+    .single()
+
+  if (reqCheck?.status === 'completed') {
+    throw new Error('Request đã được hoàn tất trước đó')
+  }
+
   // 1. Update request to completed
   const { error: reqError } = await supabase
     .from('t1_requests')
@@ -49,7 +60,7 @@ export async function completeRequestAction(
     created_by: userId,
   })
 
-  // 5. Create m1_transition_tasks for each M1 of the departed agent
+  // 5. Query M1s of the departed agent
   const { data: m1s } = await supabase
     .from('agents')
     .select('id')
@@ -62,7 +73,7 @@ export async function completeRequestAction(
       parent_request_id: request.id,
       departed_agent_id: request.agent_id,
       m1_agent_id: m1.id,
-      temp_t1_id: request.old_t1_id,
+      temp_t1_id: request.old_t1_id, // null if agent had no old T1
       notify_date: now,
       deadline_date: deadline,
       status: 'pending' as const,
@@ -72,13 +83,11 @@ export async function completeRequestAction(
     if (taskError) throw taskError
   }
 
-  // 6. Move M1s under temp T1 (old_t1_id of the departed agent)
-  if (request.old_t1_id) {
-    const { error: m1UpdateError } = await supabase
-      .from('agents')
-      .update({ current_t1_id: request.old_t1_id })
-      .eq('current_t1_id', request.agent_id)
-      .is('deleted_at', null)
-    if (m1UpdateError) throw m1UpdateError
-  }
+  // 6. Move M1s under temp T1 (or set null if agent had no old T1)
+  const { error: m1UpdateError } = await supabase
+    .from('agents')
+    .update({ current_t1_id: request.old_t1_id })
+    .eq('current_t1_id', request.agent_id)
+    .is('deleted_at', null)
+  if (m1UpdateError) throw m1UpdateError
 }

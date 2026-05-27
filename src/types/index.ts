@@ -107,7 +107,7 @@ export interface M1TransitionTask {
   parent_request_id: string
   departed_agent_id: string
   m1_agent_id: string
-  temp_t1_id: string
+  temp_t1_id: string | null
   notify_date: string | null
   deadline_date: string
   status: 'pending' | 't2_assigned' | 'm1_changed' | 'expired'

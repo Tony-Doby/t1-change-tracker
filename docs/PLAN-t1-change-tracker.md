@@ -41,19 +41,21 @@ Xây dựng một **app độc lập** để theo dõi quy trình thay đổi Ng
    - Sau 30 ngày: T2 chính thức thành T1 nếu M1 không chuyển.
    - Nếu M1 chọn T1 mới (khác T2): tính 1 lần chuyển line.
 
-### 2.3 Quy trình 5 bước (theo chính sách)
+### 2.3 Quy trình 3 bước (theo chính sách)
+
 ```
-B1: Agent gửi email đề xuất (CC: T1 cũ, T1 mới)
+B1: Tạo đề xuất trong app
     ↓
-B2: T1 mới email phản hồi "Đồng ý tiếp nhận"
+B2: T1 mới xác nhận đồng ý tiếp nhận (nhập ngày xác nhận)
     ↓
-B3: ERA VN gửi email yêu cầu Agent xác nhận (3-7 ngày làm việc)
+[Chờ 3 ngày làm việc — agent có quyền thay đổi ý kiến]
     ↓
-B4: Agent email xác nhận lần cuối
-    ↓
-B5: Hoàn tất chuyển đổi (3-7 ngày hệ thống xử lý)
-    └── Thông báo hoàn tất gửi: Agent, Ngưởi giới thiệu, Tuyến trên cũ+mới, M1 cũ
+B3: Điểm quyết định
+    ├─ ✅ Đồng ý: Hoàn tất đổi T1 (nút khóa nếu chưa đủ 3 ngày)
+    └─ ❌ Hủy: Hủy đề xuất (nút luôn hiện)
 ```
+
+> **Lưu ý:** DB vẫn giữ các cột `step3_era_notified_at`, `step4_agent_confirmed_at`, `step5_completed_at` để tương thích ngược với request cũ. UI mới chỉ hiển thị 3 bước B1→B2→B3.
 
 ---
 
@@ -375,16 +377,16 @@ Trong app tracker: Nút "Hoàn tất" (B5) sẽ trigger cập nhật T1 mới ng
 ### Phase 4: Request Workflow (2 ngày)
 15. UI tạo đề xuất: Chọn agent → chọn T1 mới → eligibility check + T1 capacity → Insert `t1_requests`.
 16. UI Requests List: Bảng/Kanban theo `status`. Export theo bộ lọc hiện tại (không export toàn bộ).
-17. UI Request Detail: Cập nhật từng bước (Step 1→2→3...). **Thread comment** thay thế notes đơn. Mini timeline **Step History** từ `activity_logs` (ai chuyển bước nào lúc nào).
+17. UI Request Detail: Quy trình 3 bước (B1→B2→B3). B2 nhập ngày xác nhận. B3 là điểm quyết định (Đồng ý/Hủy), nút Đồng ý khóa trong 3 ngày làm việc. **Thread comment** thay thế notes đơn. Mini timeline **Step History** từ `activity_logs` (ai chuyển bước nào lúc nào).
 
 ### Phase 5: Completion, Activity Log & Dashboard (2 ngày)
-18. Nút "Hoàn tất" (Step 5):
+18. Nút "Hoàn tất" (B3 — sau khi đủ 3 ngày làm việc từ B2):
     - Update `t1_requests.status = 'completed'`.
     - Update `agents.current_t1_id = proposed_new_t1_id`.
     - Insert `t1_changes`.
     - Insert `activity_logs` (action_type = 't1_changed', ghi rõ old_t1_id, new_t1_id).
     - **Tạo `m1_transition_tasks` cho từng M1:** Query `agents WHERE current_t1_id = old_t1_id` (tìm M1 của agent vừa đổi T1). Với mỗi M1, insert `m1_transition_tasks` (status = 'pending', deadline_date = NOW() + 30 ngày, temp_t1_id = old_t1_id).
-    - Mỗi lần chuyển bước (B1→B2...), insert `activity_logs` (action_type = 'request_step_changed') để audit.
+    - Khi chuyển B1→B2, insert `activity_logs` (action_type = 'request_step_changed') để audit.
 19. Khi Agent rởi đi / M1 quyết định:
     - **Nút "Áp dụng T2 làm T1 chính thức" (trên Dashboard):**
       - Chỉ hiện khi M1 hết 30 ngày (m1_transition_tasks.status = 'expired').

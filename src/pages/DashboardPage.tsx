@@ -25,7 +25,7 @@ interface TransitionTask {
   id: string
   m1_agent_id: string
   m1_agent: { full_name: string; staff_id: string } | null
-  temp_t1_id: string
+  temp_t1_id: string | null
   temp_t1: { full_name: string; staff_id: string } | null
   deadline_date: string
   status: string
@@ -166,7 +166,7 @@ export default function DashboardPage() {
       agent_id: task.m1_agent_id,
       action_type: 'm1_stayed_with_t2',
       new_t1_id: task.temp_t1_id,
-      description: `M1 ${task.m1_agent?.full_name ?? ''} ở lại với T2 (${task.temp_t1?.full_name ?? ''})`,
+      description: `M1 ${task.m1_agent?.full_name ?? ''} ở lại với T2 (${task.temp_t1?.full_name ?? 'Không có T1 tạm'})`,
       created_at: now,
     })
 
@@ -342,7 +342,7 @@ export default function DashboardPage() {
                     {t.m1_agent?.full_name ?? '—'} ({t.m1_agent?.staff_id ?? '—'})
                   </p>
                   <p className="text-xs text-neutral-500">
-                    T2 tạm: {t.temp_t1?.full_name ?? '—'} •
+                    T2 tạm: {t.temp_t1?.full_name ?? (t.temp_t1_id === null ? 'Không có T1 tạm' : '—')} •
                     {t.status === 'expired'
                       ? <span className="text-danger font-medium"> Đã quá hạn {Math.abs(t.daysLeft)} ngày</span>
                       : <span> Còn {t.daysLeft} ngày</span>
@@ -385,7 +385,7 @@ export default function DashboardPage() {
       <div className="bg-white rounded-lg p-5 shadow-card">
         <h2 className="text-lg font-semibold text-neutral-900 mb-4">📊 Trạng thái đề xuất</h2>
         <div className="space-y-3">
-          {(['step1','step2','step3','step4','step5','completed','cancelled'] as string[]).map((s) => {
+          {(['step1','step2','step3','completed','cancelled'] as string[]).map((s) => {
             const count = statusCounts[s] ?? 0
             const max = Math.max(...Object.values(statusCounts), 1)
             const pct = (count / max) * 100
