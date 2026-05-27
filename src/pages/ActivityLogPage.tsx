@@ -11,6 +11,8 @@ interface LogItem {
   description: string | null
   old_t1_id: string | null
   new_t1_id: string | null
+  old_t1: { full_name: string; staff_id: string } | null
+  new_t1: { full_name: string; staff_id: string } | null
   request_id: string | null
   agent_id: string | null
   agent_name?: string
@@ -41,7 +43,7 @@ export default function ActivityLogPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('activity_logs')
-      .select('*, agent: agent_id(full_name)')
+      .select('*, agent: agent_id(full_name, staff_id), old_t1: old_t1_id(full_name, staff_id), new_t1: new_t1_id(full_name, staff_id)')
       .order('created_at', { ascending: false })
       .limit(500)
     if (error) { console.error(error); setLoading(false); return }
@@ -129,11 +131,11 @@ export default function ActivityLogPage() {
                       <div className="flex-1">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium mr-2 ${meta.color}`}>{meta.label}</span>
                         <span className="text-sm text-neutral-800">{item.description}</span>
-                        {(item.old_t1_id || item.new_t1_id) && (
+                        {(item.old_t1 || item.new_t1) && (
                           <p className="text-xs text-neutral-500 mt-1">
-                            {item.old_t1_id && `T1 cũ: ${item.old_t1_id.slice(0, 8)}`}
-                            {item.old_t1_id && item.new_t1_id && ' → '}
-                            {item.new_t1_id && `T1 mới: ${item.new_t1_id.slice(0, 8)}`}
+                            {item.old_t1 && `T1 cũ: ${item.old_t1.full_name} - ${item.old_t1.staff_id}`}
+                            {item.old_t1 && item.new_t1 && ' → '}
+                            {item.new_t1 && `T1 mới: ${item.new_t1.full_name} - ${item.new_t1.staff_id}`}
                           </p>
                         )}
                         {item.request_id && (

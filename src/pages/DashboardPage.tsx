@@ -260,7 +260,7 @@ export default function DashboardPage() {
                 <div key={r.id} className="flex items-center justify-between p-3 rounded-md bg-neutral-50">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-neutral-900 truncate">
-                      {r.agent?.full_name ?? '—'} ({r.agent?.staff_id ?? '—'})
+                      {r.agent ? `${r.agent.full_name} - ${r.agent.staff_id}` : '—'}
                     </p>
                     <p className="text-xs text-neutral-500">
                       Ngày xác nhận: {formatDate(r.step2_confirmed_at)} • Hết hạn: {formatDate(r.deadline3)}
@@ -302,7 +302,7 @@ export default function DashboardPage() {
                     {r.agent?.full_name ?? '—'} ({r.agent?.staff_id ?? '—'})
                   </p>
                   <p className="text-xs text-neutral-500">
-                    {r.old_t1?.full_name ?? '—'} ({r.old_t1?.staff_id ?? '—'}) → {r.new_t1?.full_name ?? '—'} ({r.new_t1?.staff_id ?? '—'})
+                    {r.old_t1 ? `${r.old_t1.full_name} - ${r.old_t1.staff_id}` : '—'} → {r.new_t1 ? `${r.new_t1.full_name} - ${r.new_t1.staff_id}` : '—'}
                   </p>
                   <p className="text-xs text-neutral-500">
                     Ngày xác nhận: {formatDate(r.step2_confirmed_at)} • Đã chờ đủ 4 ngày làm việc

@@ -34,7 +34,11 @@ export default function RequestDetailPage() {
 
   async function loadData() {
     setLoading(true)
-    const { data: req } = await supabase.from('t1_requests').select('*, agent: agent_id(full_name, staff_id)').eq('id', id).single()
+    const { data: req } = await supabase
+      .from('t1_requests')
+      .select('*, agent: agent_id(full_name, staff_id), old_t1: old_t1_id(full_name, staff_id), new_t1: proposed_new_t1_id(full_name, staff_id)')
+      .eq('id', id)
+      .single()
     setRequest(req)
 
     const { data: cmts } = await supabase.from('request_comments').select('*').eq('request_id', id).order('created_at', { ascending: true })
@@ -164,11 +168,11 @@ export default function RequestDetailPage() {
       </div>
 
       <div className="bg-primary-light rounded-lg p-4 flex flex-wrap items-center justify-between gap-4">
-        <div><p className="text-xs text-neutral-500">Agent</p><p className="text-sm font-medium text-neutral-900">{request.agent?.full_name ?? '—'} ({request.agent?.staff_id ?? '—'})</p></div>
+        <div><p className="text-xs text-neutral-500">Agent</p><p className="text-sm font-medium text-neutral-900">{request.agent ? `${request.agent.full_name} - ${request.agent.staff_id}` : '—'}</p></div>
         <div className="flex items-center gap-4">
-          <div className="text-right"><p className="text-xs text-neutral-500">T1 CŨ</p><p className="text-sm font-medium text-neutral-900">{request.old_t1_id?.slice(0, 8) ?? '—'}</p></div>
+          <div className="text-right"><p className="text-xs text-neutral-500">T1 CŨ</p><p className="text-sm font-medium text-neutral-900">{request.old_t1 ? `${request.old_t1.full_name} - ${request.old_t1.staff_id}` : '—'}</p></div>
           <span className="text-xl text-neutral-400">→</span>
-          <div className="text-right"><p className="text-xs text-neutral-500">T1 MỚI</p><p className="text-sm font-medium text-neutral-900">{request.proposed_new_t1_id?.slice(0, 8) ?? '—'}</p></div>
+          <div className="text-right"><p className="text-xs text-neutral-500">T1 MỚI</p><p className="text-sm font-medium text-neutral-900">{request.new_t1 ? `${request.new_t1.full_name} - ${request.new_t1.staff_id}` : '—'}</p></div>
         </div>
       </div>
 
