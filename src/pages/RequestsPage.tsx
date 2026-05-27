@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Search, Filter, Plus, Download } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { formatDate } from '../lib/date-utils'
 import ExportModal from '../components/ExportModal'
 import type { RequestStatus } from '../types'
 
@@ -97,7 +98,7 @@ export default function RequestsPage() {
                   <td className="px-4 py-3 text-neutral-900">{r.agent ? `${r.agent.full_name} (${r.agent.staff_id})` : '—'}</td>
                   <td className="px-4 py-3 text-neutral-700">{r.old_t1_id?.slice(0, 8) ?? '—'} → {r.proposed_new_t1_id?.slice(0, 8) ?? '—'}</td>
                   <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[r.status]}`}>{statusLabels[r.status]}</span></td>
-                  <td className="px-4 py-3 text-neutral-500">{new Date(r.created_at).toLocaleDateString('vi-VN')}</td>
+                  <td className="px-4 py-3 text-neutral-500">{formatDate(r.created_at)}</td>
                 </tr>
               ))
             )}
@@ -106,7 +107,7 @@ export default function RequestsPage() {
         </table>
       </div>
 
-      {showExport && <ExportModal title="Xuất danh sách Requests" onClose={() => setShowExport(false)} data={filtered.map((r) => ({ 'Mã': r.id.slice(0, 8), 'Agent': r.agent ? `${r.agent.full_name} (${r.agent.staff_id})` : '—', 'T1 cũ': r.old_t1_id?.slice(0, 8) ?? '—', 'T1 mới': r.proposed_new_t1_id?.slice(0, 8) ?? '—', 'Bước': statusLabels[r.status], 'Ngày tạo': new Date(r.created_at).toLocaleDateString('vi-VN') }))} filename="requests" hasFilter={statusFilter !== 'all' || !!search} />}
+      {showExport && <ExportModal title="Xuất danh sách Requests" onClose={() => setShowExport(false)} data={filtered.map((r) => ({ 'Mã': r.id.slice(0, 8), 'Agent': r.agent ? `${r.agent.full_name} (${r.agent.staff_id})` : '—', 'T1 cũ': r.old_t1_id?.slice(0, 8) ?? '—', 'T1 mới': r.proposed_new_t1_id?.slice(0, 8) ?? '—', 'Bước': statusLabels[r.status], 'Ngày tạo': formatDate(r.created_at) }))} filename="requests" hasFilter={statusFilter !== 'all' || !!search} />}
     </div>
   )
 }

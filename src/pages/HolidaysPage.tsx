@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
+import { formatDate } from '../lib/date-utils'
 
 interface Holiday {
   id: string
@@ -79,7 +80,7 @@ export default function HolidaysPage() {
           <tbody>
             {holidays.map((h) => (
               <tr key={h.id} className="border-b border-neutral-100 hover:bg-neutral-50">
-                <td className="px-4 py-3 text-neutral-700">{new Date(h.holiday_date).toLocaleDateString('vi-VN')}</td>
+                <td className="px-4 py-3 text-neutral-700">{formatDate(h.holiday_date)}</td>
                 <td className="px-4 py-3 text-neutral-900 font-medium">{h.name}</td>
                 <td className="px-4 py-3 text-neutral-500">{h.year}</td>
                 <td className="px-4 py-3">

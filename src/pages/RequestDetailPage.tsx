@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import { formatDateTime } from '../lib/date-utils'
+import { completeRequestAction } from '../lib/request-actions'
 
 const stepOrder = ['step1', 'step2', 'step3', 'step4', 'step5']
 const stepNames = ['B1', 'B2', 'B3', 'B4', 'B5']
@@ -19,6 +21,8 @@ export default function RequestDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showCancel, setShowCancel] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
+  const [showStep2Date, setShowStep2Date] = useState(false)
+  const [step2Date, setStep2Date] = useState('')
   const [cancelReason, setCancelReason] = useState('')
   const [historyExpanded, setHistoryExpanded] = useState(false)
   const [notifications, setNotifications] = useState<Record<string, boolean>>({})
@@ -60,9 +64,15 @@ export default function RequestDetailPage() {
     const nextIdx = currentStepIndex + 1
     if (nextIdx >= stepOrder.length) return
     const nextStatus = stepOrder[nextIdx]
+
+    if (nextStatus === 'step2') {
+      setStep2Date(new Date().toISOString().slice(0, 10))
+      setShowStep2Date(true)
+      return
+    }
+
     const now = new Date().toISOString()
     const updateData: any = { status: nextStatus, updated_at: now }
-    if (nextStatus === 'step2') updateData.step2_confirmed_at = now
     if (nextStatus === 'step3') updateData.step3_era_notified_at = now
     if (nextStatus === 'step4') updateData.step4_agent_confirmed_at = now
     if (nextStatus === 'step5') updateData.step5_completed_at = now
@@ -75,37 +85,45 @@ export default function RequestDetailPage() {
     loadData()
   }
 
-  const completeRequest = async () => {
-    if (!isAtStep5) return
-    const now = new Date().toISOString()
-    const { error } = await supabase.from('t1_requests').update({ status: 'completed', step5_completed_at: now, updated_at: now }).eq('id', request.id)
+  const confirmStep2Date = async () => {
+    if (!step2Date) return
+    const dateValue = new Date(step2Date).toISOString()
+    const { error } = await supabase.from('t1_requests').update({
+      status: 'step2',
+      step2_confirmed_at: dateValue,
+      updated_at: new Date().toISOString(),
+    }).eq('id', request.id)
     if (error) { show('Lỗi: ' + error.message, 'error'); return }
 
-    await supabase.from('t1_changes').insert({ agent_id: request.agent_id, old_t1_id: request.old_t1_id, new_t1_id: request.proposed_new_t1_id, request_id: request.id, change_date: now, reason: 'agent_request' })
-    await supabase.from('agents').update({ current_t1_id: request.proposed_new_t1_id }).eq('id', request.agent_id)
-    await supabase.from('activity_logs').insert({ agent_id: request.agent_id, action_type: 't1_changed', old_t1_id: request.old_t1_id, new_t1_id: request.proposed_new_t1_id, request_id: request.id, description: 'Hoàn tất đổi T1', created_by: user?.id })
-
-    // Create m1_transition_tasks for each M1 of the departed agent
-    const { data: m1s } = await supabase.from('agents').select('id').eq('current_t1_id', request.agent_id).is('deleted_at', null)
-    if (m1s && m1s.length > 0) {
-      const deadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      const tasks = m1s.map((m1) => ({
-        parent_request_id: request.id,
-        departed_agent_id: request.agent_id,
-        m1_agent_id: m1.id,
-        temp_t1_id: request.old_t1_id,
-        notify_date: now,
-        deadline_date: deadline,
-        status: 'pending',
-        depth: 1,
-      }))
-      const { error: taskError } = await supabase.from('m1_transition_tasks').insert(tasks)
-      if (taskError) show('Lỗi tạo M1 transition tasks: ' + taskError.message, 'error')
-    }
-
-    setShowComplete(false)
-    show('Đã hoàn tất đề xuất', 'success')
+    await supabase.from('activity_logs').insert({
+      request_id: request.id,
+      action_type: 'request_step_changed',
+      description: 'Chuyển sang B2',
+      created_by: user?.id,
+    })
+    setShowStep2Date(false)
+    show('Đã chuyển sang B2', 'success')
     loadData()
+  }
+
+  const completeRequest = async () => {
+    if (!isAtStep5) return
+    try {
+      await completeRequestAction(
+        {
+          id: request.id,
+          agent_id: request.agent_id,
+          old_t1_id: request.old_t1_id,
+          proposed_new_t1_id: request.proposed_new_t1_id,
+        },
+        user?.id
+      )
+      setShowComplete(false)
+      show('Đã hoàn tất đề xuất', 'success')
+      loadData()
+    } catch (e: any) {
+      show('Lỗi: ' + e.message, 'error')
+    }
   }
 
   const cancelRequest = async () => {
@@ -183,7 +201,7 @@ export default function RequestDetailPage() {
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${c.created_by === user?.id ? 'bg-primary text-white' : 'bg-neutral-200 text-neutral-700'}`}>A</div>
               <div className={`max-w-[70%] rounded-lg px-3 py-2 text-sm ${c.created_by === user?.id ? 'bg-primary-light text-neutral-900' : 'bg-neutral-50 text-neutral-900'}`}>
                 <p>{c.content}</p>
-                <p className={`text-[10px] mt-1 ${c.created_by === user?.id ? 'text-primary/70' : 'text-neutral-400'}`}>{new Date(c.created_at).toLocaleString('vi-VN')}</p>
+                <p className={`text-[10px] mt-1 ${c.created_by === user?.id ? 'text-primary/70' : 'text-neutral-400'}`}>{formatDateTime(c.created_at)}</p>
               </div>
             </div>
           ))}
@@ -205,7 +223,7 @@ export default function RequestDetailPage() {
               {stepHistory.map((h, idx) => (
                 <div key={idx} className="flex items-start gap-3 text-sm">
                   <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
-                  <div><p className="text-neutral-900">{h.description}</p><p className="text-xs text-neutral-500">{new Date(h.created_at).toLocaleString('vi-VN')}</p></div>
+                  <div><p className="text-neutral-900">{h.description}</p><p className="text-xs text-neutral-500">{formatDateTime(h.created_at)}</p></div>
                 </div>
               ))}
             </div>
@@ -249,6 +267,28 @@ export default function RequestDetailPage() {
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowComplete(false)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
               <button onClick={completeRequest} className="px-4 h-9 bg-success text-white rounded-md text-sm hover:opacity-90">Xác nhận hoàn tất</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showStep2Date && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-modal w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-neutral-900">Xác nhận chuyển sang B2</h3>
+            <p className="text-sm text-neutral-600">Vui lòng nhập ngày T1 mới xác nhận đồng ý tiếp nhận.</p>
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Ngày xác nhận</label>
+              <input
+                type="date"
+                value={step2Date}
+                onChange={(e) => setStep2Date(e.target.value)}
+                className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowStep2Date(false)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
+              <button onClick={confirmStep2Date} disabled={!step2Date} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover disabled:opacity-50">Xác nhận</button>
             </div>
           </div>
         </div>

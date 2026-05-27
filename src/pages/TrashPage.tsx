@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Search, RotateCcw, Trash2, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
+import { formatDate } from '../lib/date-utils'
 
 interface TrashItem {
   type: 'agent' | 'request'
@@ -107,7 +108,7 @@ export default function TrashPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-neutral-900">{item.name}</td>
-                <td className="px-4 py-3 text-neutral-500">{new Date(item.deletedAt).toLocaleDateString('vi-VN')}</td>
+                <td className="px-4 py-3 text-neutral-500">{formatDate(item.deletedAt)}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <button onClick={() => restore(item)} className="flex items-center gap-1 px-2 py-1 text-xs border border-primary text-primary rounded hover:bg-primary-light">

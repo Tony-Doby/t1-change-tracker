@@ -1,7 +1,7 @@
 # Tiến độ T1 Change Tracker
 
 > File này dùng để theo dõi tiến độ và nối lại công việc sau khi ngưng.  
-> Cập nhật: 2026-05-25
+> Cập nhật: 2026-05-27
 
 ---
 
@@ -26,6 +26,7 @@
 ### Phase 3: Eligibility & Request Creation
 - [x] Eligibility engine (`src/lib/eligibility.ts`) — kiểm tra 91 ngày, 180 ngày, quota 3 lần, cấp bậc không phải ASC (đã refactor để nhận data từ bên ngoài)
 - [x] Create Request Modal: Searchable dropdown chọn T1 mới, eligibility real-time, T1 Capacity indicator
+- [x] **M1 Impact Analysis**: Trong modal tạo đề xuất, hiển thị tổng số M1 của agent đang đổi T1, phân loại đủ/không đủ điều kiện chọn T1 mới, expandable list chi tiết
 - [x] Insert `t1_requests` vào DB khi tạo đề xuất
 - [x] PostgreSQL Function `check_eligibility`, `get_t1_capacity`, `get_my_role` trong schema
 - [x] **M1 Transition Task automation**: Khi hoàn tất request, tự động tạo `m1_transition_tasks` cho các M1 của agent vừa đổi T1
@@ -35,11 +36,13 @@
 ### Phase 4: Request Workflow
 - [x] Requests List: Query `t1_requests` (join `agents`) từ Supabase. Kanban summary + bảng theo status, search
 - [x] Request Detail: Query request + comments + step history từ DB
-- [x] Step progress bar (5 bước), "Chuyển bước" cập nhật DB + ghi `activity_logs`
+- [x] Step progress bar (5 bước), **B2 bắt buộc nhập ngày xác nhận** (date picker), "Chuyển bước" cập nhật DB + ghi `activity_logs`
 - [x] Thread comments: Query `request_comments`, insert mới vào DB
 - [x] Mini timeline Step History (expandable) từ `activity_logs`
 - [x] Notification checklist (Step 5) — UI
-- [x] "Hoàn tất" request: Cập nhật DB, insert `t1_changes`, update `agents.current_t1_id`, ghi log
+- [x] **Dashboard B2 Alerts**: Cảnh báo 3 ngày làm việc + card xác nhận thay đổi từ ngày thứ 4
+- [x] **Countdown 10s**: Modal xác nhận cho "Xác nhận thay đổi" và "Hủy đề xuất" trên Dashboard
+- [x] "Hoàn tất" request: từ B5 hoặc **từ Dashboard khi đã qua ngày thứ 4**, insert `t1_changes`, update `agents.current_t1_id`, ghi log
 - [x] "Hủy" request với reason → cập nhật DB
 
 ### Phase 5: Dashboard, Activity, Trash, Export
@@ -93,6 +96,7 @@ webapp/
 │   │   ├── Layout.tsx              # App Shell
 │   │   ├── Toast.tsx               # Toast system
 │   │   ├── CreateRequestModal.tsx  # Tạo đề xuất (DB)
+│   │   ├── CountdownConfirmModal.tsx # Modal đếm ngược 10s
 │   │   ├── ComposeTemplateModal.tsx # Soạn mẫu email
 │   │   └── ExportModal.tsx         # Export Excel
 │   ├── pages/
@@ -112,7 +116,8 @@ webapp/
 │   │   └── useAuth.tsx             # Supabase Auth thật
 │   ├── lib/
 │   │   ├── supabase.ts             # Supabase client
-│   │   ├── eligibility.ts          # Eligibility engine
+│   │   ├── eligibility.ts          # Eligibility engine + business days + M1 impact
+│   │   ├── request-actions.ts      # completeRequestAction reusable
 │   │   └── constants.ts            # BOOKMARKS_KEY
 │   ├── types/
 │   │   └── index.ts

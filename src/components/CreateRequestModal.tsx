@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Search, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { checkEligibility, getT1Capacity } from '../lib/eligibility'
+import { checkEligibility, getT1Capacity, getM1ImpactSummary } from '../lib/eligibility'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from './Toast'
 import type { EligibilityResult } from '../types'
-import type { T1Capacity } from '../lib/eligibility'
+import type { T1Capacity, M1ImpactSummary } from '../lib/eligibility'
 
 interface Props {
   agentId: string
@@ -21,10 +21,14 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
+  const [dropdownAgents, setDropdownAgents] = useState<any[]>([])
+  const [searchingDropdown, setSearchingDropdown] = useState(false)
   const [selectedT1Id, setSelectedT1Id] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
   const [result, setResult] = useState<EligibilityResult | null>(null)
   const [capacity, setCapacity] = useState<T1Capacity | null>(null)
+  const [m1Impact, setM1Impact] = useState<M1ImpactSummary | null>(null)
+  const [showM1Detail, setShowM1Detail] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -33,27 +37,74 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
 
   async function loadData() {
     setLoading(true)
-    const [{ data: agentsData }, { data: agentData }, { data: changesData }] = await Promise.all([
-      supabase.from('agents').select('*').is('deleted_at', null),
+    const [
+      { data: agentsData },
+      { data: agentData },
+      { data: changesData },
+      { data: m1Agents },
+    ] = await Promise.all([
+      supabase.from('agents').select('*').is('deleted_at', null).limit(10000),
       supabase.from('agents').select('*').eq('id', agentId).single(),
-      supabase.from('t1_changes').select('*').is('deleted_at', null),
+      supabase.from('t1_changes').select('*').is('deleted_at', null).limit(10000),
+      supabase.from('agents').select('*').eq('current_t1_id', agentId).is('deleted_at', null),
     ])
-    setAgents(agentsData ?? [])
+    // Merge all agents, ensure main agent and M1s are present
+    const merged = new Map<string, any>()
+    ;(agentsData ?? []).forEach((a) => merged.set(a.id, a))
+    ;(m1Agents ?? []).forEach((a) => merged.set(a.id, a))
+    if (agentData) merged.set(agentData.id, agentData)
+    const allAgents = Array.from(merged.values())
+
+    setAgents(allAgents)
     setAgent(agentData)
     setT1Changes(changesData ?? [])
+    if (agentData && changesData) {
+      setM1Impact(getM1ImpactSummary(agentData.id, allAgents, changesData ?? []))
+    }
     setLoading(false)
   }
 
-  const t1Candidates = useMemo(() => {
-    return agents.filter(
-      (a) =>
-        a.id !== agentId &&
-        a.id !== agent?.current_t1_id &&
-        !a.deleted_at &&
-        (a.full_name.toLowerCase().includes(search.toLowerCase()) ||
-          a.staff_id.toLowerCase().includes(search.toLowerCase()))
-    )
-  }, [agents, agentId, agent, search])
+  // Server-side search for dropdown
+  useEffect(() => {
+    if (!showDropdown || search.trim().length < 1) {
+      setDropdownAgents([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setSearchingDropdown(true)
+      const q = search.trim()
+      const { data } = await supabase
+        .from('agents')
+        .select('*')
+        .is('deleted_at', null)
+        .or(`full_name.ilike.%${q}%,staff_id.ilike.%${q}%`)
+        .limit(20)
+      const filtered = (data ?? []).filter(
+        (a) => a.id !== agentId && a.id !== agent?.current_t1_id
+      )
+      setDropdownAgents(filtered)
+      setSearchingDropdown(false)
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [search, showDropdown, agentId, agent])
+
+  // Ensure selected T1 exists in agents array for eligibility/capacity calculations
+  useEffect(() => {
+    if (!selectedT1Id) {
+      setResult(null)
+      setCapacity(null)
+      return
+    }
+    const ensureAgent = async () => {
+      if (!agents.find((a) => a.id === selectedT1Id)) {
+        const { data } = await supabase.from('agents').select('*').eq('id', selectedT1Id).single()
+        if (data) {
+          setAgents((prev) => [...prev, data])
+        }
+      }
+    }
+    ensureAgent()
+  }, [selectedT1Id])
 
   useEffect(() => {
     if (!selectedT1Id || !agent) {
@@ -135,8 +186,15 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
                 <div className="absolute left-0 right-0 mt-1 bg-white rounded-lg shadow-dropdown border border-neutral-300 z-20 max-h-56 overflow-y-auto">
-                  {t1Candidates.length === 0 && <div className="px-3 py-2 text-sm text-neutral-500">Không tìm thấy</div>}
-                  {t1Candidates.map((c) => (
+                  {searchingDropdown && (
+                    <div className="px-3 py-2 text-sm text-neutral-500 flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> Đang tìm...
+                    </div>
+                  )}
+                  {!searchingDropdown && dropdownAgents.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-neutral-500">{search.trim().length < 1 ? 'Nhập để tìm kiếm...' : 'Không tìm thấy'}</div>
+                  )}
+                  {dropdownAgents.map((c) => (
                     <button key={c.id} onClick={() => { setSelectedT1Id(c.id); setShowDropdown(false); setSearch('') }}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-bold">{c.full_name.charAt(0)}</div>
@@ -174,6 +232,54 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
                   ))
                 ) : null}
               </div>
+            </div>
+          )}
+
+          {m1Impact && m1Impact.total > 0 && (
+            <div className="border border-neutral-200 rounded-lg p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-700 mb-2">Tác động đến ngưởi dưới line</p>
+              <p className="text-xs text-neutral-500 mb-2">
+                ℹ️ Agent trong 90 ngày đầu không bị giới hạn cấp bậc (ASC vẫn được phép đổi T1).
+              </p>
+              <p className="text-sm text-neutral-700">
+                Agent này đang là T1 của: <span className="font-medium text-neutral-900">{m1Impact.total} ngưởi</span>
+              </p>
+              <p className="text-sm text-neutral-700">
+                <span className="text-success font-medium">{m1Impact.eligibleCount} ngưởi</span> đủ điều kiện chọn T1 mới
+              </p>
+              <p className="text-sm text-neutral-700">
+                <span className="text-danger font-medium">{m1Impact.ineligibleCount} ngưởi</span> không đủ điều kiện (sẽ ở lại với T2)
+              </p>
+              <button
+                onClick={() => setShowM1Detail((v) => !v)}
+                className="mt-2 text-xs text-primary hover:underline"
+              >
+                {showM1Detail ? 'Thu gọn' : 'Xem chi tiết'}
+              </button>
+              {showM1Detail && (
+                <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
+                  {m1Impact.details.map((d) => (
+                    <div key={d.agent.id} className="flex items-start gap-2 text-sm">
+                      <span>{d.eligible ? '✅' : '❌'}</span>
+                      <div>
+                        <p className="font-medium text-neutral-900">
+                          {d.agent.full_name ?? '—'} ({d.agent.staff_id ?? '—'})
+                        </p>
+                        {d.reasons.length > 0 && (
+                          <p className="text-xs text-red-600">
+                            {d.reasons.join('; ')}
+                          </p>
+                        )}
+                        {d.notes.length > 0 && (
+                          <p className="text-xs text-primary">
+                            {d.notes.join('; ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

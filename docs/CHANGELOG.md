@@ -89,3 +89,37 @@ ALTER TABLE public.t1_changes ALTER COLUMN old_t1_id DROP NOT NULL;
 **URL:** https://t1-change-tracker.vercel.app
 
 **Cách deploy:** `cd webapp && vercel --prod --yes`
+
+---
+
+## 2026-05-27
+
+### 6. Điều chỉnh workflow B2 — nhập ngày xác nhận, cảnh báo 3 ngày làm việc, xác nhận thay đổi từ ngày thứ 4
+
+**Thay đổi:**
+- Khi chuyển sang B2, admin phải nhập ngày xác nhận (date picker) thay vì auto ghi `NOW()`.
+- Dashboard thêm card **"B2 chờ phản hồi chấp thuận"**: tính deadline = ngày xác nhận + 3 ngày làm việc (trừ T7, CN, ngày lễ VN), cảnh báo đỏ khi quá hạn.
+- Dashboard thêm card **"B2 đủ điều kiện xác nhận thay đổi"**: từ ngày thứ 4 (ngày xác nhận + 4 ngày làm việc), admin có thể bấm **"Xác nhận thay đổi"** để hoàn tất request ngay (bypass B3→B4→B5) hoặc **"Hủy đề xuất"**.
+- Cả 2 nút đều có **countdown 10 giây** (modal `CountdownConfirmModal`) để tránh misclick.
+- Không auto-update, chỉ xảy ra khi admin thao tác tay.
+
+**Files sửa:**
+- `webapp/src/lib/eligibility.ts` — Thêm `addBusinessDays`, `isBusinessDay`, `checkCanChooseNewT1`, `getM1ImpactSummary`
+- `webapp/src/lib/request-actions.ts` — Tạo mới, tách `completeRequestAction` reusable
+- `webapp/src/components/CountdownConfirmModal.tsx` — Tạo mới
+- `webapp/src/pages/RequestDetailPage.tsx` — Modal nhập ngày B2, refactor dùng `completeRequestAction`
+- `webapp/src/pages/DashboardPage.tsx` — 2 card B2 + query holidays + countdown modal
+- `webapp/docs/CHANGELOG.md`
+
+### 7. M1 Impact Analysis trong modal Tạo đề xuất
+
+**Thay đổi:**
+- Khi tạo đề xuất, hiển thị thêm section **"Tác động đến ngưởi dưới line"**:
+  - Tổng số M1 của agent đang đổi T1.
+  - Số M1 đủ điều kiện chọn T1 mới.
+  - Số M1 không đủ điều kiện (sẽ ở lại với T2).
+  - Expandable list chi tiết từng M1 + lý do.
+
+**Files sửa:**
+- `webapp/src/components/CreateRequestModal.tsx`
+- `webapp/src/lib/eligibility.ts`

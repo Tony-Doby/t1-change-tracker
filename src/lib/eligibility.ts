@@ -14,6 +14,8 @@ function daysSince(dateStr: string | null): number {
 
 interface AgentLike {
   id: string
+  staff_id: string
+  full_name: string
   current_t1_id: string | null
   contract_signing_date: string | null
   rank_name: string | null
@@ -118,5 +120,103 @@ export function getT1Capacity(
     menteeCount,
     recentAcceptCount,
     warning: menteeCount > 10 || recentAcceptCount > 3,
+  }
+}
+
+export function isBusinessDay(dateStr: string, holidays: Set<string>): boolean {
+  const date = new Date(dateStr)
+  const dayOfWeek = date.getDay()
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false
+  return !holidays.has(dateStr.slice(0, 10))
+}
+
+export function addBusinessDays(
+  startDateStr: string,
+  days: number,
+  holidays: Set<string>
+): Date {
+  const date = new Date(startDateStr)
+  date.setHours(0, 0, 0, 0)
+  let remaining = days
+  while (remaining > 0) {
+    date.setDate(date.getDate() + 1)
+    const dStr = date.toISOString().slice(0, 10)
+    if (isBusinessDay(dStr, holidays)) {
+      remaining--
+    }
+  }
+  return date
+}
+
+export function checkCanChooseNewT1(
+  agent: AgentLike,
+  t1Changes: ChangeLike[]
+): { eligible: boolean; reasons: string[]; notes: string[] } {
+  const reasons: string[] = []
+  const notes: string[] = []
+  const days = daysSince(agent.contract_signing_date)
+  const changes = t1Changes.filter(
+    (c) => c.agent_id === agent.id && c.is_counted_for_quota && !c.deleted_at
+  )
+  const changeCount = changes.length
+  const lastChange = changes.sort(
+    (a, b) => new Date(b.change_date).getTime() - new Date(a.change_date).getTime()
+  )[0]
+  const daysSinceLastChange = lastChange ? daysSince(lastChange.change_date) : null
+
+  if (days <= 90) {
+    if (!isNotASC(agent.rank_name)) {
+      notes.push('Cấp bậc ASC — trong 90 ngày đầu vẫn được phép đổi T1')
+    }
+    if (changeCount >= 1) {
+      reasons.push(`Đã đổi T1 ${changeCount} lần trong 90 ngày đầu`)
+    }
+  } else {
+    if (changeCount >= 3) {
+      reasons.push(`Đã đổi T1 ${changeCount} lần (tối đa 3 lần)`)
+    }
+    if (!isNotASC(agent.rank_name)) {
+      reasons.push(`Cấp bậc ${agent.rank_name ?? '—'} không đạt (không được là ASC)`)
+    }
+    if (daysSinceLastChange !== null && daysSinceLastChange < 180) {
+      reasons.push(`Mới đổi T1 cách đây ${daysSinceLastChange} ngày (cần >= 180)`)
+    }
+  }
+
+  return { eligible: reasons.length === 0, reasons, notes }
+}
+
+export interface M1ImpactDetail {
+  agent: AgentLike
+  eligible: boolean
+  reasons: string[]
+  notes: string[]
+}
+
+export interface M1ImpactSummary {
+  total: number
+  eligibleCount: number
+  ineligibleCount: number
+  details: M1ImpactDetail[]
+}
+
+export function getM1ImpactSummary(
+  t1Id: string,
+  agents: AgentLike[],
+  t1Changes: ChangeLike[]
+): M1ImpactSummary {
+  const m1s = agents.filter(
+    (a) => a.current_t1_id === t1Id && !a.deleted_at && a.status === 'active'
+  )
+  const details: M1ImpactDetail[] = m1s.map((m1) => {
+    const res = checkCanChooseNewT1(m1, t1Changes)
+    return { agent: m1, eligible: res.eligible, reasons: res.reasons, notes: res.notes }
+  })
+  const eligibleCount = details.filter((d) => d.eligible).length
+  return {
+    total: m1s.length,
+    eligibleCount,
+    ineligibleCount: m1s.length - eligibleCount,
+    details,
   }
 }

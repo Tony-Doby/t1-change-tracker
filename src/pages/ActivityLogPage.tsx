@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { Filter, Search } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { formatDate, formatTime } from '../lib/date-utils'
 
 interface LogItem {
   id: string
@@ -71,7 +72,7 @@ export default function ActivityLogPage() {
   const grouped = useMemo(() => {
     const g: Record<string, LogItem[]> = {}
     filtered.forEach((item) => {
-      const date = new Date(item.created_at).toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+      const date = formatDate(item.created_at)
       if (!g[date]) g[date] = []
       g[date].push(item)
     })
@@ -120,7 +121,7 @@ export default function ActivityLogPage() {
               <div className="space-y-3">
                 {items.map((item) => {
                   const meta = actionTypeLabels[item.action_type] ?? { label: item.action_type, color: 'bg-neutral-100 text-neutral-700', dot: 'bg-neutral-500' }
-                  const time = new Date(item.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                  const time = formatTime(item.created_at)
                   return (
                     <div key={item.id} className="flex items-start gap-3">
                       <div className="w-16 text-xs text-neutral-500 shrink-0 pt-1">{time}</div>

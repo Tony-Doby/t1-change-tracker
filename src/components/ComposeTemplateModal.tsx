@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { X, Copy, Mail } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useToast } from './Toast'
+import { formatDate } from '../lib/date-utils'
 
 interface Props {
   agentId: string
@@ -78,9 +79,9 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
       .replace(/{{oldT1Email}}/g, t1Old?.email ?? '')
       .replace(/{{newT1Name}}/g, 'Lê Thị D')
       .replace(/{{newT1Email}}/g, 'ltd@era.com')
-      .replace(/{{date}}/g, new Date().toLocaleDateString('vi-VN'))
-      .replace(/{{deadlineDate}}/g, new Date(Date.now() + 30 * 86400000).toLocaleDateString('vi-VN'))
-      .replace(/{{notifyDate}}/g, new Date().toLocaleDateString('vi-VN'))
+      .replace(/{{date}}/g, formatDate(new Date()))
+      .replace(/{{deadlineDate}}/g, formatDate(new Date(Date.now() + 30 * 86400000)))
+      .replace(/{{notifyDate}}/g, formatDate(new Date()))
       .replace(/{{tempT1Name}}/g, t1Old?.full_name ?? '')
   }, [template, agent, t1Old])
 

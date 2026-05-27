@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast'
 import ExportModal from '../components/ExportModal'
 import ComposeTemplateModal from '../components/ComposeTemplateModal'
 import { BOOKMARKS_KEY } from '../lib/constants'
+import { formatDate } from '../lib/date-utils'
 
 type QuickFilter = 'all' | 'near_91d' | 'near_180d' | 'quota_exceeded' | 'transition' | 'no_t1' | 'bookmarked'
 
@@ -25,6 +26,7 @@ export default function AgentsPage() {
   const { user } = useAuth()
   const { show } = useToast()
   const [agents, setAgents] = useState<any[]>([])
+  const [t1Map, setT1Map] = useState<Record<string, { full_name: string; staff_id: string }>>({})
   const [search, setSearch] = useState('')
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
   const [showFilterMenu, setShowFilterMenu] = useState(false)
@@ -52,8 +54,24 @@ export default function AgentsPage() {
     const { data, error } = await query.order('created_at', { ascending: false })
     if (error) {
       show('Lỗi tải dữ liệu: ' + error.message, 'error')
+      setAgents([])
+      setT1Map({})
     } else {
-      setAgents(data ?? [])
+      const list = data ?? []
+      setAgents(list)
+
+      const t1Ids = [...new Set(list.map((a: any) => a.current_t1_id).filter(Boolean))]
+      if (t1Ids.length > 0) {
+        const { data: t1Data } = await supabase
+          .from('agents')
+          .select('id, full_name, staff_id')
+          .in('id', t1Ids)
+        const map: Record<string, { full_name: string; staff_id: string }> = {}
+        t1Data?.forEach((a: any) => { map[a.id] = a })
+        setT1Map(map)
+      } else {
+        setT1Map({})
+      }
     }
     setLoading(false)
   }
@@ -140,8 +158,8 @@ export default function AgentsPage() {
                     <td className="px-4 py-3"><Link to={`/agents/${agent.id}`} className="text-primary hover:underline font-medium">{agent.staff_id}</Link></td>
                     <td className="px-4 py-3 text-neutral-900">{agent.full_name}</td>
                     <td className="px-4 py-3 text-neutral-700">{agent.rank_name ?? '—'}</td>
-                    <td className="px-4 py-3 text-neutral-700">{agent.contract_signing_date}</td>
-                    <td className="px-4 py-3 text-neutral-700">{agent.current_t1_id ?? '—'}</td>
+                    <td className="px-4 py-3 text-neutral-700">{formatDate(agent.contract_signing_date)}</td>
+                    <td className="px-4 py-3 text-neutral-700">{agent.current_t1_id ? (t1Map[agent.current_t1_id] ? `${t1Map[agent.current_t1_id].full_name} - ${t1Map[agent.current_t1_id].staff_id}` : agent.current_t1_id.slice(0, 8)) : '—'}</td>
                     <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${agent.status === 'active' ? 'bg-success-light text-success' : 'bg-neutral-100 text-neutral-500'}`}>{agent.status === 'active' ? 'Active' : 'Inactive'}</span></td>
                   </tr>
                 )
@@ -164,7 +182,7 @@ export default function AgentsPage() {
         )}
       </div>
 
-      {showExport && <ExportModal title="Xuất danh sách Agent" onClose={() => setShowExport(false)} data={filtered.map((a) => ({ 'Mã NV': a.staff_id, 'Họ tên': a.full_name, 'Cấp bậc': a.rank_name, 'Ngày ký HĐ': a.contract_signing_date, 'T1 hiện tại': a.current_t1_id ?? '—', 'Trạng thái': a.status }))} filename="agents" hasFilter={quickFilter !== 'all' || !!search} />}
+      {showExport && <ExportModal title="Xuất danh sách Agent" onClose={() => setShowExport(false)} data={filtered.map((a) => ({ 'Mã NV': a.staff_id, 'Họ tên': a.full_name, 'Cấp bậc': a.rank_name, 'Ngày ký HĐ': formatDate(a.contract_signing_date), 'T1 hiện tại': a.current_t1_id ? (t1Map[a.current_t1_id] ? `${t1Map[a.current_t1_id].full_name} - ${t1Map[a.current_t1_id].staff_id}` : a.current_t1_id) : '—', 'Trạng thái': a.status }))} filename="agents" hasFilter={quickFilter !== 'all' || !!search} />}
       {showCompose && selected.length === 1 && <ComposeTemplateModal agentId={selected[0]} onClose={() => setShowCompose(false)} />}
     </div>
   )
