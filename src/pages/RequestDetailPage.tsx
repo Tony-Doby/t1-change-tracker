@@ -8,6 +8,7 @@ import { formatDateTime } from '../lib/date-utils'
 import { addBusinessDays } from '../lib/eligibility'
 import { completeRequestAction } from '../lib/request-actions'
 import CountdownConfirmModal from '../components/CountdownConfirmModal'
+import { SkeletonText } from '../components/Skeleton'
 
 const stepNames = ['B1', 'B2', 'B3']
 
@@ -79,7 +80,17 @@ export default function RequestDetailPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+    return (
+      <div className="space-y-6 animate-fade-in max-w-4xl">
+        <SkeletonText lines={2} />
+        <div className="page-card-lg space-y-4">
+          <SkeletonText lines={4} />
+        </div>
+        <div className="page-card-lg space-y-4">
+          <SkeletonText lines={6} />
+        </div>
+      </div>
+    )
   }
 
   if (!request) {

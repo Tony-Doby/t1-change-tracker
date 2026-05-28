@@ -42,10 +42,10 @@ export async function completeRequestAction(
   })
   if (changeError) throw changeError
 
-  // 3. Update agent current T1
+  // 3. Update agent current T1 (both old and new field for backward compatibility)
   const { error: agentError } = await supabase
     .from('agents')
-    .update({ current_t1_id: request.proposed_new_t1_id })
+    .update({ current_t1_id: request.proposed_new_t1_id, referrer_id: request.proposed_new_t1_id })
     .eq('id', request.agent_id)
   if (agentError) throw agentError
 
@@ -73,7 +73,7 @@ export async function completeRequestAction(
       parent_request_id: request.id,
       departed_agent_id: request.agent_id,
       m1_agent_id: m1.id,
-      temp_t1_id: request.old_t1_id, // null if agent had no old T1
+      temp_t1_id: request.old_t1_id,
       notify_date: now,
       deadline_date: deadline,
       status: 'pending' as const,
@@ -86,7 +86,7 @@ export async function completeRequestAction(
   // 6. Move M1s under temp T1 (or set null if agent had no old T1)
   const { error: m1UpdateError } = await supabase
     .from('agents')
-    .update({ current_t1_id: request.old_t1_id })
+    .update({ current_t1_id: request.old_t1_id, referrer_id: request.old_t1_id })
     .eq('current_t1_id', request.agent_id)
     .is('deleted_at', null)
   if (m1UpdateError) throw m1UpdateError

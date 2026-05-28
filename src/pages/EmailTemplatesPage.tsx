@@ -12,7 +12,7 @@ interface Template {
 
 const defaultPlaceholders = [
   '{{agentName}}', '{{staffId}}', '{{oldT1Name}}', '{{oldT1Email}}',
-  '{{newT1Name}}', '{{newT1Email}}', '{{date}}', '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}',
+  '{{newT1Name}}', '{{newT1Email}}', '{{newT1StaffId}}', '{{date}}', '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}',
 ]
 
 export default function EmailTemplatesPage() {
@@ -58,6 +58,7 @@ export default function EmailTemplatesPage() {
       .replace(/{{oldT1Email}}/g, 'tvb@era.com')
       .replace(/{{newT1Name}}/g, 'Lê Thị D')
       .replace(/{{newT1Email}}/g, 'ltd@era.com')
+      .replace(/{{newT1StaffId}}/g, 'TV22904')
       .replace(/{{date}}/g, '25/05/2026')
       .replace(/{{deadlineDate}}/g, '24/06/2026')
       .replace(/{{notifyDate}}/g, '25/05/2026')

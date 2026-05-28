@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, X } from 'lucide-react'
+import { Plus, Trash2, X, Inbox } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import { formatDate } from '../lib/date-utils'
+import EmptyState from '../components/EmptyState'
 
 interface Holiday {
   id: string
@@ -68,7 +69,8 @@ export default function HolidaysPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow-card overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[500px]">
           <thead>
             <tr className="bg-neutral-50 border-b border-neutral-300">
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Ngày</th>
@@ -84,15 +86,16 @@ export default function HolidaysPage() {
                 <td className="px-4 py-3 text-neutral-900 font-medium">{h.name}</td>
                 <td className="px-4 py-3 text-neutral-500">{h.year}</td>
                 <td className="px-4 py-3">
-                  <button onClick={() => deleteHoliday(h.id)} className="text-neutral-400 hover:text-danger transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => deleteHoliday(h.id)} className="text-neutral-400 hover:text-danger transition-colors" aria-label="Xóa ngày lễ"><Trash2 className="w-4 h-4" /></button>
                 </td>
               </tr>
             ))}
             {holidays.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-12 text-center text-neutral-500">Chưa có ngày lễ nào</td></tr>
+              <tr><td colSpan={4}><EmptyState icon={<Inbox className="w-12 h-12" />} title="Chưa có ngày lễ nào" subtitle="Thêm ngày lễ để tính đúng ngày làm việc" /></td></tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showAdd && (

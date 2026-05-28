@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Search, RotateCcw, Trash2, AlertTriangle } from 'lucide-react'
+import { Search, RotateCcw, Trash2, AlertTriangle, Inbox } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import { formatDate } from '../lib/date-utils'
+import EmptyState from '../components/EmptyState'
 
 interface TrashItem {
   type: 'agent' | 'request'
@@ -123,7 +124,7 @@ export default function TrashPage() {
               </tr>
             ))}
             {allItems.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-12 text-center text-neutral-500">Thùng rác trống</td></tr>
+              <tr><td colSpan={4}><EmptyState icon={<Inbox className="w-12 h-12" />} title="Thùng rác trống" /></td></tr>
             )}
           </tbody>
         </table>

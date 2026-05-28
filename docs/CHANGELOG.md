@@ -7,6 +7,191 @@
 
 ## 2026-05-28
 
+### Docs Cleanup: Archive `PLAN-ui-improvements.md`
+
+**Lý do:** File `PLAN-ui-improvements.md` đã hoàn thành toàn bộ 4 phases (Foundation, Critical Fixes, Loading/Animation Polish, Advanced UI). Các cải tiến đã được triển khai và ghi nhận trong mục **"UI Improvements — Phase 1-4"** ở trên. Để tránh confuse cho AI/agent sau, nội dung plan gốc đã được merge vào CHANGELOG.md và file plan đã xóa.
+
+**Nội dung plan gốc (tóm tắt):**
+- **Phase 1:** Design tokens (CSS variables), `@layer components`, `Skeleton`, `Badge`, `EmptyState`, `Pagination`, `Modal`, `PageTransition`, `SearchDropdown`, hooks `useDebounce`/`useFocusTrap`.
+- **Phase 2:** Fix pagination overflow, table `overflow-x-auto`, max-width container, responsive padding.
+- **Phase 3:** Skeleton loading cho tất cả pages, EmptyState, page transitions, modal animations, debounce search, login polish, aria labels, table row hover.
+- **Phase 4:** Command Palette (Ctrl+K), Notification Dropdown, `SearchDropdown` refactor, print CSS.
+
+**Files xóa:**
+- `webapp/docs/PLAN-ui-improvements.md`
+
+**Files sửa:**
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+## 2026-05-28
+
+### 9. Fix BUG-007: M1 Transition UI cải tiến
+
+**Vấn đề:** Dashboard M1 Transition UI chưa tối ưu: hiển thị "T2 tạm" sai, thiếu Staff ID của T1 tạm, chưa có quick actions, tên M1 chưa clickable.
+
+**Giải pháp:**
+- Đổi text "T2 tạm" → "T1 tạm", hiển thị format `tên (staff_id)`.
+- Tên M1 bọc trong `<Link>` → chuyển `/agents/:id`.
+- Thêm 3 quick buttons: Tạo email mẫu (disabled nếu không eligible), Tạo đề xuất, Ở lại với T2 (countdown 10s).
+- Query thêm `contract_signing_date`, `rank_name` của m1_agent và `t1_changes` để check eligibility.
+
+**Files sửa:**
+- `webapp/src/pages/DashboardPage.tsx`
+- `webapp/docs/PLAN-bug-fixes.md`
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+## 2026-05-28
+
+### 8. Fix BUG-006: Modal bị cắt trong container do PageTransition transform
+
+**Vấn đề:** Modal `ComposeTemplateModal` bị giới hạn bên trong khung content, không overlay toàn màn hình. Nguyên nhân là `PageTransition` dùng CSS animation `fade-in` có `transform: translateY()`, tạo stacking context mới → `position: fixed` của modal bị "trapped".
+
+**Giải pháp:** Dùng `createPortal` từ `react-dom` để render modal ra `document.body`, hoàn toàn thoát khỏi DOM tree và stacking context của `PageTransition` / `Layout`.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`
+- `webapp/docs/PLAN-bug-fixes.md`
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+## 2026-05-28
+
+### 7. Fix BUG-005: Hardcoded T1 mới trong email, thiếu newT1StaffId
+
+**Vấn đề:** `ComposeTemplateModal` hardcoded T1 mới là `'Lê Thị D'` / `'ltd@era.com'` cho mọi agent. Thực tế T1 mới phải lấy từ `t1_requests.proposed_new_t1_id` (request active). Thiếu placeholder `{{newT1StaffId}}`.
+
+**Giải pháp:**
+- Query `t1_requests` tìm request active mới nhất của agent → lấy `proposed_new_t1_id`.
+- Query `agents` lấy `full_name`, `staff_id`, `email` của T1 dự kiến.
+- Replace `{{newT1Name}}`, `{{newT1Email}}`, `{{newT1StaffId}}` từ dữ liệu thực thay vì hardcoded.
+- Thêm `{{newT1StaffId}}` vào `EmailTemplatesPage` placeholders + preview.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`
+- `webapp/src/pages/EmailTemplatesPage.tsx`
+- `webapp/docs/PLAN-bug-fixes.md`
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+## 2026-05-28
+
+### 6. Fix BUG-004: Modal soạn mẫu bị đẩy lên trên, mất nút X
+
+**Vấn đề:** Modal `ComposeTemplateModal` bị đẩy sát header app, phần header của modal (tiêu đề + nút X) bị ẩn khỏi viewport khi nội dung dài.
+
+**Giải pháp:**
+- Wrapper: thêm `overflow-y-auto` để cuộn an toàn khi modal cao hơn viewport.
+- Inner modal: bỏ `max-h-[90vh] overflow-y-auto`, thay bằng `my-auto` để tự căn giữa không bị cắt header.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`
+- `webapp/docs/PLAN-bug-fixes.md`
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+## 2026-05-28
+
+### 5. Fix BUG-003: Soạn mẫu email không lấy nội dung từ DB
+
+**Vấn đề:** `ComposeTemplateModal` dùng mảng templates hardcoded trong code, không query từ DB. Khi admin sửa template trong `EmailTemplatesPage` và lưu, modal soạn thư vẫn hiển thị nội dung cũ.
+
+**Giải pháp:**
+- Thêm `loadTemplates()` query `email_templates` từ Supabase khi modal mount.
+- Merge DB templates với `defaultTemplates` (DB override theo `template_key`).
+- Giữ hardcoded làm fallback nếu DB chưa có data.
+- Thêm `else { setT1Old(null) }` để tránh giữ T1 cũ khi chuyển sang agent không có T1.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`
+- `webapp/docs/PLAN-bug-fixes.md`
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+## 2026-05-28
+
+### UI Improvements — Phase 1-4 (Foundation, Critical Fixes, Polish, Advanced)
+
+**Mục tiêu:** Cải tiến UI/UX toàn diện dựa trên patterns từ `freelancer-workspace` (ThompBui SaaS dashboard).
+
+#### Phase 1: Foundation
+- **CSS Design Tokens:** Chuyển sang CSS variables làm design tokens, thêm animation keyframes (`fade-in`, `fade-in-scale`, `skeleton-pulse`).
+- **Shared Components (mới):**
+  - `Skeleton` — Block, Text, Card, Table shimmer loading states
+  - `Badge` — 5 variants: primary/success/warning/danger/neutral
+  - `EmptyState` — Icon 48px + title + subtitle + optional CTA
+  - `Pagination` — Smart ellipsis `[1] ... [5] [6] **7** [8] [9] ... [255]`
+  - `Modal` — Backdrop blur, scale+fade animation, focus trap, Escape đóng
+  - `PageTransition` — Fade-in wrapper cho mỗi page route
+- **Hooks (mới):**
+  - `useDebounce` — Debounce value với delay tùy chỉnh
+  - `useFocusTrap` — Trap focus trong modal (Tab vòng lặp)
+
+#### Phase 2: Critical Fixes (P0)
+- **Pagination overflow fix:** `AgentsPage` thay 255 nút page inline bằng `Pagination` component (max 7 visible buttons + ellipsis).
+- **Table scroll mobile:** Thêm `overflow-x-auto` wrapper + `min-w` cho tất cả tables: Agents, Requests, AgentDetail (M1), Trash, Holidays.
+- **Max-width container:** `Layout.tsx` thêm `max-w-7xl mx-auto` cho Main Content, giảm stretch trên màn hình lớn.
+- **Responsive padding:** Main content padding thay đổi theo breakpoint `p-4 sm:p-6 lg:p-8`.
+
+#### Phase 3: Loading, Empty & Animation Polish
+- **Skeleton loading:** Thay spinner/text "Đang tải..." bằng `Skeleton` components trên Dashboard (stat cards + content cards), AgentsPage (5 table rows), RequestsPage, AgentDetailPage, RequestDetailPage.
+- **Empty States:** Thay text đơn điệu "Không có dữ liệu" bằng `EmptyState` component (icon + title + subtitle) trên Agents, Requests, AgentDetail (M1, T1 history, as T1), ActivityLog, Trash, Holidays, Dashboard (bookmarks + transitions).
+- **Page Transitions:** `App.tsx` wrap tất cả pages với `PageTransition` → fade-in 350ms mỗi lần chuyển trang.
+- **Modal animations:** `Modal` component mới dùng scale 95% + fade 150ms, focus trap, Escape đóng.
+- **Debounce search:** `RequestsPage` và `ActivityLogPage` dùng `useDebounce` 300ms cho search input.
+- **Login polish:** `LoginPage` thêm toggle show/hide password (Eye/EyeOff icon), `autoComplete="email"` và `autoComplete="current-password"`.
+- **Aria labels:** Thêm `aria-label` cho Menu, Notifications, User menu, bookmark star, delete holiday.
+- **Table row hover:** Thêm `transition-colors duration-100` cho tất cả table rows.
+
+#### Phase 4: Advanced UI
+- **Command Palette (Ctrl+K):** Component mới `CommandPalette` — global search:
+  - Tìm agent theo tên/mã (server-side, limit 5)
+  - Tìm request theo mã/agent (server-side, limit 5)
+  - Navigation nhanh đến tất cả pages
+  - Keyboard nav: ↑↓ chọn, Enter mở, Escape đóng
+  - Header thêm nút "Tìm kiếm [Ctrl K]" trigger
+- **Notification Dropdown:** Component mới `NotificationDropdown`:
+  - Query 20 activity_logs gần nhất
+  - Badge đỏ hiển thị số chưa đọc
+  - Mark all read / mark individual read (lưu localStorage)
+  - Link đến request detail / activity log
+- **Print CSS:** `@media print` ẩn sidebar, header, nav, buttons — chỉ hiển thị nội dung chính.
+
+**Files sửa/tạo:**
+- `webapp/src/index.css` — Design tokens, animations, print CSS
+- `webapp/src/components/Skeleton.tsx` — Mới
+- `webapp/src/components/Badge.tsx` — Mới
+- `webapp/src/components/EmptyState.tsx` — Mới
+- `webapp/src/components/Pagination.tsx` — Mới
+- `webapp/src/components/Modal.tsx` — Mới
+- `webapp/src/components/PageTransition.tsx` — Mới
+- `webapp/src/components/CommandPalette.tsx` — Mới
+- `webapp/src/components/NotificationDropdown.tsx` — Mới
+- `webapp/src/hooks/useDebounce.ts` — Mới
+- `webapp/src/hooks/useFocusTrap.ts` — Mới
+- `webapp/src/App.tsx` — PageTransition wrap
+- `webapp/src/components/Layout.tsx` — max-width, aria labels, CommandPalette, NotificationDropdown
+- `webapp/src/pages/LoginPage.tsx` — Toggle password, autoComplete
+- `webapp/src/pages/AgentsPage.tsx` — Pagination component, SkeletonTable, EmptyState, overflow-x-auto
+- `webapp/src/pages/RequestsPage.tsx` — Debounce, SkeletonTable, EmptyState, overflow-x-auto
+- `webapp/src/pages/AgentDetailPage.tsx` — Skeleton, EmptyState, overflow-x-auto
+- `webapp/src/pages/RequestDetailPage.tsx` — Skeleton loading
+- `webapp/src/pages/ActivityLogPage.tsx` — Debounce, EmptyState
+- `webapp/src/pages/TrashPage.tsx` — EmptyState
+- `webapp/src/pages/HolidaysPage.tsx` — EmptyState, overflow-x-auto, aria-label
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+## 2026-05-28
+
 ### 4. Fix BUG-002: Agent không tìm thấy do Supabase `max-rows` limit
 
 **Vấn đề:** Agent Lê Vạn Lý - LL60640 có trong DB nhưng không tìm thấy khi search trong AgentsPage. Supabase REST API mặc định giới hạn 1000 rows, query không có `.limit()` chỉ trả về ~1000 agents mới nhất. Search client-side chỉ tìm trên subset → agents cũ bị "mất".
@@ -279,3 +464,53 @@ ALTER TABLE public.t1_changes ALTER COLUMN old_t1_id DROP NOT NULL;
 **Files sửa:**
 - `webapp/supabase/cleanup_agent_data.sql` — Tạo mới (script xóa data giữ schema)
 - `webapp/supabase/import_agents.sql` — Revert về không có `agent_code`
+
+### 13. BUG-008: DivisionsPage — Head Agent searchable dropdown + table scroll
+
+**Vấn đề:**
+1. Form "Sửa division" yêu cầu nhập UUID thủ công cho `head_agent_id` → admin không thể dùng thực tế.
+2. Bảng divisions hiển thị toàn bộ 29 dòng, không giới hạn chiều cao → page dài, khó quan sát.
+
+**Giải pháp:**
+1. Thay input text UUID bằng **searchable dropdown**: gõ tên hoặc staff_id → query Supabase → chọn agent → lưu UUID ngầm.
+2. Giới hạn chiều cao bảng `max-h-[400px]` với `overflow-y-auto` + `sticky` header.
+
+**Files sửa:**
+- `webapp/src/pages/DivisionsPage.tsx` — Searchable dropdown, sticky scroll table
+
+
+### 14. BUG-009: AgentsPage không hiển thị Division — Schema gap `division_id` INTEGER vs UUID
+
+**Vấn đề:**
+1. `AgentsPage` không có cột Division trong bảng.
+2. `agents.division_id` là `INTEGER` (schema cũ) trong khi `divisions.id` là `UUID` (schema mới). Trigger `recompute_division_on_referrer_change` gán UUID vào cột INTEGER → sẽ gây lỗi cast.
+
+**Giải pháp:**
+1. **Schema migration** (`011_fix_division_id_uuid.sql`):
+   - Tạo cột `division_uuid UUID`, compute division cho toàn bộ agents (head → division của head, còn lại → "Khác")
+   - Drop cột `division_id` INTEGER cũ, rename `division_uuid` → `division_id`
+   - Tạo index, recreate trigger với kiểu UUID đúng
+2. **Frontend:**
+   - `types/index.ts` — `Agent.division_id: string | null`
+   - `AgentsPage.tsx` — query divisions, thêm cột Division, update export
+   - `AgentDetailPage.tsx` — hiển thị division trong info card
+
+**Files sửa:**
+- `webapp/supabase/migrations/011_fix_division_id_uuid.sql` — Tạo mới
+- `webapp/src/types/index.ts`
+- `webapp/src/pages/AgentsPage.tsx`
+- `webapp/src/pages/AgentDetailPage.tsx`
+
+
+### 15. FEAT-008: Division Safety Net — Force Recompute & getAgentDivision RPC
+
+**Mô tả:**
+Hoàn thiện Lớp 2 và Lớp 3 của Division Safety Net theo thiết kế FEAT-006:
+
+- **Lớp 2:** RPC `get_agent_division(agent_id)` — tính division đúng theo business rule (agent là head → division đó, có T1 → đi lên cây T1 tìm head → division của head, fallback → "Khác")
+- **Lớp 3:** Nút "🔄 Tính lại Division" trong trang Divisions — admin force recompute toàn bộ agents với CountdownConfirmModal 10s
+
+**Files sửa:**
+- `webapp/supabase/migrations/012_division_safety_net.sql` — 2 RPC functions mới
+- `webapp/src/pages/DivisionsPage.tsx` — Thêm button + CountdownConfirmModal + gọi RPC
+

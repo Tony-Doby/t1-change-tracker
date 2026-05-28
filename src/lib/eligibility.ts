@@ -1,8 +1,16 @@
 import type { EligibilityResult } from '../types'
 
-function isNotASC(rank: string | null): boolean {
-  if (!rank) return false
-  return rank.toLowerCase().trim() !== 'asc'
+function isNotASC(rankName: string | null, rankId: string | null, rankNamesMap?: Map<string, string>): boolean {
+  if (rankName) {
+    return rankName.toLowerCase().trim() !== 'asc'
+  }
+  if (rankId && rankNamesMap) {
+    const name = rankNamesMap.get(rankId)
+    if (name) {
+      return name.toLowerCase().trim() !== 'asc'
+    }
+  }
+  return false
 }
 
 function daysSince(dateStr: string | null): number {
@@ -17,8 +25,10 @@ interface AgentLike {
   staff_id: string
   full_name: string
   current_t1_id: string | null
+  referrer_id: string | null
   contract_signing_date: string | null
   rank_name: string | null
+  rank_id: string | null
   deleted_at: string | null
   status: string | null
 }
@@ -31,11 +41,16 @@ interface ChangeLike {
   deleted_at: string | null
 }
 
+function getAgentT1(agent: AgentLike): string | null {
+  return agent.referrer_id ?? agent.current_t1_id ?? null
+}
+
 export function checkEligibility(
   agentId: string,
   proposedT1Id: string | null,
   agents: AgentLike[],
-  t1Changes: ChangeLike[]
+  t1Changes: ChangeLike[],
+  rankNamesMap?: Map<string, string>
 ): EligibilityResult {
   const agent = agents.find((a) => a.id === agentId && !a.deleted_at)
   if (!agent) {
@@ -50,7 +65,7 @@ export function checkEligibility(
   if (proposedT1Id === agentId) {
     return { eligible: false, reasons: ['Không thể chọn chính mình làm T1'] }
   }
-  if (proposedT1Id === agent.current_t1_id) {
+  if (proposedT1Id === getAgentT1(agent)) {
     return { eligible: false, reasons: ['T1 mới không được trùng với T1 hiện tại'] }
   }
 
@@ -77,10 +92,12 @@ export function checkEligibility(
       reasons.push(`✅ Đã đổi T1 ${changeCount}/3 lần`)
     }
 
-    if (!isNotASC(agent.rank_name)) {
-      reasons.push(`❌ Cấp bậc hiện tại "${agent.rank_name ?? '—'}" không đạt yêu cầu (không được là ASC)`)
+    if (!isNotASC(agent.rank_name, agent.rank_id, rankNamesMap)) {
+      const displayRank = agent.rank_name ?? (agent.rank_id && rankNamesMap ? rankNamesMap.get(agent.rank_id) : '—')
+      reasons.push(`❌ Cấp bậc hiện tại "${displayRank ?? '—'}" không đạt yêu cầu (không được là ASC)`)
     } else {
-      reasons.push(`✅ Cấp bậc: ${agent.rank_name} (đạt yêu cầu)`)
+      const displayRank = agent.rank_name ?? (agent.rank_id && rankNamesMap ? rankNamesMap.get(agent.rank_id) : '—')
+      reasons.push(`✅ Cấp bậc: ${displayRank} (đạt yêu cầu)`)
     }
 
     if (daysSinceLastChange !== null && daysSinceLastChange < 180) {
@@ -108,7 +125,7 @@ export function getT1Capacity(
   t1Changes: ChangeLike[]
 ): T1Capacity {
   const menteeCount = agents.filter(
-    (a) => a.current_t1_id === t1Id && !a.deleted_at && a.status === 'active'
+    (a) => getAgentT1(a) === t1Id && !a.deleted_at && a.status === 'active'
   ).length
 
   const recentAcceptCount = t1Changes.filter((c) => {
@@ -150,7 +167,8 @@ export function addBusinessDays(
 
 export function checkCanChooseNewT1(
   agent: AgentLike,
-  t1Changes: ChangeLike[]
+  t1Changes: ChangeLike[],
+  rankNamesMap?: Map<string, string>
 ): { eligible: boolean; reasons: string[]; notes: string[] } {
   const reasons: string[] = []
   const notes: string[] = []
@@ -165,7 +183,7 @@ export function checkCanChooseNewT1(
   const daysSinceLastChange = lastChange ? daysSince(lastChange.change_date) : null
 
   if (days <= 90) {
-    if (!isNotASC(agent.rank_name)) {
+    if (!isNotASC(agent.rank_name, agent.rank_id, rankNamesMap)) {
       notes.push('Cấp bậc ASC — trong 90 ngày đầu vẫn được phép đổi T1')
     }
     if (changeCount >= 1) {
@@ -175,8 +193,9 @@ export function checkCanChooseNewT1(
     if (changeCount >= 3) {
       reasons.push(`Đã đổi T1 ${changeCount} lần (tối đa 3 lần)`)
     }
-    if (!isNotASC(agent.rank_name)) {
-      reasons.push(`Cấp bậc ${agent.rank_name ?? '—'} không đạt (không được là ASC)`)
+    if (!isNotASC(agent.rank_name, agent.rank_id, rankNamesMap)) {
+      const displayRank = agent.rank_name ?? (agent.rank_id && rankNamesMap ? rankNamesMap.get(agent.rank_id) : '—')
+      reasons.push(`Cấp bậc ${displayRank} không đạt (không được là ASC)`)
     }
     if (daysSinceLastChange !== null && daysSinceLastChange < 180) {
       reasons.push(`Mới đổi T1 cách đây ${daysSinceLastChange} ngày (cần >= 180)`)
@@ -203,13 +222,14 @@ export interface M1ImpactSummary {
 export function getM1ImpactSummary(
   t1Id: string,
   agents: AgentLike[],
-  t1Changes: ChangeLike[]
+  t1Changes: ChangeLike[],
+  rankNamesMap?: Map<string, string>
 ): M1ImpactSummary {
   const m1s = agents.filter(
-    (a) => a.current_t1_id === t1Id && !a.deleted_at && a.status === 'active'
+    (a) => getAgentT1(a) === t1Id && !a.deleted_at && a.status === 'active'
   )
   const details: M1ImpactDetail[] = m1s.map((m1) => {
-    const res = checkCanChooseNewT1(m1, t1Changes)
+    const res = checkCanChooseNewT1(m1, t1Changes, rankNamesMap)
     return { agent: m1, eligible: res.eligible, reasons: res.reasons, notes: res.notes }
   })
   const eligibleCount = details.filter((d) => d.eligible).length

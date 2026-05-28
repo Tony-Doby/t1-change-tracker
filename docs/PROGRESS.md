@@ -1,7 +1,8 @@
 # Tiến độ T1 Change Tracker
 
 > File này dùng để theo dõi tiến độ và nối lại công việc sau khi ngưng.  
-> Cập nhật: 2026-05-27
+> Đọc kèm `KNOWLEDGE.md` để nắm gotchas & constraints trước khi code.  
+> Cập nhật: 2026-05-28
 
 ---
 
@@ -71,11 +72,11 @@
 
 ### Tính năng còn thiếu
 - [x] **M1 Transition Task automation**: Khi hoàn tất request, tự động tạo `m1_transition_tasks` cho các M1 của agent vừa đổi T1. Dashboard gọi RPC `process_expired_m1_transitions()` + nút "Áp dụng T2" update DB
-- [ ] **Email sending thật**: Hiện chỉ copy nội dung/email. Cần tích hợp SendGrid/Resend để gửi email từ backend
-- [ ] **Realtime updates**: Chưa dùng Supabase Realtime (subscriptions) cho comments, status changes
-- [ ] **In-app Notifications**: Chưa có hệ thống thông báo (badge, dropdown)
-- [ ] **Search/Filter server-side**: Hiện query all rồi filter client-side (OK với <10k records, cần pagination server-side nếu scale)
-- [ ] **TanStack Query**: Đã cài nhưng chưa dùng — các page đang dùng `useState` + `useEffect` thủ công
+- [ ] **Email sending thật** → xem `PLAN-feature-dev.md` FEAT-001
+- [ ] **Realtime updates** → xem `PLAN-feature-dev.md` FEAT-002
+- [ ] **In-app Notifications** → xem `PLAN-feature-dev.md` FEAT-003
+- [ ] **Search/Filter server-side** → xem `PLAN-feature-dev.md` FEAT-005
+- [ ] **TanStack Query refactor** → xem `PLAN-feature-dev.md` FEAT-004
 
 ### Polish & Deploy
 - [ ] **Responsive mobile**: Chưa optimize cho màn hình nhỏ (bỏ qua theo yêu cầu)

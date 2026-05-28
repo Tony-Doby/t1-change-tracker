@@ -30,6 +30,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
   const [m1Impact, setM1Impact] = useState<M1ImpactSummary | null>(null)
   const [showM1Detail, setShowM1Detail] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [rankNamesMap, setRankNamesMap] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     loadData()
@@ -42,11 +43,13 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
       { data: agentData },
       { data: changesData },
       { data: m1Agents },
+      { data: ranksData },
     ] = await Promise.all([
       supabase.from('agents').select('*').is('deleted_at', null).limit(10000),
       supabase.from('agents').select('*').eq('id', agentId).single(),
       supabase.from('t1_changes').select('*').is('deleted_at', null).limit(10000),
-      supabase.from('agents').select('*').eq('current_t1_id', agentId).is('deleted_at', null),
+      supabase.from('agents').select('*').or(`referrer_id.eq.${agentId},current_t1_id.eq.${agentId}`).is('deleted_at', null),
+      supabase.from('ranks').select('id, name'),
     ])
     // Merge all agents, ensure main agent and M1s are present
     const merged = new Map<string, any>()
@@ -55,11 +58,15 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
     if (agentData) merged.set(agentData.id, agentData)
     const allAgents = Array.from(merged.values())
 
+    const rMap = new Map<string, string>()
+    ranksData?.forEach((r: any) => rMap.set(r.id, r.name))
+    setRankNamesMap(rMap)
+
     setAgents(allAgents)
     setAgent(agentData)
     setT1Changes(changesData ?? [])
     if (agentData && changesData) {
-      setM1Impact(getM1ImpactSummary(agentData.id, allAgents, changesData ?? []))
+      setM1Impact(getM1ImpactSummary(agentData.id, allAgents, changesData ?? [], rMap))
     }
     setLoading(false)
   }
@@ -80,7 +87,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
         .or(`full_name.ilike.%${q}%,staff_id.ilike.%${q}%`)
         .limit(20)
       const filtered = (data ?? []).filter(
-        (a) => a.id !== agentId && a.id !== agent?.current_t1_id
+        (a) => a.id !== agentId && a.id !== (agent?.referrer_id ?? agent?.current_t1_id)
       )
       setDropdownAgents(filtered)
       setSearchingDropdown(false)
@@ -114,7 +121,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
     }
     setChecking(true)
     const timer = setTimeout(() => {
-      const res = checkEligibility(agentId, selectedT1Id, agents, t1Changes)
+      const res = checkEligibility(agentId, selectedT1Id, agents, t1Changes, rankNamesMap)
       const cap = getT1Capacity(selectedT1Id, agents, t1Changes)
       setResult(res)
       setCapacity(cap)
@@ -128,7 +135,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
     setSubmitting(true)
     const { error } = await supabase.from('t1_requests').insert({
       agent_id: agentId,
-      old_t1_id: agent.current_t1_id,
+      old_t1_id: agent.referrer_id ?? agent.current_t1_id,
       proposed_new_t1_id: selectedT1Id,
       status: 'step1',
       created_by: user?.id,
@@ -169,7 +176,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
         <div className="p-5 space-y-5">
           <div className="bg-neutral-50 rounded-lg p-3 text-sm space-y-1">
             <p><span className="text-neutral-500">Agent:</span> <span className="font-medium text-neutral-900">{agent.full_name} ({agent.staff_id})</span></p>
-            <p><span className="text-neutral-500">T1 hiện tại:</span> <span className="font-medium text-neutral-900">{getAgentName(agent.current_t1_id)}</span></p>
+            <p><span className="text-neutral-500">T1 hiện tại:</span> <span className="font-medium text-neutral-900">{getAgentName(agent.referrer_id ?? agent.current_t1_id)}</span></p>
           </div>
 
           <div className="relative">
@@ -198,7 +205,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
                     <button key={c.id} onClick={() => { setSelectedT1Id(c.id); setShowDropdown(false); setSearch('') }}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-bold">{c.full_name.charAt(0)}</div>
-                      <div><p className="font-medium text-neutral-900">{c.full_name}</p><p className="text-xs text-neutral-500">{c.staff_id} • {c.rank_name ?? '—'}</p></div>
+                      <div><p className="font-medium text-neutral-900">{c.full_name}</p><p className="text-xs text-neutral-500">{c.staff_id} • {c.rank_name ?? rankNamesMap.get(c.rank_id) ?? '—'}</p></div>
                     </button>
                   ))}
                 </div>

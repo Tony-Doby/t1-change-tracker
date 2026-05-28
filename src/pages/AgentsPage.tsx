@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Search, Filter, Download, Mail, Star, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Filter, Download, Mail, Star } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
 import ExportModal from '../components/ExportModal'
 import ComposeTemplateModal from '../components/ComposeTemplateModal'
+import DeactivateAgentModal from '../components/DeactivateAgentModal'
+import RestoreAgentModal from '../components/RestoreAgentModal'
+import Pagination from '../components/Pagination'
+import { SkeletonTable } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
+import { Inbox, Power, PowerOff } from 'lucide-react'
 import { BOOKMARKS_KEY } from '../lib/constants'
 import { formatDate } from '../lib/date-utils'
 
@@ -34,6 +40,10 @@ export default function AgentsPage() {
   const [loading, setLoading] = useState(true)
   const [showExport, setShowExport] = useState(false)
   const [showCompose, setShowCompose] = useState(false)
+  const [deactivateAgentId, setDeactivateAgentId] = useState<string | null>(null)
+  const [restoreAgentId, setRestoreAgentId] = useState<string | null>(null)
+  const [rankNamesMap, setRankNamesMap] = useState<Record<string, string>>({})
+  const [divisionMap, setDivisionMap] = useState<Record<string, string>>({})
 
   const role = user?.role ?? 'viewer'
 
@@ -50,7 +60,23 @@ export default function AgentsPage() {
 
   useEffect(() => {
     loadAgents()
+    loadRanks()
+    loadDivisions()
   }, [debouncedSearch, page, quickFilter])
+
+  async function loadRanks() {
+    const { data } = await supabase.from('ranks').select('id, name')
+    const map: Record<string, string> = {}
+    data?.forEach((r: any) => { map[r.id] = r.name })
+    setRankNamesMap(map)
+  }
+
+  async function loadDivisions() {
+    const { data } = await supabase.from('divisions').select('id, name')
+    const map: Record<string, string> = {}
+    data?.forEach((d: any) => { map[d.id] = d.name })
+    setDivisionMap(map)
+  }
 
   async function loadAgents() {
     setLoading(true)
@@ -61,7 +87,9 @@ export default function AgentsPage() {
       .select('*', { count: 'exact', head: true })
       .is('deleted_at', null)
 
-    if (quickFilter === 'no_t1') countQuery = countQuery.is('current_t1_id', null)
+    if (quickFilter === 'no_t1') {
+      countQuery = countQuery.or('referrer_id.is.null,current_t1_id.is.null')
+    }
     if (quickFilter === 'bookmarked') countQuery = countQuery.in('id', bookmarks)
 
     if (debouncedSearch.trim()) {
@@ -77,7 +105,9 @@ export default function AgentsPage() {
       .select('*')
       .is('deleted_at', null)
 
-    if (quickFilter === 'no_t1') query = query.is('current_t1_id', null)
+    if (quickFilter === 'no_t1') {
+      query = query.or('referrer_id.is.null,current_t1_id.is.null')
+    }
     if (quickFilter === 'bookmarked') query = query.in('id', bookmarks)
 
     if (debouncedSearch.trim()) {
@@ -101,7 +131,7 @@ export default function AgentsPage() {
       setAgents(list)
 
       // Load T1 info only for current page agents
-      const t1Ids = [...new Set(list.map((a: any) => a.current_t1_id).filter(Boolean))]
+      const t1Ids = [...new Set(list.map((a: any) => a.referrer_id ?? a.current_t1_id).filter(Boolean))]
       if (t1Ids.length > 0) {
         const { data: t1Data } = await supabase
           .from('agents')
@@ -146,7 +176,9 @@ export default function AgentsPage() {
         .select('*')
         .is('deleted_at', null)
 
-      if (quickFilter === 'no_t1') query = query.is('current_t1_id', null)
+      if (quickFilter === 'no_t1') {
+        query = query.or('referrer_id.is.null,current_t1_id.is.null')
+      }
       if (quickFilter === 'bookmarked') query = query.in('id', bookmarks)
 
       if (debouncedSearch.trim()) {
@@ -165,7 +197,7 @@ export default function AgentsPage() {
     }
 
     // Build T1 map for all exported rows
-    const t1Ids = [...new Set(all.map((a: any) => a.current_t1_id).filter(Boolean))]
+    const t1Ids = [...new Set(all.map((a: any) => a.referrer_id ?? a.current_t1_id).filter(Boolean))]
     const t1MapAll: Record<string, { full_name: string; staff_id: string }> = {}
     if (t1Ids.length > 0) {
       const { data: t1Data } = await supabase
@@ -178,13 +210,14 @@ export default function AgentsPage() {
     return all.map((a: any) => ({
       'Mã NV': a.staff_id,
       'Họ tên': a.full_name,
-      'Cấp bậc': a.rank_name,
+      'Cấp bậc': a.rank_name ?? rankNamesMap[a.rank_id] ?? '—',
       'Ngày ký HĐ': formatDate(a.contract_signing_date),
-      'T1 hiện tại': a.current_t1_id
-        ? t1MapAll[a.current_t1_id]
-          ? `${t1MapAll[a.current_t1_id].full_name} - ${t1MapAll[a.current_t1_id].staff_id}`
-          : a.current_t1_id
+      'T1 hiện tại': (a.referrer_id ?? a.current_t1_id)
+        ? t1MapAll[a.referrer_id ?? a.current_t1_id]
+          ? `${t1MapAll[a.referrer_id ?? a.current_t1_id].full_name} - ${t1MapAll[a.referrer_id ?? a.current_t1_id].staff_id}`
+          : (a.referrer_id ?? a.current_t1_id)
         : '—',
+      'Division': divisionMap[a.division_id] ?? '—',
       'Trạng thái': a.status,
     }))
   }
@@ -251,7 +284,8 @@ export default function AgentsPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow-card overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr className="bg-neutral-50 border-b border-neutral-300">
               <th className="px-4 py-3 text-left w-10">
@@ -268,12 +302,14 @@ export default function AgentsPage() {
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Cấp bậc</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Ngày ký HĐ</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">T1 hiện tại</th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Division</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Trạng thái</th>
+              {role === 'admin' && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500 w-10"></th>}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="px-4 py-12 text-center text-neutral-500">Đang tải...</td></tr>
+              <SkeletonTable rows={5} cols={8} />
             ) : (
               agents.map((agent) => {
                 const isBookmarked = bookmarks.includes(agent.id)
@@ -303,60 +339,60 @@ export default function AgentsPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-neutral-900">{agent.full_name}</td>
-                    <td className="px-4 py-3 text-neutral-700">{agent.rank_name ?? '—'}</td>
+                    <td className="px-4 py-3 text-neutral-700">{agent.rank_name ?? rankNamesMap[agent.rank_id] ?? '—'}</td>
                     <td className="px-4 py-3 text-neutral-700">{formatDate(agent.contract_signing_date)}</td>
                     <td className="px-4 py-3 text-neutral-700">
-                      {agent.current_t1_id
-                        ? (t1Map[agent.current_t1_id]
-                          ? `${t1Map[agent.current_t1_id].full_name} - ${t1Map[agent.current_t1_id].staff_id}`
-                          : agent.current_t1_id.slice(0, 8))
+                      {(agent.referrer_id ?? agent.current_t1_id)
+                        ? (t1Map[agent.referrer_id ?? agent.current_t1_id]
+                          ? `${t1Map[agent.referrer_id ?? agent.current_t1_id].full_name} - ${t1Map[agent.referrer_id ?? agent.current_t1_id].staff_id}`
+                          : (agent.referrer_id ?? agent.current_t1_id).slice(0, 8))
                         : '—'}
                     </td>
+                    <td className="px-4 py-3 text-neutral-700">{divisionMap[agent.division_id] ?? '—'}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${agent.status === 'active' ? 'bg-success-light text-success' : 'bg-neutral-100 text-neutral-500'}`}>
                         {agent.status === 'active' ? 'Active' : 'Inactive'}
                       </span>
                     </td>
+                    {role === 'admin' && (
+                      <td className="px-4 py-3">
+                        {agent.status === 'active' ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeactivateAgentId(agent.id) }}
+                            className="text-danger hover:text-danger/80"
+                            title="Chấm dứt hoạt động"
+                          >
+                            <PowerOff className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setRestoreAgentId(agent.id) }}
+                            className="text-success hover:text-success/80"
+                            title="Kích hoạt lại"
+                          >
+                            <Power className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 )
               })
             )}
             {!loading && agents.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-12 text-center text-neutral-500">Không có dữ liệu</td></tr>
+              <tr><td colSpan={role === 'admin' ? 9 : 8}><EmptyState icon={<Inbox className="w-12 h-12" />} title="Không tìm thấy agent nào" subtitle="Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm" /></td></tr>
             )}
           </tbody>
         </table>
+        </div>
         {totalCount > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100">
-            <span className="text-xs text-neutral-500">
-              Hiển thị {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, totalCount)} / {totalCount}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-1 rounded-md hover:bg-neutral-100 disabled:opacity-40"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={`w-7 h-7 rounded-md text-xs font-medium ${p === page ? 'bg-primary text-white' : 'text-neutral-700 hover:bg-neutral-100'}`}
-                >
-                  {p}
-                </button>
-              ))}
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="p-1 rounded-md hover:bg-neutral-100 disabled:opacity-40"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+            pageSize={PAGE_SIZE}
+            totalCount={totalCount}
+          />
         )}
       </div>
 
@@ -369,11 +405,12 @@ export default function AgentsPage() {
             'Họ tên': a.full_name,
             'Cấp bậc': a.rank_name,
             'Ngày ký HĐ': formatDate(a.contract_signing_date),
-            'T1 hiện tại': a.current_t1_id
-              ? (t1Map[a.current_t1_id]
-                ? `${t1Map[a.current_t1_id].full_name} - ${t1Map[a.current_t1_id].staff_id}`
-                : a.current_t1_id)
+            'T1 hiện tại': (a.referrer_id ?? a.current_t1_id)
+              ? (t1Map[a.referrer_id ?? a.current_t1_id]
+                ? `${t1Map[a.referrer_id ?? a.current_t1_id].full_name} - ${t1Map[a.referrer_id ?? a.current_t1_id].staff_id}`
+                : (a.referrer_id ?? a.current_t1_id))
               : '—',
+            'Division': divisionMap[a.division_id] ?? '—',
             'Trạng thái': a.status,
           }))}
           filename="agents"
@@ -383,6 +420,12 @@ export default function AgentsPage() {
       )}
       {showCompose && selected.length === 1 && (
         <ComposeTemplateModal agentId={selected[0]} onClose={() => setShowCompose(false)} />
+      )}
+      {deactivateAgentId && (
+        <DeactivateAgentModal agentId={deactivateAgentId} onClose={() => { setDeactivateAgentId(null); loadAgents() }} />
+      )}
+      {restoreAgentId && (
+        <RestoreAgentModal agentId={restoreAgentId} onClose={() => { setRestoreAgentId(null); loadAgents() }} />
       )}
     </div>
   )

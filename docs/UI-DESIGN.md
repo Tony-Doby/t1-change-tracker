@@ -99,7 +99,7 @@ Base unit: 4px
 **Nav Items (vertical stack):**
 1. 📊 Dashboard (icon: LayoutDashboard) — route: `/` — tất cả role
 2. 👤 Agents (icon: Users) — route: `/agents` — tất cả role
-3. 📋 Requests (icon: ClipboardList) — route: `/requests` — tất cả role — **Badge:** số request đang pending (step1→step5)
+3. 📋 Requests (icon: ClipboardList) — route: `/requests` — tất cả role — **Badge:** số request đang pending (B1→B3)
 4. 📈 Activity Log (icon: Activity) — route: `/activity` — tất cả role
 5. 📧 Email Templates (icon: Mail) — route: `/templates` — **chỉ admin**
 6. 📤 Upload Data (icon: Upload) — route: `/upload` — admin + operator
@@ -205,7 +205,7 @@ Same layout as Login, but:
 │  │ ⚠️ Deadline sắp tới    │  │ 📊 Biểu đồ trạng thái   │   │
 │  │                        │  │                         │   │
 │  │ • Agent A - còn 2 ngày │  │  [Pie chart]            │   │
-│  │ • Agent B - còn 5 ngày │  │  Step1: 3 | Step2: 2... │   │
+│  │ • Agent B - còn 5 ngày │  │  B1: 3 | B2: 2... │   │
 │  │ • Request #5 quá hạn   │  │                         │   │
 │  └────────────────────────┘  └─────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
@@ -240,13 +240,11 @@ Same layout as Login, but:
 **3.3.4 Status Chart (Below alert + widget, full width)**
 - Card title: "📊 Trạng thái đề xuất" — H2
 - Donut/Pie chart showing:
-  - Step 1 (primary-light)
-  - Step 2 (primary)
-  - Step 3 (warning)
-  - Step 4 (neutral-500)
-  - Step 5 (success)
-  - Completed (success-light)
-  - Cancelled (danger-light)
+  - B1 (primary-light)
+  - B2 (primary)
+  - B3 (warning)
+  - Hoàn tất (success-light)
+  - Đã hủy (danger-light)
 - Legend below chart
 
 ---
@@ -353,7 +351,7 @@ Same layout as Login, but:
 
 **3.5.1 Header**
 - Left: back arrow button + "Quay lại danh sách"
-- Center: "Agent: [Full Name] ([Agent Code])" — H1
+- Center: "Agent: [Full Name] ([Staff ID])" — H1
 - Right:
   - ⭐ Bookmark toggle (icon Star, outline/filled)
   - "Tạo đề xuất đổi T1" button (bg primary)
@@ -453,8 +451,8 @@ Same layout as Login, but:
 │  [🔍 Search] [Filter ▼] [+ Tạo đề xuất]                      │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌────────┐ │
-│  │ Step 1  │ │ Step 2  │ │ Step 3  │ │ Step 4  ││ Step 5 │ │
-│  │   3     │ │   2     │ │   4     │ │   1     ││   2    │ │
+│  │   B1    │ │   B2    │ │   B3    │ │ Hoàn tất││Đã hủy  │ │
+│  │   3     │ │   2     │ │   4     │ │    1    ││   2    │ │
 │  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └────────┘ │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────────────┐│
@@ -471,8 +469,8 @@ Same layout as Login, but:
   - B1: bg primary-light, text primary
   - B2: bg primary/10, text primary
   - B3: bg warning-light, text warning
-  - Completed: bg success-light/50, text success — click → filter completed
-  - Cancelled: bg danger-light/50, text danger — click → filter cancelled
+  - Hoàn tất: bg success-light/50, text success — click → filter completed
+  - Đã hủy: bg danger-light/50, text danger — click → filter cancelled
 - Click card → filter table to that status
 
 **3.7.2 Table**

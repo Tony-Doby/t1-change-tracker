@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import Layout from './components/Layout'
+import PageTransition from './components/PageTransition'
 import LoginPage from './pages/LoginPage'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 import DashboardPage from './pages/DashboardPage'
@@ -13,6 +14,8 @@ import EmailTemplatesPage from './pages/EmailTemplatesPage'
 import UploadPage from './pages/UploadPage'
 import TrashPage from './pages/TrashPage'
 import HolidaysPage from './pages/HolidaysPage'
+import RanksPage from './pages/RanksPage'
+import DivisionsPage from './pages/DivisionsPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuth()
@@ -34,7 +37,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/change-password" replace />
   }
 
-  return <Layout>{children}</Layout>
+  return <Layout><PageTransition>{children}</PageTransition></Layout>
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
@@ -74,6 +77,8 @@ export default function App() {
         <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
         <Route path="/trash" element={<ProtectedRoute><TrashPage /></ProtectedRoute>} />
         <Route path="/holidays" element={<ProtectedRoute><HolidaysPage /></ProtectedRoute>} />
+        <Route path="/ranks" element={<ProtectedRoute><RanksPage /></ProtectedRoute>} />
+        <Route path="/divisions" element={<ProtectedRoute><DivisionsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

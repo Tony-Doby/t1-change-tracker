@@ -10,13 +10,17 @@ import {
   Trash2,
   Calendar,
   ChevronDown,
-  Bell,
   Menu,
   X,
+  Search,
+  Award,
+  Building2,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { UserRole } from '../types'
+import CommandPalette from './CommandPalette'
+import NotificationDropdown from './NotificationDropdown'
 
 interface NavItem {
   label: string
@@ -57,6 +61,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Upload Data', icon: Upload, path: '/upload', roles: ['admin', 'operator'] },
     { label: 'Trash', icon: Trash2, path: '/trash', roles: ['admin'] },
     { label: 'Holidays', icon: Calendar, path: '/holidays', roles: ['admin'] },
+    { label: 'Ranks', icon: Award, path: '/ranks', roles: ['admin'] },
+    { label: 'Divisions', icon: Building2, path: '/divisions', roles: ['admin'] },
   ]
 
   const visibleNav = navItems.filter((n) => n.roles.includes(role))
@@ -116,7 +122,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
         <header className="h-14 bg-white border-b border-neutral-300 flex items-center px-4 gap-4 shrink-0">
-          <button className="lg:hidden" onClick={() => setMobileMenuOpen(true)}>
+          <button className="lg:hidden" onClick={() => setMobileMenuOpen(true)} aria-label="Mở menu">
             <Menu className="w-5 h-5 text-neutral-700" />
           </button>
 
@@ -128,10 +134,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="ml-auto flex items-center gap-3">
-            <button className="relative p-1.5 rounded-md hover:bg-neutral-100">
-              <Bell className="w-5 h-5 text-neutral-500" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full" />
+            <button
+              onClick={() => {}}
+              className="hidden sm:flex items-center gap-2 px-2.5 h-8 bg-neutral-100 rounded-md text-xs text-neutral-500 hover:bg-neutral-200 transition-colors"
+              onFocus={() => {}}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))
+              }}
+            >
+              <Search className="w-3.5 h-3.5" />
+              Tìm kiếm
+              <kbd className="px-1 bg-white rounded text-[10px] font-mono border border-neutral-200">Ctrl K</kbd>
             </button>
+            <NotificationDropdown />
 
             <div className="relative">
               <button
@@ -182,8 +198,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        <CommandPalette />
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">{children}</div>
+        </main>
       </div>
     </div>
   )

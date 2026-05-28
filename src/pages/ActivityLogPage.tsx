@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Filter, Search } from 'lucide-react'
+import { Filter, Search, Inbox } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatTime } from '../lib/date-utils'
+import { useDebounce } from '../hooks/useDebounce'
+import EmptyState from '../components/EmptyState'
 
 interface LogItem {
   id: string
@@ -33,6 +35,7 @@ export default function ActivityLogPage() {
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState('all')
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounce(search, 300)
   const [showFilter, setShowFilter] = useState(false)
 
   useEffect(() => {
@@ -61,8 +64,8 @@ export default function ActivityLogPage() {
     if (filterType !== 'all') {
       list = list.filter((l) => l.action_type === filterType)
     }
-    if (search.trim()) {
-      const q = search.toLowerCase()
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase()
       list = list.filter((l) =>
         (l.description?.toLowerCase() ?? '').includes(q) ||
         (l.agent_name?.toLowerCase() ?? '').includes(q)
@@ -149,7 +152,7 @@ export default function ActivityLogPage() {
             </div>
           ))}
           {Object.keys(grouped).length === 0 && (
-            <div className="p-12 text-center text-neutral-500 text-sm">Không có dữ liệu</div>
+            <EmptyState icon={<Inbox className="w-12 h-12" />} title="Không có hoạt động nào" subtitle="Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm" />
           )}
         </div>
       </div>

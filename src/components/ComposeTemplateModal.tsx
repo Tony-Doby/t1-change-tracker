@@ -1,15 +1,17 @@
 import { useState, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Copy, Mail } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useToast } from './Toast'
 import { formatDate } from '../lib/date-utils'
+import type { EmailTemplate } from '../types'
 
 interface Props {
   agentId: string
   onClose: () => void
 }
 
-const templates = [
+const defaultTemplates = [
   {
     key: 'transfer_complete',
     name: 'Thông báo chuyển line',
@@ -36,11 +38,11 @@ Phòng Vận Hành ERA`,
   },
   {
     key: 'temp_t1_assigned',
-    name: 'Thông báo T1 tạm thời',
-    subject: '[Thông báo] T1 tạm thời được chỉ định',
+    name: 'Thông báo T1 tạm thờivàichỉ định',
+    subject: '[Thông báo] T1 tạm thờivàichỉ định',
     body: `Kính gửi {{agentName}},
 
-Do T1 cũ {{oldT1Name}} đã chuyển line, T2 {{tempT1Name}} sẽ đóng vai trò T1 tạm thời trong 30 ngày.
+Do T1 cũ {{oldT1Name}} đã chuyển line, T2 {{tempT1Name}} sẽ đóng vai trò T1 tạm thờitrong 30 ngày.
 
 Trân trọng,
 Phòng Vận Hành ERA`,
@@ -51,21 +53,62 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
   const { show } = useToast()
   const [agent, setAgent] = useState<any>(null)
   const [t1Old, setT1Old] = useState<any>(null)
+  const [newT1, setNewT1] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [selectedKey, setSelectedKey] = useState(templates[0].key)
+  const [templates, setTemplates] = useState(defaultTemplates)
+  const [selectedKey, setSelectedKey] = useState(defaultTemplates[0].key)
 
   useEffect(() => {
     loadData()
+    loadTemplates()
   }, [agentId])
+
+  async function loadTemplates() {
+    const { data, error } = await supabase.from('email_templates').select('*')
+    if (error || !data || data.length === 0) return
+    const dbMap = new Map((data as EmailTemplate[]).map((t) => [t.template_key, t]))
+    setTemplates((prev) =>
+      prev.map((pt) => {
+        const db = dbMap.get(pt.key)
+        if (db) {
+          return { ...pt, subject: db.subject, body: db.body }
+        }
+        return pt
+      })
+    )
+  }
 
   async function loadData() {
     setLoading(true)
     const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
     setAgent(a)
-    if (a?.current_t1_id) {
-      const { data: t1 } = await supabase.from('agents').select('*').eq('id', a.current_t1_id).single()
+
+    const t1Id = a?.referrer_id ?? a?.current_t1_id ?? null
+    if (t1Id) {
+      const { data: t1 } = await supabase.from('agents').select('*').eq('id', t1Id).single()
       setT1Old(t1)
+    } else {
+      setT1Old(null)
     }
+
+    if (a?.id) {
+      const { data: req } = await supabase
+        .from('t1_requests')
+        .select('id, proposed_new_t1_id')
+        .eq('agent_id', a.id)
+        .not('status', 'in', "('completed','cancelled')")
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (req?.proposed_new_t1_id) {
+        const { data: t1New } = await supabase.from('agents').select('*').eq('id', req.proposed_new_t1_id).single()
+        setNewT1(t1New)
+      } else {
+        setNewT1(null)
+      }
+    }
+
     setLoading(false)
   }
 
@@ -77,13 +120,14 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
       .replace(/{{staffId}}/g, agent?.staff_id ?? '')
       .replace(/{{oldT1Name}}/g, t1Old?.full_name ?? '')
       .replace(/{{oldT1Email}}/g, t1Old?.email ?? '')
-      .replace(/{{newT1Name}}/g, 'Lê Thị D')
-      .replace(/{{newT1Email}}/g, 'ltd@era.com')
+      .replace(/{{newT1Name}}/g, newT1?.full_name ?? '')
+      .replace(/{{newT1Email}}/g, newT1?.email ?? '')
+      .replace(/{{newT1StaffId}}/g, newT1?.staff_id ?? '')
       .replace(/{{date}}/g, formatDate(new Date()))
       .replace(/{{deadlineDate}}/g, formatDate(new Date(Date.now() + 30 * 86400000)))
       .replace(/{{notifyDate}}/g, formatDate(new Date()))
       .replace(/{{tempT1Name}}/g, t1Old?.full_name ?? '')
-  }, [template, agent, t1Old])
+  }, [template, agent, t1Old, newT1])
 
   const copyContent = () => {
     navigator.clipboard.writeText(rendered)
@@ -96,19 +140,13 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
     show('Đã copy email', 'success')
   }
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-xl p-6"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
-      </div>
-    )
-  }
-
-  if (!agent) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-modal w-full max-w-[640px] max-h-[90vh] overflow-y-auto">
+  const content = loading ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl p-6"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+    </div>
+  ) : !agent ? null : (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-modal w-full max-w-[640px] my-auto">
         <div className="flex items-center justify-between p-5 border-b border-neutral-100">
           <h2 className="text-xl font-semibold text-neutral-900">Soạn mẫu thông báo</h2>
           <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700"><X className="w-5 h-5" /></button>
@@ -143,4 +181,6 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
       </div>
     </div>
   )
+
+  return createPortal(content, document.body)
 }

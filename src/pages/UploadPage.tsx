@@ -3,7 +3,9 @@ import { UploadCloud, X, CheckCircle, AlertTriangle, FileSpreadsheet } from 'luc
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 
-const EXPECTED_HEADERS = ['staff_id', 'full_name', 'email', 'phone', 'rank_name', 'contract_signing_date', 'current_t1_id', 'introducing_agent_id', 'status']
+const REQUIRED_HEADERS = ['staff_id', 'full_name', 'email', 'phone', 'rank_name', 'contract_signing_date', 'current_t1_id', 'introducing_agent_id', 'status']
+const OPTIONAL_HEADERS = ['agent_code', 'referrer_id', 'rank_id', 'register_date', 'agent_start_date', 'end_date', 'deactivation_reason', 'business_email', 'id_card_number', 'date_of_birth', 'id_card_issue_date', 'id_card_issue_place', 'permanent_address', 'place_of_origin', 'gender', 'tax_code', 'bank_name', 'bank_account_number', 'bank_branch_name', 'active_area', 'real_estate_experience', 'broker_licence_number', 'broker_licence_expiry_date', 'success_seminar_date', 'source']
+const ALL_HEADERS = [...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]
 
 interface ParsedRow {
   row: number
@@ -28,6 +30,7 @@ export default function UploadPage() {
   const [preview, setPreview] = useState<ParsedRow[]>([])
   const [allRows, setAllRows] = useState<ParsedRow[]>([])
   const [report, setReport] = useState<ImportReport | null>(null)
+  const [detectedHeaders, setDetectedHeaders] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
   const reset = () => {
@@ -37,6 +40,7 @@ export default function UploadPage() {
     setReport(null)
     setProgress(0)
     setImporting(false)
+    setDetectedHeaders([])
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -71,13 +75,15 @@ export default function UploadPage() {
     }
 
     const headers = (json[0] as unknown as string[]).map((h) => String(h).trim().toLowerCase())
-    const missingHeaders = EXPECTED_HEADERS.filter((h) => !headers.includes(h))
+    const missingHeaders = REQUIRED_HEADERS.filter((h) => !headers.includes(h))
 
     if (missingHeaders.length > 0) {
       show(`Thiếu cột: ${missingHeaders.join(', ')}`, 'error')
       setParsing(false)
       return
     }
+
+    setDetectedHeaders(headers)
 
     const rows: ParsedRow[] = []
     const warnings: ImportReport['warnings'] = []
@@ -136,7 +142,7 @@ export default function UploadPage() {
 
     const payload = validRows.map((r) => {
       const d = r.data
-      return {
+      const base: Record<string, any> = {
         staff_id: String(d['staff_id'] || '').trim(),
         full_name: String(d['full_name'] || '').trim(),
         email: d['email'] ? String(d['email']).trim() : null,
@@ -147,6 +153,21 @@ export default function UploadPage() {
         introducing_agent_id: d['introducing_agent_id'] ? String(d['introducing_agent_id']).trim() : null,
         status: String(d['status'] || 'active').trim(),
       }
+      // Add optional fields if present
+      OPTIONAL_HEADERS.forEach((h) => {
+        if (d[h] !== undefined && d[h] !== null && d[h] !== '') {
+          base[h] = String(d[h]).trim()
+        }
+      })
+      // Sync referrer_id with current_t1_id
+      if (base.referrer_id) {
+        base.current_t1_id = base.referrer_id
+      } else if (base.current_t1_id) {
+        base.referrer_id = base.current_t1_id
+      }
+      // If rank_id is provided but rank_name is not, we can't resolve it here easily
+      // The DB trigger or app will handle it
+      return base
     })
 
     const { error } = await supabase.from('agents').upsert(payload, { onConflict: 'staff_id' })
@@ -188,7 +209,7 @@ export default function UploadPage() {
 
   const downloadTemplate = async (format: 'csv' | 'xlsx') => {
     const XLSX = await import('xlsx')
-    const rows = [EXPECTED_HEADERS, ['NV001', 'Nguyễn Văn A', 'a@era.vn', '0901234567', 'Consultant Specialist', '2026-01-01', '', '', 'active']]
+    const rows = [ALL_HEADERS, ['NV001', 'Nguyễn Văn A', 'a@era.vn', '0901234567', 'Consultant Specialist', '2026-01-01', '', '', 'active', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']]
     const ws = XLSX.utils.aoa_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Agents')
@@ -255,7 +276,10 @@ export default function UploadPage() {
                 <thead>
                   <tr className="bg-neutral-50 border-b border-neutral-200">
                     <th className="px-3 py-2 text-left text-neutral-500 font-medium">Dòng</th>
-                    {EXPECTED_HEADERS.map((h) => (
+                    {REQUIRED_HEADERS.map((h) => (
+                      <th key={h} className="px-3 py-2 text-left text-neutral-500 font-medium whitespace-nowrap">{h}</th>
+                    ))}
+                    {OPTIONAL_HEADERS.filter((h) => detectedHeaders.includes(h)).map((h) => (
                       <th key={h} className="px-3 py-2 text-left text-neutral-500 font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -264,7 +288,10 @@ export default function UploadPage() {
                   {preview.map((r) => (
                     <tr key={r.row} className={`border-b border-neutral-100 ${r.errors.length > 0 ? 'bg-danger-light/30' : ''}`}>
                       <td className="px-3 py-2 text-neutral-500">{r.row}</td>
-                      {EXPECTED_HEADERS.map((h) => (
+                      {REQUIRED_HEADERS.map((h) => (
+                        <td key={h} className="px-3 py-2 text-neutral-700 whitespace-nowrap max-w-[150px] truncate">{String(r.data[h] ?? '')}</td>
+                      ))}
+                      {OPTIONAL_HEADERS.filter((h) => detectedHeaders.includes(h)).map((h) => (
                         <td key={h} className="px-3 py-2 text-neutral-700 whitespace-nowrap max-w-[150px] truncate">{String(r.data[h] ?? '')}</td>
                       ))}
                     </tr>

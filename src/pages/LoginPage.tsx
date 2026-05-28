@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
+import { Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const { signIn, isAuthenticated, user } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('admin@era.vn')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -51,17 +53,29 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light text-sm"
               required
+              autoComplete="email"
             />
           </div>
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-neutral-700 mb-1">Mật khẩu</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light text-sm"
-              required
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full h-10 px-3 pr-10 border border-neutral-300 rounded-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light text-sm"
+                required
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <button

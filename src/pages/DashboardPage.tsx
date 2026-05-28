@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../components/Toast'
-import { Users, ClipboardList, Clock, CheckCircle, AlertTriangle, Star, ArrowRight } from 'lucide-react'
+import { Users, ClipboardList, Clock, CheckCircle, AlertTriangle, Star, ArrowRight, Inbox } from 'lucide-react'
+import { SkeletonCard, SkeletonText } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { BOOKMARKS_KEY } from '../lib/constants'
@@ -8,7 +10,25 @@ import { addBusinessDays } from '../lib/eligibility'
 import { completeRequestAction } from '../lib/request-actions'
 import { formatDate } from '../lib/date-utils'
 import CountdownConfirmModal from '../components/CountdownConfirmModal'
+import ComposeTemplateModal from '../components/ComposeTemplateModal'
+import CreateRequestModal from '../components/CreateRequestModal'
 import type { RequestStatus } from '../types'
+
+function canCreateRequest(agent: any, allChanges: any[], rMap?: Map<string, string>): boolean {
+  if (!agent?.contract_signing_date) return false
+  const days = Math.floor((Date.now() - new Date(agent.contract_signing_date).getTime()) / (1000 * 60 * 60 * 24))
+  const changes = allChanges.filter((c: any) => c.agent_id === agent.id && c.is_counted_for_quota && !c.deleted_at)
+  if (days <= 90) return changes.length < 1
+  if (changes.length >= 3) return false
+  const lastChange = changes.sort((a: any, b: any) => new Date(b.change_date).getTime() - new Date(a.change_date).getTime())[0]
+  if (lastChange) {
+    const daysSinceLast = Math.floor((Date.now() - new Date(lastChange.change_date).getTime()) / (1000 * 60 * 60 * 24))
+    if (daysSinceLast < 180) return false
+  }
+  const rankName = agent.rank_name ?? (agent.rank_id && rMap ? rMap.get(agent.rank_id) : null)
+  if (rankName?.toLowerCase().trim() === 'asc') return false
+  return true
+}
 
 const statusLabels: Record<RequestStatus | string, string> = {
   step1: 'B1', step2: 'B2', step3: 'B3', step4: 'B4', step5: 'B5',
@@ -24,7 +44,7 @@ const statusColors: Record<string, string> = {
 interface TransitionTask {
   id: string
   m1_agent_id: string
-  m1_agent: { full_name: string; staff_id: string } | null
+  m1_agent: { full_name: string; staff_id: string; contract_signing_date: string; rank_name: string } | null
   temp_t1_id: string | null
   temp_t1: { full_name: string; staff_id: string } | null
   deadline_date: string
@@ -57,6 +77,11 @@ export default function DashboardPage() {
 
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; req: B2Request | null }>({ open: false, req: null })
   const [cancelModal, setCancelModal] = useState<{ open: boolean; req: B2Request | null; reason: string }>({ open: false, req: null, reason: '' })
+  const [t1Changes, setT1Changes] = useState<any[]>([])
+  const [emailModalAgentId, setEmailModalAgentId] = useState<string | null>(null)
+  const [requestModalAgentId, setRequestModalAgentId] = useState<string | null>(null)
+  const [confirmT2Task, setConfirmT2Task] = useState<TransitionTask | null>(null)
+  const [rankNamesMap, setRankNamesMap] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     async function load() {
@@ -116,10 +141,23 @@ export default function DashboardPage() {
         // Process expired M1 transitions (lazy processing)
         await supabase.rpc('process_expired_m1_transitions')
 
+        // Load t1_changes for eligibility check
+        const { data: changesData } = await supabase
+          .from('t1_changes')
+          .select('agent_id, change_date, is_counted_for_quota, deleted_at')
+          .is('deleted_at', null)
+        setT1Changes(changesData ?? [])
+
+        // Load ranks map
+        const { data: ranksData } = await supabase.from('ranks').select('id, name')
+        const rMap = new Map<string, string>()
+        ranksData?.forEach((r: any) => rMap.set(r.id, r.name))
+        setRankNamesMap(rMap)
+
         // Load transition tasks
         const { data: tasks } = await supabase
           .from('m1_transition_tasks')
-          .select('*, m1_agent: m1_agent_id(full_name, staff_id), temp_t1: temp_t1_id(full_name, staff_id)')
+          .select('*, m1_agent: m1_agent_id(full_name, staff_id, contract_signing_date, rank_name), temp_t1: temp_t1_id(full_name, staff_id)')
           .in('status', ['pending', 'expired'])
           .order('deadline_date', { ascending: true })
 
@@ -156,7 +194,7 @@ export default function DashboardPage() {
     setProcessingT2(task.id)
     const now = new Date().toISOString()
 
-    const { error: agentError } = await supabase.from('agents').update({ current_t1_id: task.temp_t1_id }).eq('id', task.m1_agent_id)
+    const { error: agentError } = await supabase.from('agents').update({ current_t1_id: task.temp_t1_id, referrer_id: task.temp_t1_id }).eq('id', task.m1_agent_id)
     if (agentError) { show('Lỗi cập nhật agent: ' + agentError.message, 'error'); setProcessingT2(null); return }
 
     const { error: taskError } = await supabase.from('m1_transition_tasks').update({ status: 't2_assigned', resolved_at: now }).eq('id', task.id)
@@ -166,7 +204,7 @@ export default function DashboardPage() {
       agent_id: task.m1_agent_id,
       action_type: 'm1_stayed_with_t2',
       new_t1_id: task.temp_t1_id,
-      description: `M1 ${task.m1_agent?.full_name ?? ''} ở lại với T2 (${task.temp_t1?.full_name ?? 'Không có T1 tạm'})`,
+      description: `M1 ${task.m1_agent?.full_name ?? ''} ở lại với T1 tạm (${task.temp_t1?.full_name ?? 'Không có T1 tạm'})`,
       created_at: now,
     })
 
@@ -222,7 +260,22 @@ export default function DashboardPage() {
   const b2Eligible = b2Requests.filter((r) => today >= r.deadline4)
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="page-title">Dashboard</div>
+        <div className="page-grid-cards">
+          <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 page-card-lg space-y-3">
+            <SkeletonText lines={4} />
+          </div>
+          <div className="page-card-lg space-y-3">
+            <SkeletonText lines={3} />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -275,7 +328,7 @@ export default function DashboardPage() {
               <div key={r.id} className="flex items-center justify-between p-3 rounded-md bg-danger-light/30">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-neutral-900 truncate">
-                    {r.agent?.full_name ?? '—'} ({r.agent?.staff_id ?? '—'})
+                    {r.agent?.full_name ?? '—'} - {r.agent?.staff_id ?? '—'}
                   </p>
                   <p className="text-xs text-neutral-500">
                     Ngày xác nhận: {formatDate(r.step2_confirmed_at)} • Hết hạn: {formatDate(r.deadline3)}
@@ -299,7 +352,7 @@ export default function DashboardPage() {
               <div key={r.id} className="flex items-center justify-between p-3 rounded-md bg-success-light/30">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-neutral-900 truncate">
-                    {r.agent?.full_name ?? '—'} ({r.agent?.staff_id ?? '—'})
+                    {r.agent?.full_name ?? '—'} - {r.agent?.staff_id ?? '—'}
                   </p>
                   <p className="text-xs text-neutral-500">
                     {r.old_t1 ? `${r.old_t1.full_name} - ${r.old_t1.staff_id}` : '—'} → {r.new_t1 ? `${r.new_t1.full_name} - ${r.new_t1.staff_id}` : '—'}
@@ -334,30 +387,49 @@ export default function DashboardPage() {
             <AlertTriangle className="w-5 h-5 text-warning" /> M1 Transition ({transitions.length})
           </h2>
           <div className="space-y-3 max-h-[320px] overflow-y-auto">
-            {transitions.length === 0 && <p className="text-sm text-neutral-500 italic">Không có M1 nào đang trong giai đoạn transition</p>}
+            {transitions.length === 0 && (
+              <EmptyState
+                icon={<Inbox className="w-12 h-12" />}
+                title="Không có M1 nào đang trong giai đoạn transition"
+                subtitle="Tất cả M1 đã được xử lý hoặc chưa có request hoàn tất"
+              />
+            )}
             {transitions.map((t) => (
               <div key={t.id} className={`flex items-center justify-between p-3 rounded-md ${t.status === 'expired' ? 'bg-danger-light/30' : 'bg-neutral-50'}`}>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-neutral-900 truncate">
-                    {t.m1_agent?.full_name ?? '—'} ({t.m1_agent?.staff_id ?? '—'})
-                  </p>
+                  <Link to={`/agents/${t.m1_agent_id}`} className="text-sm font-medium text-neutral-900 truncate hover:text-primary block">
+                    {t.m1_agent?.full_name ?? '—'} - {t.m1_agent?.staff_id ?? '—'}
+                  </Link>
                   <p className="text-xs text-neutral-500">
-                    T2 tạm: {t.temp_t1?.full_name ?? (t.temp_t1_id === null ? 'Không có T1 tạm' : '—')} •
+                    T1 tạm: {t.temp_t1 ? `${t.temp_t1.full_name} - ${t.temp_t1.staff_id}` : (t.temp_t1_id === null ? 'Không có T1 tạm' : '—')} •
                     {t.status === 'expired'
                       ? <span className="text-danger font-medium"> Đã quá hạn {Math.abs(t.daysLeft)} ngày</span>
                       : <span> Còn {t.daysLeft} ngày</span>
                     }
                   </p>
                 </div>
-                {t.status === 'expired' && (
+                <div className="flex items-center gap-2 shrink-0 ml-3">
                   <button
-                    onClick={() => applyT2(t)}
-                    disabled={processingT2 === t.id}
-                    className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100 shrink-0 ml-3 disabled:opacity-50"
+                    onClick={() => setEmailModalAgentId(t.m1_agent_id)}
+                    className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100"
                   >
-                    {processingT2 === t.id ? 'Đang xử lý...' : 'Áp dụng T2'}
+                    Tạo email mẫu
                   </button>
-                )}
+                  <button
+                    onClick={() => setRequestModalAgentId(t.m1_agent_id)}
+                    disabled={!canCreateRequest(t.m1_agent, t1Changes, rankNamesMap)}
+                    className="text-xs bg-white border border-primary text-primary px-2 py-1 rounded hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Tạo đề xuất
+                  </button>
+                  <button
+                    onClick={() => setConfirmT2Task(t)}
+                    disabled={processingT2 === t.id}
+                    className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100 disabled:opacity-50"
+                  >
+                    {processingT2 === t.id ? 'Đang xử lý...' : 'Ở lại với T2'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -368,7 +440,13 @@ export default function DashboardPage() {
             <Star className="w-5 h-5 text-warning" /> Agent đang theo dõi
           </h2>
           <div className="space-y-3">
-            {bookmarkedAgents.length === 0 && <p className="text-sm text-neutral-500 italic">Chưa có agent nào được đánh dấu</p>}
+            {bookmarkedAgents.length === 0 && (
+              <EmptyState
+                icon={<Star className="w-12 h-12" />}
+                title="Chưa có agent nào được đánh dấu"
+                subtitle="Đánh dấu agent để theo dõi nhanh tại đây"
+              />
+            )}
             {bookmarkedAgents.slice(0, 5).map((a: any) => (
               <Link key={a.id} to={`/agents/${a.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-neutral-50 transition-colors">
                 <div>
@@ -434,6 +512,24 @@ export default function DashboardPage() {
           />
         </div>
       </CountdownConfirmModal>
+
+      {emailModalAgentId && (
+        <ComposeTemplateModal agentId={emailModalAgentId} onClose={() => setEmailModalAgentId(null)} />
+      )}
+      {requestModalAgentId && (
+        <CreateRequestModal agentId={requestModalAgentId} onClose={() => setRequestModalAgentId(null)} />
+      )}
+      {confirmT2Task && (
+        <CountdownConfirmModal
+          open={true}
+          title="Xác nhận ở lại với T1 tạm"
+          confirmText="Xác nhận"
+          onConfirm={() => { applyT2(confirmT2Task); setConfirmT2Task(null); }}
+          onCancel={() => setConfirmT2Task(null)}
+        >
+          <p>M1 <strong>{confirmT2Task.m1_agent?.full_name ?? '—'}</strong> sẽ ở lại với T1 tạm <strong>{confirmT2Task.temp_t1?.full_name ?? 'Không có T1 tạm'}</strong>.</p>
+        </CountdownConfirmModal>
+      )}
     </div>
   )
 }
