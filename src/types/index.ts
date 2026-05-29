@@ -246,6 +246,19 @@ export interface AgentTimelineEvent {
   created_at: string
 }
 
+// FEAT-003: In-app Notifications
+
+export interface Notification {
+  id: string
+  user_id: string
+  type: 'request_new' | 'comment_new' | 'b2_alert' | 'm1_expired' | 'request_completed' | 'request_cancelled' | 'agent_deactivated' | 'agent_restored'
+  title: string
+  message: string | null
+  link: string | null
+  read: boolean
+  created_at: string
+}
+
 // FEAT-007: Agent Deactivation
 
 export interface AgentDeactivationSnapshot {

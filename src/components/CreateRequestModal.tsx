@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Search, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { checkEligibility, getT1Capacity, getM1ImpactSummary } from '../lib/eligibility'
+import { createNotificationsForAdmins } from '../lib/notifications'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from './Toast'
 import type { EligibilityResult } from '../types'
@@ -146,6 +147,12 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
       return
     }
     show('Đã tạo đề xuất đổi T1', 'success')
+    createNotificationsForAdmins([{
+      type: 'request_new',
+      title: 'Đề xuất đổi T1 mới',
+      message: `${agent.full_name} (${agent.staff_id}) vừa được tạo đề xuất đổi T1`,
+      link: `/requests`,
+    }])
     onClose()
   }
 

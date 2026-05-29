@@ -34,6 +34,17 @@
 - Để làm admin: cập nhật `user_profiles.role = 'admin'` trong Supabase Table Editor.
 - Menu `Email Templates` và `Trash` chỉ hiển thị cho `admin`.
 
+### 1.5 Migration SQL — `CREATE POLICY` không có `IF NOT EXISTS`
+- PostgreSQL **không hỗ trợ** `CREATE POLICY IF NOT EXISTS`.
+- Nếu chạy lại migration hoặc policy đã tồn tại → lỗi `42710: policy "..." already exists`.
+- **Cách xử lý:** Dùng `DROP POLICY IF EXISTS ...` trước khi `CREATE POLICY`, hoặc dùng file `*_safe_rerun.sql` để drop policies cũ trước.
+- Các object khác an toàn khi rerun:
+  - `CREATE TABLE IF NOT EXISTS` ✅
+  - `CREATE OR REPLACE FUNCTION` ✅
+  - `CREATE INDEX IF NOT EXISTS` ✅
+  - `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER` ✅
+  - `CREATE POLICY` ❌ (dễ lỗi duplicate)
+
 ---
 
 ## 2. Business Rules (dễ code sai)
@@ -147,7 +158,7 @@
 | Vấn đề | Trạng thái | Plan xử lý |
 |--------|-----------|------------|
 | Email chỉ copy, chưa gửi thật | Chưa làm | `PLAN-feature-dev.md` FEAT-001 |
-| Chưa có In-app Notifications (real) | Chưa làm | `PLAN-feature-dev.md` FEAT-003 |
+| ~~Chưa có In-app Notifications (real)~~ | **Đã hoàn thành (2026-05-29)** | `PLAN-feature-dev.md` FEAT-003 |
 | Chưa dùng Supabase Realtime | Chưa làm | `PLAN-feature-dev.md` FEAT-002 |
 | TanStack Query chưa được dùng | Chưa làm | `PLAN-feature-dev.md` FEAT-004 |
 | Search presets phức tạp bị ẩn | Chưa làm | `PLAN-feature-dev.md` FEAT-005 |

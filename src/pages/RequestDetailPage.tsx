@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast'
 import { formatDateTime } from '../lib/date-utils'
 import { addBusinessDays } from '../lib/eligibility'
 import { completeRequestAction } from '../lib/request-actions'
+import { createNotificationsForAdmins } from '../lib/notifications'
 import CountdownConfirmModal from '../components/CountdownConfirmModal'
 import { SkeletonText } from '../components/Skeleton'
 
@@ -180,6 +181,12 @@ export default function RequestDetailPage() {
     }
     setCancelModal({ open: false, reason: '' })
     show('Đã hủy đề xuất', 'warning')
+    createNotificationsForAdmins([{
+      type: 'request_cancelled',
+      title: 'Đề xuất đã bị hủy',
+      message: `Đề xuất #${request.id?.slice(0, 8)} đã bị hủy`,
+      link: `/requests/${request.id}`,
+    }])
     loadData()
   }
 
@@ -189,6 +196,12 @@ export default function RequestDetailPage() {
     if (error) { show('Lỗi: ' + error.message, 'error'); return }
     setComments((prev) => [...prev, ...(data ?? [])])
     setNewComment('')
+    createNotificationsForAdmins([{
+      type: 'comment_new',
+      title: 'Bình luận mới',
+      message: `Có bình luận mới trong đề xuất #${request.id?.slice(0, 8)}`,
+      link: `/requests/${request.id}`,
+    }])
   }
 
   const isAtB3 = (request.status === 'step2' && request.step2_confirmed_at) || ['step3', 'step4', 'step5'].includes(request.status)

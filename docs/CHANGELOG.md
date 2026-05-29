@@ -7,6 +7,52 @@
 
 ## 2026-05-29
 
+### 11. FEAT-003 + FEAT-006 + FEAT-007: In-app Notifications, Schema v2 UI polish, Agent Deactivation complete
+
+**FEAT-003 — In-app Notifications (hoàn thành):**
+- `supabase/migrations/013_notifications.sql` — Bảng `notifications` + indexes + RLS policies.
+- `src/types/index.ts` — Thêm interface `Notification`.
+- `src/lib/notifications.ts` — Helpers: `createNotification`, `createNotificationsForAdmins`, `markNotificationAsRead`, `markAllNotificationsAsRead`, `getUnreadNotificationCount`.
+- `src/components/NotificationDropdown.tsx` — Query từ bảng `notifications` thay vì `activity_logs`, badge unread từ DB, mark read trong DB, poll 30s, icon theo type.
+- Tích hợp tạo notification tự động:
+  - `CreateRequestModal` → `request_new`
+  - `RequestDetailPage` (hủy) → `request_cancelled`
+  - `RequestDetailPage` (comment) → `comment_new`
+  - `request-actions.ts` (hoàn tất) → `request_completed`
+  - `agent-actions.ts` (deactivate/restore) → `agent_deactivated` / `agent_restored`
+
+**FEAT-006 — Schema v2 UI polish:**
+- `src/pages/AgentDetailPage.tsx` — Thêm 3 section mới trong info card:
+  - "Thông tin cá nhân": CCCD, ngày sinh, giới tính, ngày cấp CCCD, nơi cấp, nguyên quán, địa chỉ thường trú.
+  - "Ngân hàng & Thuế": ngân hàng, số TK, chi nhánh, mã số thuế.
+  - "Nghề nghiệp": khu vực hoạt động, kinh nghiệm BĐS, số chứng chỉ MG, hết hạn chứng chỉ, ngày seminar.
+- `UploadPage` — Đã có đầy đủ OPTIONAL_HEADERS cho ~25 cột schema v2 (không cần sửa).
+
+**FEAT-007 — Agent Deactivation (hoàn thành):**
+- Xác nhận `AgentDetailPage` đã có tab "Lịch sử chấm dứt".
+- Xác nhận `Layout.tsx` đã có menu "Ranks" và "Divisions".
+- `src/lib/agent-actions.ts` — Đã thêm `createNotificationsForAdmins` khi deactivate/restore.
+
+**Lưu ý triển khai:**
+- Cần chạy 3 file migration trên Supabase SQL Editor:
+  1. `008_schema_v2_agents.sql` (FEAT-006)
+  2. `009_agent_deactivation.sql` (FEAT-007)
+  3. `013_notifications.sql` (FEAT-003)
+
+**Files sửa/tạo:**
+- `webapp/supabase/migrations/013_notifications.sql` — Mới
+- `webapp/src/types/index.ts` — Thêm `Notification`
+- `webapp/src/lib/notifications.ts` — Mới
+- `webapp/src/components/NotificationDropdown.tsx` — Rewrite
+- `webapp/src/components/CreateRequestModal.tsx` — Thêm noti
+- `webapp/src/pages/RequestDetailPage.tsx` — Thêm noti + sections info
+- `webapp/src/lib/request-actions.ts` — Thêm noti
+- `webapp/src/lib/agent-actions.ts` — Thêm noti
+- `webapp/docs/PLAN-feature-dev.md` — Cập nhật status
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
 ### 10. FEAT-009 + FEAT-010 + FEAT-011 + FEAT-012: Dashboard navigation, Requests multi-filter, Ranks/Divisions modal CRUD
 
 **Tính năng:**

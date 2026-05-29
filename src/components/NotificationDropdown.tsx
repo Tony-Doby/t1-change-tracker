@@ -3,42 +3,50 @@ import { Bell, Check, Clock } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatDateTime } from '../lib/date-utils'
-
-interface NotificationItem {
-  id: string
-  created_at: string
-  description: string | null
-  request_id: string | null
-  agent_id: string | null
-  action_type: string
-}
-
-const NOTIFICATIONS_READ_KEY = 't1_notifications_read'
+import { useAuth } from '../hooks/useAuth'
+import { markNotificationAsRead, markAllNotificationsAsRead } from '../lib/notifications'
+import type { Notification } from '../types'
 
 export default function NotificationDropdown() {
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
-  const [items, setItems] = useState<NotificationItem[]>([])
+  const [items, setItems] = useState<Notification[]>([])
   const [loading, setLoading] = useState(false)
-  const [readIds, setReadIds] = useState<Set<string>>(new Set())
+  const [unreadCount, setUnreadCount] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
 
+  async function loadNotifications() {
+    if (!user?.id) return
+    setLoading(true)
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    setItems(data ?? [])
+    setLoading(false)
+  }
+
+  async function loadUnreadCount() {
+    if (!user?.id) return
+    const { count } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('read', false)
+    setUnreadCount(count ?? 0)
+  }
+
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem(NOTIFICATIONS_READ_KEY) || '[]')
-    setReadIds(new Set(saved))
-  }, [])
+    loadUnreadCount()
+    const interval = setInterval(loadUnreadCount, 30000)
+    return () => clearInterval(interval)
+  }, [user?.id])
 
   useEffect(() => {
     if (!open) return
-    setLoading(true)
-    supabase
-      .from('activity_logs')
-      .select('id, created_at, description, request_id, agent_id, action_type')
-      .order('created_at', { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        setItems(data ?? [])
-        setLoading(false)
-      })
+    loadNotifications()
   }, [open])
 
   useEffect(() => {
@@ -49,20 +57,31 @@ export default function NotificationDropdown() {
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
-  const unreadCount = items.filter((i) => !readIds.has(i.id)).length
-
-  const markAllRead = () => {
-    const allIds = items.map((i) => i.id)
-    const next = new Set([...readIds, ...allIds])
-    setReadIds(next)
-    localStorage.setItem(NOTIFICATIONS_READ_KEY, JSON.stringify([...next]))
+  const handleMarkAllRead = async () => {
+    if (!user?.id) return
+    await markAllNotificationsAsRead(user.id)
+    setItems((prev) => prev.map((i) => ({ ...i, read: true })))
+    setUnreadCount(0)
   }
 
-  const markRead = (id: string) => {
-    const next = new Set(readIds)
-    next.add(id)
-    setReadIds(next)
-    localStorage.setItem(NOTIFICATIONS_READ_KEY, JSON.stringify([...next]))
+  const handleMarkRead = async (id: string) => {
+    await markNotificationAsRead(id)
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, read: true } : i)))
+    setUnreadCount((c) => Math.max(0, c - 1))
+  }
+
+  const typeIcon = (type: Notification['type']) => {
+    switch (type) {
+      case 'request_new': return '📝'
+      case 'request_completed': return '✅'
+      case 'request_cancelled': return '❌'
+      case 'comment_new': return '💬'
+      case 'agent_deactivated': return '🔴'
+      case 'agent_restored': return '🟢'
+      case 'b2_alert': return '⚠️'
+      case 'm1_expired': return '⏰'
+      default: return '🔔'
+    }
   }
 
   return (
@@ -88,7 +107,7 @@ export default function NotificationDropdown() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
               <h3 className="text-sm font-semibold text-neutral-900">Thông báo</h3>
               {unreadCount > 0 && (
-                <button onClick={markAllRead} className="text-xs text-primary hover:underline flex items-center gap-1">
+                <button onClick={handleMarkAllRead} className="text-xs text-primary hover:underline flex items-center gap-1">
                   <Check className="w-3 h-3" /> Đánh dấu đã đọc
                 </button>
               )}
@@ -101,28 +120,32 @@ export default function NotificationDropdown() {
                 <div className="py-8 text-center text-sm text-neutral-400">Chưa có thông báo</div>
               ) : (
                 items.map((item) => {
-                  const isUnread = !readIds.has(item.id)
+                  const isUnread = !item.read
                   return (
                     <div
                       key={item.id}
-                      onClick={() => markRead(item.id)}
+                      onClick={() => { if (isUnread) handleMarkRead(item.id) }}
                       className={`px-4 py-3 border-b border-neutral-50 hover:bg-neutral-50 cursor-pointer transition-colors ${
                         isUnread ? 'bg-primary-light/20' : ''
                       }`}
                     >
                       <div className="flex items-start gap-2">
-                        <Clock className="w-3.5 h-3.5 text-neutral-400 mt-0.5 shrink-0" />
+                        <span className="text-sm shrink-0 mt-0.5">{typeIcon(item.type)}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-neutral-800 line-clamp-2">{item.description ?? 'Hoạt động mới'}</p>
+                          <p className="text-sm font-medium text-neutral-800 line-clamp-1">{item.title}</p>
+                          {item.message && <p className="text-xs text-neutral-500 line-clamp-2 mt-0.5">{item.message}</p>}
                           <div className="flex items-center justify-between mt-1">
-                            <span className="text-[10px] text-neutral-400">{formatDateTime(item.created_at)}</span>
-                            {item.request_id && (
+                            <span className="text-[10px] text-neutral-400 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {formatDateTime(item.created_at)}
+                            </span>
+                            {item.link && (
                               <Link
-                                to={`/requests/${item.request_id}`}
+                                to={item.link}
                                 onClick={(e) => e.stopPropagation()}
                                 className="text-[10px] text-primary hover:underline"
                               >
-                                Xem request
+                                Xem chi tiết
                               </Link>
                             )}
                           </div>

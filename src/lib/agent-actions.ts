@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { createNotificationsForAdmins } from './notifications'
 
 export interface DeactivateInput {
   agentId: string
@@ -64,6 +65,12 @@ export async function deactivateAgent({ agentId, endDate, reason, userId }: Deac
     const { error: taskError } = await supabase.from('m1_transition_tasks').insert(tasks)
     if (taskError) throw taskError
   }
+
+  createNotificationsForAdmins([{
+    type: 'agent_deactivated',
+    title: 'Agent đã bị chấm dứt hoạt động',
+    message: `Agent đã bị chấm dứt hoạt động từ ngày ${endDate}`,
+  }])
 
   return { snapshotId: snapshot }
 }
@@ -140,6 +147,12 @@ export async function restoreAgent({ agentId, mode, userId }: RestoreInput) {
       if (lightError) throw lightError
     }
   }
+
+  createNotificationsForAdmins([{
+    type: 'agent_restored',
+    title: 'Agent đã được kích hoạt lại',
+    message: `Agent đã được kích hoạt lại (mode: ${mode})`,
+  }])
 
   return { success: true }
 }

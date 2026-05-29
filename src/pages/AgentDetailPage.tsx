@@ -190,14 +190,45 @@ export default function AgentDetailPage() {
               <div className="flex justify-between"><span className="text-neutral-500">Lý do chấm dứt</span><span className="text-neutral-900 font-medium">{agent.deactivation_reason}</span></div>
             )}
             {agent.email && <div className="flex justify-between"><span className="text-neutral-500">Email</span><span className="text-neutral-900 font-medium">{agent.email}</span></div>}
+            {agent.business_email && <div className="flex justify-between"><span className="text-neutral-500">Email công việc</span><span className="text-neutral-900 font-medium">{agent.business_email}</span></div>}
             {agent.phone && <div className="flex justify-between"><span className="text-neutral-500">SĐT</span><span className="text-neutral-900 font-medium">{agent.phone}</span></div>}
-            {agent.id_card_number && <div className="flex justify-between"><span className="text-neutral-500">CCCD/CMND</span><span className="text-neutral-900 font-medium">{agent.id_card_number}</span></div>}
-            {agent.date_of_birth && <div className="flex justify-between"><span className="text-neutral-500">Ngày sinh</span><span className="text-neutral-900 font-medium">{formatDate(agent.date_of_birth)}</span></div>}
-            {agent.gender && <div className="flex justify-between"><span className="text-neutral-500">Giới tính</span><span className="text-neutral-900 font-medium">{agent.gender}</span></div>}
-            {agent.bank_name && <div className="flex justify-between"><span className="text-neutral-500">Ngân hàng</span><span className="text-neutral-900 font-medium">{agent.bank_name}</span></div>}
-            {agent.bank_account_number && <div className="flex justify-between"><span className="text-neutral-500">Số TK</span><span className="text-neutral-900 font-medium">{agent.bank_account_number}</span></div>}
-            {agent.tax_code && <div className="flex justify-between"><span className="text-neutral-500">Mã số thuế</span><span className="text-neutral-900 font-medium">{agent.tax_code}</span></div>}
-            {agent.permanent_address && <div className="flex justify-between"><span className="text-neutral-500">Địa chỉ</span><span className="text-neutral-900 font-medium">{agent.permanent_address}</span></div>}
+            {agent.register_date && <div className="flex justify-between"><span className="text-neutral-500">Ngày đăng ký</span><span className="text-neutral-900 font-medium">{formatDate(agent.register_date)}</span></div>}
+            {agent.agent_start_date && <div className="flex justify-between"><span className="text-neutral-500">Ngày bắt đầu</span><span className="text-neutral-900 font-medium">{formatDate(agent.agent_start_date)}</span></div>}
+            {agent.source && <div className="flex justify-between"><span className="text-neutral-500">Nguồn</span><span className="text-neutral-900 font-medium">{agent.source}</span></div>}
+
+            {(agent.id_card_number || agent.date_of_birth || agent.gender || agent.id_card_issue_date || agent.id_card_issue_place || agent.place_of_origin || agent.permanent_address) && (
+              <div className="pt-2 mt-2 border-t border-neutral-100">
+                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-2">Thông tin cá nhân</p>
+                {agent.id_card_number && <div className="flex justify-between"><span className="text-neutral-500">CCCD/CMND</span><span className="text-neutral-900 font-medium">{agent.id_card_number}</span></div>}
+                {agent.date_of_birth && <div className="flex justify-between"><span className="text-neutral-500">Ngày sinh</span><span className="text-neutral-900 font-medium">{formatDate(agent.date_of_birth)}</span></div>}
+                {agent.gender && <div className="flex justify-between"><span className="text-neutral-500">Giới tính</span><span className="text-neutral-900 font-medium">{agent.gender}</span></div>}
+                {agent.id_card_issue_date && <div className="flex justify-between"><span className="text-neutral-500">Ngày cấp CCCD</span><span className="text-neutral-900 font-medium">{formatDate(agent.id_card_issue_date)}</span></div>}
+                {agent.id_card_issue_place && <div className="flex justify-between"><span className="text-neutral-500">Nơi cấp CCCD</span><span className="text-neutral-900 font-medium">{agent.id_card_issue_place}</span></div>}
+                {agent.place_of_origin && <div className="flex justify-between"><span className="text-neutral-500">Nguyên quán</span><span className="text-neutral-900 font-medium">{agent.place_of_origin}</span></div>}
+                {agent.permanent_address && <div className="flex justify-between"><span className="text-neutral-500">Địa chỉ thường trú</span><span className="text-neutral-900 font-medium">{agent.permanent_address}</span></div>}
+              </div>
+            )}
+
+            {(agent.bank_name || agent.bank_account_number || agent.bank_branch_name || agent.tax_code) && (
+              <div className="pt-2 mt-2 border-t border-neutral-100">
+                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-2">Ngân hàng & Thuế</p>
+                {agent.bank_name && <div className="flex justify-between"><span className="text-neutral-500">Ngân hàng</span><span className="text-neutral-900 font-medium">{agent.bank_name}</span></div>}
+                {agent.bank_account_number && <div className="flex justify-between"><span className="text-neutral-500">Số TK</span><span className="text-neutral-900 font-medium">{agent.bank_account_number}</span></div>}
+                {agent.bank_branch_name && <div className="flex justify-between"><span className="text-neutral-500">Chi nhánh</span><span className="text-neutral-900 font-medium">{agent.bank_branch_name}</span></div>}
+                {agent.tax_code && <div className="flex justify-between"><span className="text-neutral-500">Mã số thuế</span><span className="text-neutral-900 font-medium">{agent.tax_code}</span></div>}
+              </div>
+            )}
+
+            {(agent.active_area || agent.real_estate_experience || agent.broker_licence_number || agent.broker_licence_expiry_date || agent.success_seminar_date) && (
+              <div className="pt-2 mt-2 border-t border-neutral-100">
+                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mb-2">Nghề nghiệp</p>
+                {agent.active_area && <div className="flex justify-between"><span className="text-neutral-500">Khu vực hoạt động</span><span className="text-neutral-900 font-medium">{agent.active_area}</span></div>}
+                {agent.real_estate_experience && <div className="flex justify-between"><span className="text-neutral-500">Kinh nghiệm BĐS</span><span className="text-neutral-900 font-medium">{agent.real_estate_experience}</span></div>}
+                {agent.broker_licence_number && <div className="flex justify-between"><span className="text-neutral-500">Số chứng chỉ MG</span><span className="text-neutral-900 font-medium">{agent.broker_licence_number}</span></div>}
+                {agent.broker_licence_expiry_date && <div className="flex justify-between"><span className="text-neutral-500">Hết hạn chứng chỉ</span><span className="text-neutral-900 font-medium">{formatDate(agent.broker_licence_expiry_date)}</span></div>}
+                {agent.success_seminar_date && <div className="flex justify-between"><span className="text-neutral-500">Ngày seminar</span><span className="text-neutral-900 font-medium">{formatDate(agent.success_seminar_date)}</span></div>}
+              </div>
+            )}
           </div>
         </div>
 

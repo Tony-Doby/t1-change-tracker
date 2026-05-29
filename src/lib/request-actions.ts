@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { createNotificationsForAdmins } from './notifications'
 
 export interface CompleteRequestInput {
   id: string
@@ -90,4 +91,12 @@ export async function completeRequestAction(
     .eq('current_t1_id', request.agent_id)
     .is('deleted_at', null)
   if (m1UpdateError) throw m1UpdateError
+
+  // 7. Notify admins
+  createNotificationsForAdmins([{
+    type: 'request_completed',
+    title: 'Đề xuất đã hoàn tất',
+    message: `Đề xuất đổi T1 đã được hoàn tất`,
+    link: `/requests/${request.id}`,
+  }])
 }

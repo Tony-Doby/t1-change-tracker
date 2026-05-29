@@ -64,11 +64,11 @@
 |----|---------|--------|---------|------------|
 | 001 | Tích hợp gửi email thật (SendGrid/Resend) | backlog | 2026-05-28 | — |
 | 002 | Supabase Realtime updates (comments, status) | backlog | 2026-05-28 | — |
-| 003 | In-app Notifications (badge, dropdown) | partial | 2026-05-28 | — |
+| 003 | In-app Notifications (badge, dropdown) | done | 2026-05-28 | 2026-05-29 |
 | 004 | Refactor pages sang TanStack Query | partial | 2026-05-28 | — |
 | 005 | Search/Filter server-side cho presets phức tạp | backlog | 2026-05-28 | — |
 | 006 | Schema v2 — Align agents table with eravnTrans | partial | 2026-05-28 | — |
-| 007 | Agent Deactivation với Restore Point & Downline Transition | partial | 2026-05-28 | — |
+| 007 | Agent Deactivation với Restore Point & Downline Transition | done | 2026-05-28 | 2026-05-29 |
 | 008 | Division Safety Net — Force Recompute & getAgentDivision RPC | fixed | 2026-05-29 | 2026-05-29 |
 | 009 | Dashboard stat cards navigation (→ Agents / Requests / Filter) | done | 2026-05-29 | 2026-05-29 |
 | 010 | Requests multi-choice status filter (toggle on/off) | done | 2026-05-29 | 2026-05-29 |
@@ -258,20 +258,26 @@ Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đ
 ## FEAT-003: In-app Notifications (badge, dropdown)
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `partial`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-05-29
 
 ### Current Status (as of 2026-05-29)
 
 **Đã làm:**
-- `src/components/NotificationDropdown.tsx` — Component dropdown hiển thị danh sách thông báo, badge số chưa đọc, nút "Đánh dấu đã đọc/tất cả", link đến request/activity.
-- Query từ `activity_logs` làm nguồn thông báo tạm thờivì chưa có bảng `notifications`.
+- `supabase/migrations/013_notifications.sql` — Bảng `notifications` + RLS + indexes.
+- `src/types/index.ts` — Type `Notification`.
+- `src/lib/notifications.ts` — Helpers: `createNotification`, `createNotificationsForAdmins`, `markNotificationAsRead`, `markAllNotificationsAsRead`, `getUnreadNotificationCount`.
+- `src/components/NotificationDropdown.tsx` — Query từ `notifications` table, badge đếm unread từ DB, mark read trong DB, poll 30s, icon theo type.
+- Tích hợp tạo notification tự động trong:
+  - `CreateRequestModal` → `request_new`
+  - `RequestDetailPage` (hủy) → `request_cancelled`
+  - `RequestDetailPage` (comment) → `comment_new`
+  - `request-actions.ts` (hoàn tất) → `request_completed`
+  - `agent-actions.ts` (deactivate/restore) → `agent_deactivated` / `agent_restored`
 - Đã tích hợp vào `Layout.tsx` (header).
 
 **Chưa làm:**
-- Bảng `notifications` riêng trong DB (vẫn query `activity_logs`).
-- Tạo notification khi có event (request mới, comment, B2 alert, M1 expired).
-- `lib/notifications.ts` helper.
 - Realtime update (cần FEAT-002).
 
 ### 1. Mô tả feature
@@ -586,11 +592,13 @@ $$;
 - `src/types/index.ts` — `Agent` interface đã cập nhật đầy đủ cột mới.
 
 **Chưa làm:**
-- Chưa chạy migration trên DB production (file chỉ local).
-- Frontend vẫn ưu tiên `rank_name`/`current_t1_id` cũ ở nhiều chỗ (`AgentsPage`, `AgentDetailPage`, `DashboardPage`).
-- Chưa thêm tab/info card cá nhân/ngân hàng/nghề nghiệp trong `AgentDetailPage`.
-- `UploadPage` chưa validate/map headers mới.
+- Chưa chạy migration trên DB production (file chỉ local) — **bắt buộc chạy thủ công trong Supabase SQL Editor**.
 - Chưa seed data `ranks` từ eravnTrans (chỉ seed từ `rank_name` hiện có).
+
+**Đã cập nhật (2026-05-29):**
+- `AgentDetailPage` — Đã thêm section "Thông tin cá nhân" (CCCD, ngày sinh, giới tính, ngày cấp, nơi cấp, nguyên quán, địa chỉ), "Ngân hàng & Thuế" (ngân hàng, số TK, chi nhánh, mã số thuế), "Nghề nghiệp" (khu vực, kinh nghiệm BĐS, chứng chỉ MG, hết hạn, seminar).
+- `UploadPage` — Đã có đầy đủ OPTIONAL_HEADERS cho ~25 cột mới của schema v2.
+- `AgentsPage`/`DashboardPage` — Đã dùng pattern `referrer_id ?? current_t1_id` và `rank_name ?? rankNamesMap[rank_id]`.
 
 ### 1. Mô tả feature
 Nâng cấp schema bảng `agents` và các bảng phụ trợ để **chuẩn hóa theo eravnTrans**. Mục tiêu: lưu trữ nhiều thông tin hơn, dùng tên field giống eravnTrans, tách các entity liên quan (`ranks`, `divisions`) thành bảng riêng với FK chặt chẽ.
@@ -871,8 +879,9 @@ Migration file `008_schema_v2_agents.sql` sẽ chứa toàn bộ ALTER TABLE + C
 ## FEAT-007: Agent Deactivation với Restore Point & Downline Transition
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `partial`
+- **Status**: `done`
 - **Priority**: `high`
+- **Hoàn thành**: 2026-05-29
 
 ### Current Status (as of 2026-05-29)
 
@@ -886,10 +895,11 @@ Migration file `008_schema_v2_agents.sql` sẽ chứa toàn bộ ALTER TABLE + C
 - `src/components/RestoreAgentModal.tsx` — UI đầy đủ: 2 mode (full/light), preview affected M1s, CountdownConfirmModal.
 - `src/lib/agent-actions.ts` — `deactivateAgent()` + `restoreAgent()` đầy đủ logic (snapshot, timeline, transition tasks, cancel/restore downline).
 - `src/pages/AgentsPage.tsx` — Admin đã thấy nút PowerOff (deactivate) / Power (restore) trên mỗi row.
+- `src/pages/AgentDetailPage.tsx` — Đã có tab "Lịch sử chấm dứt" (hiển thị khi agent có lịch sử deactivate).
+- `src/components/Layout.tsx` — Đã có menu "Ranks" và "Divisions" trong sidebar.
 
 **Chưa làm:**
-- Chưa chạy migration `009_agent_deactivation.sql` trên DB production.
-- `AgentDetailPage` chưa có tab "Lịch sử chấm dứt".
+- Chưa chạy migration `009_agent_deactivation.sql` trên DB production — **bắt buộc chạy thủ công trong Supabase SQL Editor**.
 - `Layout.tsx` chưa có menu mới "Quản lý Ranks/Divisions" (dù Ranks/Divisions pages đã có trong nav admin).
 
 ### 1. Mô tả feature
