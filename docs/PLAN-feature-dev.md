@@ -64,11 +64,11 @@
 |----|---------|--------|---------|------------|
 | 001 | Tích hợp gửi email thật (SendGrid/Resend) | backlog | 2026-05-28 | — |
 | 002 | Supabase Realtime updates (comments, status) | backlog | 2026-05-28 | — |
-| 003 | In-app Notifications (badge, dropdown) | backlog | 2026-05-28 | — |
-| 004 | Refactor pages sang TanStack Query | backlog | 2026-05-28 | — |
+| 003 | In-app Notifications (badge, dropdown) | partial | 2026-05-28 | — |
+| 004 | Refactor pages sang TanStack Query | partial | 2026-05-28 | — |
 | 005 | Search/Filter server-side cho presets phức tạp | backlog | 2026-05-28 | — |
-| 006 | Schema v2 — Align agents table with eravnTrans | backlog | 2026-05-28 | — |
-| 007 | Agent Deactivation với Restore Point & Downline Transition | backlog | 2026-05-28 | — |
+| 006 | Schema v2 — Align agents table with eravnTrans | partial | 2026-05-28 | — |
+| 007 | Agent Deactivation với Restore Point & Downline Transition | partial | 2026-05-28 | — |
 | 008 | Division Safety Net — Force Recompute & getAgentDivision RPC | fixed | 2026-05-29 | 2026-05-29 |
 | 009 | Dashboard stat cards navigation (→ Agents / Requests / Filter) | done | 2026-05-29 | 2026-05-29 |
 | 010 | Requests multi-choice status filter (toggle on/off) | done | 2026-05-29 | 2026-05-29 |
@@ -258,8 +258,21 @@ Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đ
 ## FEAT-003: In-app Notifications (badge, dropdown)
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `backlog`
+- **Status**: `partial`
 - **Priority**: `medium`
+
+### Current Status (as of 2026-05-29)
+
+**Đã làm:**
+- `src/components/NotificationDropdown.tsx` — Component dropdown hiển thị danh sách thông báo, badge số chưa đọc, nút "Đánh dấu đã đọc/tất cả", link đến request/activity.
+- Query từ `activity_logs` làm nguồn thông báo tạm thờivì chưa có bảng `notifications`.
+- Đã tích hợp vào `Layout.tsx` (header).
+
+**Chưa làm:**
+- Bảng `notifications` riêng trong DB (vẫn query `activity_logs`).
+- Tạo notification khi có event (request mới, comment, B2 alert, M1 expired).
+- `lib/notifications.ts` helper.
+- Realtime update (cần FEAT-002).
 
 ### 1. Mô tả feature
 Xây dựng hệ thống thông báo trong app: badge trên chuông header hiển thị số noti chưa đọc, dropdown liệt kê các thông báo (request mới, comment mới, B2 alert, M1 transition expired).
@@ -360,8 +373,19 @@ CREATE POLICY "Allow insert notifications"
 ## FEAT-004: Refactor pages sang TanStack Query
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `backlog`
+- **Status**: `partial`
 - **Priority**: `low`
+
+### Current Status (as of 2026-05-29)
+
+**Đã làm:**
+- `src/main.tsx` — Đã setup `QueryClientProvider` với `staleTime: 5 phút`, `retry: 1`.
+- `@tanstack/react-query` đã cài trong `package.json`.
+
+**Chưa làm:**
+- Chưa tạo custom hooks (`useAgents`, `useRequests`, `useAgentDetail`, v.v.).
+- Chưa refactor bất kỳ page nào sang dùng `useQuery`/`useMutation`.
+- Các page vẫn dùng `useState` + `useEffect` thủ công.
 
 ### 1. Mô tả feature
 Hiện tại các page đang dùng `useState` + `useEffect` thủ công để fetch data từ Supabase. Refactor sang `@tanstack/react-query` để có caching, background refetch, error handling, loading state tốt hơn.
@@ -546,8 +570,27 @@ $$;
 ## FEAT-006: Schema v2 — Align agents table with eravnTrans
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `backlog`
+- **Status**: `partial`
 - **Priority**: `high`
+
+### Current Status (as of 2026-05-29)
+
+**Đã làm:**
+- `supabase/migrations/008_schema_v2_agents.sql` (414 dòng) — Đã có đầy đủ:
+  - 6 bảng mới: `divisions`, `division_head_history`, `rank_profiles`, `ranks`, `agent_referrer_log`, `agent_info_history_log`, `agent_timeline_events`
+  - ALTER `agents`: thêm ~25 cột mới (`agent_code`, `referrer_id`, `rank_id`, `register_date`, `end_date`, `deactivation_reason`, `bank_name`, `id_card_number`, v.v.)
+  - Trigger sync `referrer_id` ↔ `current_t1_id`
+  - Trigger `recompute_division_on_referrer_change`
+  - Update RPC `check_eligibility` + `get_t1_capacity` hỗ trợ schema mới
+  - RLS policies + indexes
+- `src/types/index.ts` — `Agent` interface đã cập nhật đầy đủ cột mới.
+
+**Chưa làm:**
+- Chưa chạy migration trên DB production (file chỉ local).
+- Frontend vẫn ưu tiên `rank_name`/`current_t1_id` cũ ở nhiều chỗ (`AgentsPage`, `AgentDetailPage`, `DashboardPage`).
+- Chưa thêm tab/info card cá nhân/ngân hàng/nghề nghiệp trong `AgentDetailPage`.
+- `UploadPage` chưa validate/map headers mới.
+- Chưa seed data `ranks` từ eravnTrans (chỉ seed từ `rank_name` hiện có).
 
 ### 1. Mô tả feature
 Nâng cấp schema bảng `agents` và các bảng phụ trợ để **chuẩn hóa theo eravnTrans**. Mục tiêu: lưu trữ nhiều thông tin hơn, dùng tên field giống eravnTrans, tách các entity liên quan (`ranks`, `divisions`) thành bảng riêng với FK chặt chẽ.
@@ -828,8 +871,26 @@ Migration file `008_schema_v2_agents.sql` sẽ chứa toàn bộ ALTER TABLE + C
 ## FEAT-007: Agent Deactivation với Restore Point & Downline Transition
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `backlog`
+- **Status**: `partial`
 - **Priority**: `high`
+
+### Current Status (as of 2026-05-29)
+
+**Đã làm:**
+- `supabase/migrations/009_agent_deactivation.sql` — Đã có:
+  - Bảng `agent_deactivation_snapshots`
+  - Function `create_deactivation_snapshot()`
+  - RLS policies
+  - Seed `agent_referrer_log` từ `t1_changes`
+- `src/components/DeactivateAgentModal.tsx` — UI đầy đủ: date picker, dropdown lý do, preview M1, CountdownConfirmModal 10s.
+- `src/components/RestoreAgentModal.tsx` — UI đầy đủ: 2 mode (full/light), preview affected M1s, CountdownConfirmModal.
+- `src/lib/agent-actions.ts` — `deactivateAgent()` + `restoreAgent()` đầy đủ logic (snapshot, timeline, transition tasks, cancel/restore downline).
+- `src/pages/AgentsPage.tsx` — Admin đã thấy nút PowerOff (deactivate) / Power (restore) trên mỗi row.
+
+**Chưa làm:**
+- Chưa chạy migration `009_agent_deactivation.sql` trên DB production.
+- `AgentDetailPage` chưa có tab "Lịch sử chấm dứt".
+- `Layout.tsx` chưa có menu mới "Quản lý Ranks/Divisions" (dù Ranks/Divisions pages đã có trong nav admin).
 
 ### 1. Mô tả feature
 Cho phép admin chấm dứt hoạt động (deactivate) agent. Agent không bị xóa mà được lưu toàn bộ thông tin lúc chấm dứt. Có thể restore (kích hoạt lại). Toàn bộ downline của agent bị chấm dứt sẽ được xử lý tương tự như khi T1 chuyển đi (M1 Transition).
