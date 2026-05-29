@@ -18,6 +18,8 @@ export default function DivisionsPage() {
   const [form, setForm] = useState({ name: '', head_agent_id: '', is_official: false })
   const [showRecomputeConfirm, setShowRecomputeConfirm] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [deleting, setDeleting] = useState<any | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const role = user?.role ?? 'viewer'
 
@@ -190,6 +192,38 @@ export default function DivisionsPage() {
     setShowDropdown(false)
   }
 
+  const handleDelete = async () => {
+    if (!deleting) return
+    setDeleteBusy(true)
+    // Check if any agent belongs to this division
+    const { count, error: countError } = await supabase
+      .from('agents')
+      .select('*', { count: 'exact', head: true })
+      .eq('division_id', deleting.id)
+      .is('deleted_at', null)
+    if (countError) {
+      show('Lỗi kiểm tra: ' + countError.message, 'error')
+      setDeleteBusy(false)
+      return
+    }
+    if ((count ?? 0) > 0) {
+      show(`Không thể xóa: ${count} agent đang thuộc division này`, 'error')
+      setDeleteBusy(false)
+      setDeleting(null)
+      return
+    }
+    const { error } = await supabase.from('divisions').delete().eq('id', deleting.id)
+    if (error) {
+      show('Lỗi xóa: ' + error.message, 'error')
+      setDeleteBusy(false)
+      return
+    }
+    show('Đã xóa division', 'success')
+    setDeleteBusy(false)
+    setDeleting(null)
+    loadDivisions()
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -241,7 +275,12 @@ export default function DivisionsPage() {
                     <td className="px-4 py-3 text-neutral-700">{d.is_official ? '✅' : '—'}</td>
                     <td className="px-4 py-3 text-neutral-700">{d.is_default ? '✅' : '—'}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => startEdit(d)} className="text-primary text-xs hover:underline">Sửa</button>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => startEdit(d)} className="text-primary text-xs hover:underline">Sửa</button>
+                        {!d.is_default && (
+                          <button onClick={() => setDeleting(d)} className="text-red-600 text-xs hover:underline">Xóa</button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -253,6 +292,31 @@ export default function DivisionsPage() {
           </table>
         </div>
       </div>
+
+      {deleting && (
+        <Modal onClose={() => setDeleting(null)} title="Xác nhận xóa" maxWidth="max-w-sm">
+          <div className="space-y-4">
+            <p className="text-sm text-neutral-700">
+              Bạn có chắc muốn xóa division <strong>{deleting.name}</strong>?
+            </p>
+            <p className="text-xs text-red-600">
+              Nếu division đang có agent, hệ thống sẽ từ chối xóa để tránh mất dữ liệu.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button onClick={() => setDeleting(null)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">
+                Hủy
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleteBusy}
+                className="px-4 h-9 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleteBusy ? 'Đang xóa...' : 'Xóa'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {showModal && (
         <Modal onClose={closeModal} title={editing ? 'Sửa division' : 'Thêm division mới'} maxWidth="max-w-md">

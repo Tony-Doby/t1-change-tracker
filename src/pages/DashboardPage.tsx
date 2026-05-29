@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useToast } from '../components/Toast'
-import { Users, ClipboardList, Clock, CheckCircle, AlertTriangle, Star, ArrowRight, Inbox } from 'lucide-react'
+import { Users, ClipboardList, Clock, CheckCircle, AlertTriangle, Star, ArrowRight, Inbox, Search, X, Mail } from 'lucide-react'
 import { SkeletonCard, SkeletonText } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import { Link, useNavigate } from 'react-router-dom'
@@ -47,9 +47,14 @@ interface TransitionTask {
   m1_agent: { full_name: string; staff_id: string; contract_signing_date: string; rank_name: string } | null
   temp_t1_id: string | null
   temp_t1: { full_name: string; staff_id: string } | null
+  departed_agent_id: string
+  departed_agent: { full_name: string; staff_id: string } | null
+  parent_request_id: string | null
   deadline_date: string
   status: string
   daysLeft: number
+  email_sent_count: number
+  last_email_sent_at: string | null
 }
 
 interface B2Request {
@@ -79,7 +84,9 @@ export default function DashboardPage() {
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; req: B2Request | null }>({ open: false, req: null })
   const [cancelModal, setCancelModal] = useState<{ open: boolean; req: B2Request | null; reason: string }>({ open: false, req: null, reason: '' })
   const [t1Changes, setT1Changes] = useState<any[]>([])
-  const [emailModalAgentId, setEmailModalAgentId] = useState<string | null>(null)
+  const [m1Search, setM1Search] = useState('')
+  const [b2Search, setB2Search] = useState('')
+  const [emailModal, setEmailModal] = useState<{ agentId: string; taskId?: string } | null>(null)
   const [requestModalAgentId, setRequestModalAgentId] = useState<string | null>(null)
   const [confirmT2Task, setConfirmT2Task] = useState<TransitionTask | null>(null)
   const [rankNamesMap, setRankNamesMap] = useState<Map<string, string>>(new Map())
@@ -156,11 +163,21 @@ export default function DashboardPage() {
         setRankNamesMap(rMap)
 
         // Load transition tasks
-        const { data: tasks } = await supabase
+        const { data: tasks, error: tasksError } = await supabase
           .from('m1_transition_tasks')
-          .select('*, m1_agent: m1_agent_id(full_name, staff_id, contract_signing_date, rank_name), temp_t1: temp_t1_id(full_name, staff_id)')
+          .select(`
+            *,
+            m1_agent:m1_agent_id(full_name, staff_id, contract_signing_date, rank_name),
+            temp_t1:temp_t1_id(full_name, staff_id),
+            departed_agent:departed_agent_id(full_name, staff_id)
+          `)
           .in('status', ['pending', 'expired'])
           .order('deadline_date', { ascending: true })
+
+        if (tasksError) {
+          console.error('M1 Transition query error:', tasksError)
+          show('Lỗi tải M1 Transition: ' + tasksError.message, 'error')
+        }
 
         const mapped: TransitionTask[] = (tasks ?? []).map((t: any) => {
           const daysLeft = Math.ceil((new Date(t.deadline_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
@@ -170,9 +187,14 @@ export default function DashboardPage() {
             m1_agent: t.m1_agent,
             temp_t1_id: t.temp_t1_id,
             temp_t1: t.temp_t1,
+            departed_agent_id: t.departed_agent_id,
+            departed_agent: t.departed_agent,
+            parent_request_id: t.parent_request_id,
             deadline_date: t.deadline_date,
             status: t.status,
             daysLeft,
+            email_sent_count: t.email_sent_count ?? 0,
+            last_email_sent_at: t.last_email_sent_at,
           }
         })
         setTransitions(mapped)
@@ -256,9 +278,40 @@ export default function DashboardPage() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
+  const filteredTransitions = useMemo(() => {
+    const q = m1Search.trim().toLowerCase()
+    if (!q) return transitions
+    return transitions.filter((t) =>
+      t.m1_agent?.full_name?.toLowerCase().includes(q) ||
+      t.m1_agent?.staff_id?.toLowerCase().includes(q) ||
+      t.temp_t1?.full_name?.toLowerCase().includes(q) ||
+      t.temp_t1?.staff_id?.toLowerCase().includes(q) ||
+      t.departed_agent?.full_name?.toLowerCase().includes(q) ||
+      t.departed_agent?.staff_id?.toLowerCase().includes(q)
+    )
+  }, [transitions, m1Search])
+
   const b2Pending = b2Requests.filter((r) => today <= r.deadline3)
   const b2Alert = b2Requests.filter((r) => today > r.deadline3 && today < r.deadline4)
   const b2Eligible = b2Requests.filter((r) => today >= r.deadline4)
+
+  const filteredB2Eligible = useMemo(() => {
+    const q = b2Search.trim().toLowerCase()
+    if (!q) return b2Eligible
+    return b2Eligible.filter((r: any) => {
+      const a = r.agent
+      const old = r.old_t1
+      const n = r.new_t1
+      return (
+        (a?.full_name && a.full_name.toLowerCase().includes(q)) ||
+        (a?.staff_id && a.staff_id.toLowerCase().includes(q)) ||
+        (old?.full_name && old.full_name.toLowerCase().includes(q)) ||
+        (old?.staff_id && old.staff_id.toLowerCase().includes(q)) ||
+        (n?.full_name && n.full_name.toLowerCase().includes(q)) ||
+        (n?.staff_id && n.staff_id.toLowerCase().includes(q))
+      )
+    })
+  }, [b2Eligible, b2Search])
 
   if (loading) {
     return (
@@ -349,11 +402,38 @@ export default function DashboardPage() {
 
       {b2Eligible.length > 0 && (
         <div className="bg-white rounded-lg p-5 shadow-card">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4 flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-success" /> B2 đủ điều kiện xác nhận thay đổi (từ ngày thứ 4)
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-success" /> B2 đủ điều kiện xác nhận thay đổi ({filteredB2Eligible.length})
+            </h2>
+            <div className="relative w-48 sm:w-56">
+              <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+              <input
+                type="text"
+                value={b2Search}
+                onChange={(e) => setB2Search(e.target.value)}
+                placeholder="Tìm agent..."
+                className="w-full h-9 pl-9 pr-8 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+              />
+              {b2Search && (
+                <button
+                  onClick={() => setB2Search('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
           <div className="space-y-3 max-h-[320px] overflow-y-auto">
-            {b2Eligible.map((r) => (
+            {filteredB2Eligible.length === 0 && (
+              <EmptyState
+                icon={<Inbox className="w-12 h-12" />}
+                title="Không tìm thấy kết quả"
+                subtitle="Thử tìm theo tên hoặc mã nhân viên"
+              />
+            )}
+            {filteredB2Eligible.map((r) => (
               <div key={r.id} className="flex items-center justify-between p-3 rounded-md bg-success-light/30">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-neutral-900 truncate">
@@ -367,6 +447,12 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-3">
+                  <button
+                    onClick={() => setEmailModal({ agentId: r.agent_id })}
+                    className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100 whitespace-nowrap"
+                  >
+                    Tạo email mẫu
+                  </button>
                   <button
                     onClick={() => setConfirmModal({ open: true, req: r })}
                     className="text-xs bg-success text-white px-2 py-1 rounded hover:opacity-90"
@@ -388,49 +474,98 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white rounded-lg p-5 shadow-card">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-warning" /> M1 Transition ({transitions.length})
-          </h2>
-          <div className="space-y-3 max-h-[320px] overflow-y-auto">
-            {transitions.length === 0 && (
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-warning" /> M1 Transition ({filteredTransitions.length})
+            </h2>
+            <div className="relative w-48 sm:w-56">
+              <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+              <input
+                type="text"
+                value={m1Search}
+                onChange={(e) => setM1Search(e.target.value)}
+                placeholder="Tìm agent..."
+                className="w-full h-9 pl-9 pr-8 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+              />
+              {m1Search && (
+                <button
+                  onClick={() => setM1Search('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {filteredTransitions.length === 0 && (
               <EmptyState
                 icon={<Inbox className="w-12 h-12" />}
                 title="Không có M1 nào đang trong giai đoạn transition"
-                subtitle="Tất cả M1 đã được xử lý hoặc chưa có request hoàn tất"
+                subtitle={m1Search ? 'Không tìm thấy kết quả phù hợp' : 'Tất cả M1 đã được xử lý hoặc chưa có request hoàn tất'}
               />
             )}
-            {transitions.map((t) => (
-              <div key={t.id} className={`flex items-center justify-between p-3 rounded-md ${t.status === 'expired' ? 'bg-danger-light/30' : 'bg-neutral-50'}`}>
-                <div className="min-w-0">
-                  <Link to={`/agents/${t.m1_agent_id}`} className="text-sm font-medium text-neutral-900 truncate hover:text-primary block">
-                    {t.m1_agent?.full_name ?? '—'} - {t.m1_agent?.staff_id ?? '—'}
-                  </Link>
-                  <p className="text-xs text-neutral-500">
-                    T1 tạm: {t.temp_t1 ? `${t.temp_t1.full_name} - ${t.temp_t1.staff_id}` : (t.temp_t1_id === null ? 'Không có T1 tạm' : '—')} •
-                    {t.status === 'expired'
-                      ? <span className="text-danger font-medium"> Đã quá hạn {Math.abs(t.daysLeft)} ngày</span>
-                      : <span> Còn {t.daysLeft} ngày</span>
-                    }
+            {filteredTransitions.map((t) => (
+              <div key={t.id} className={`flex items-start justify-between gap-4 p-3 rounded-md ${t.status === 'expired' ? 'bg-danger-light/30' : 'bg-neutral-50'}`}>
+                {/* Left: Info vertical stack */}
+                <div className="min-w-0 flex-1 space-y-1">
+                  {/* Dòng 1: Tên agent + deadline */}
+                  <div className="flex items-center gap-2">
+                    <Link to={`/agents/${t.m1_agent_id}`} className="text-sm font-medium text-neutral-900 truncate hover:text-primary">
+                      {t.m1_agent?.full_name ?? '—'} - {t.m1_agent?.staff_id ?? '—'}
+                    </Link>
+                    {t.status === 'expired' ? (
+                      <span className="text-xs text-danger font-medium shrink-0">Quá hạn {Math.abs(t.daysLeft)} ngày</span>
+                    ) : (
+                      <span className="text-xs text-neutral-500 shrink-0">Còn {t.daysLeft} ngày</span>
+                    )}
+                  </div>
+                  {/* Dòng 2: T1 cũ */}
+                  <p className="text-xs text-neutral-500 truncate">
+                    T1 cũ: {t.departed_agent ? `${t.departed_agent.full_name} - ${t.departed_agent.staff_id}` : '—'}
                   </p>
+                  {/* Dòng 3: T1 tạm */}
+                  <p className="text-xs text-neutral-500 truncate">
+                    T1 tạm: {t.temp_t1 ? `${t.temp_t1.full_name} - ${t.temp_t1.staff_id}` : (t.temp_t1_id === null ? 'Không có' : '—')}
+                  </p>
+                  {/* Dòng 4: Lý do + Email */}
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      t.parent_request_id ? 'bg-primary-light text-primary' : 'bg-warning-light text-warning'
+                    }`}>
+                      {t.parent_request_id ? 'T1 cũ thay đổi' : 'Deactivate agent'}
+                    </span>
+                    {t.email_sent_count > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-500" title={`Gửi lần cuối: ${formatDate(t.last_email_sent_at)}`}>
+                        <Mail className="w-3 h-3" /> Đã gửi {t.email_sent_count} lần
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400">
+                        <Mail className="w-3 h-3" /> Chưa gửi email
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0 ml-3">
+
+                {/* Right: Actions */}
+                <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={() => setEmailModalAgentId(t.m1_agent_id)}
-                    className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100"
+                    onClick={() => setEmailModal({ agentId: t.m1_agent_id, taskId: t.id })}
+                    className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100 whitespace-nowrap"
                   >
-                    Tạo email mẫu
+                    {t.email_sent_count > 0 ? 'Gửi lại email' : 'Tạo email mẫu'}
                   </button>
                   <button
                     onClick={() => setRequestModalAgentId(t.m1_agent_id)}
                     disabled={!canCreateRequest(t.m1_agent, t1Changes, rankNamesMap)}
-                    className="text-xs bg-white border border-primary text-primary px-2 py-1 rounded hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-xs bg-white border border-primary text-primary px-2 py-1 rounded hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     Tạo đề xuất
                   </button>
                   <button
                     onClick={() => setConfirmT2Task(t)}
                     disabled={processingT2 === t.id}
-                    className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100 disabled:opacity-50"
+                    className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100 disabled:opacity-50 whitespace-nowrap"
                   >
                     {processingT2 === t.id ? 'Đang xử lý...' : 'Ở lại với T2'}
                   </button>
@@ -522,8 +657,8 @@ export default function DashboardPage() {
         </div>
       </CountdownConfirmModal>
 
-      {emailModalAgentId && (
-        <ComposeTemplateModal agentId={emailModalAgentId} onClose={() => setEmailModalAgentId(null)} />
+      {emailModal && (
+        <ComposeTemplateModal agentId={emailModal.agentId} m1TaskId={emailModal.taskId ?? undefined} onClose={() => setEmailModal(null)} />
       )}
       {requestModalAgentId && (
         <CreateRequestModal agentId={requestModalAgentId} onClose={() => setRequestModalAgentId(null)} />

@@ -5,7 +5,247 @@
 
 ---
 
+## 2026-05-30
+
+### 26. BUG-014: Fix `temp_t1_id` trong Deactivation bị set sai
+
+**Bug:** Khi deactivate agent, `m1_transition_tasks.temp_t1_id` bị set = chính agent bị deactivate (vì code lấy `m1.referrer_id` của M1). Agent đã nghỉ không thể làm T1 tạm.
+
+**Fix:**
+- Query agent bị deactivate trước để lấy `referrer_id` / `current_t1_id` (T1 của agent bị deactivate).
+- Set `temp_t1_id` cho toàn bộ M1 transition tasks = T1 của agent bị deactivate (T2 của M1).
+- Nếu agent bị deactivate không có T1 → `temp_t1_id = null`.
+
+**Files sửa:**
+- `webapp/src/lib/agent-actions.ts` — Query deactivated agent T1, dùng làm `temp_t1_id` cho M1 tasks
+
+---
+
 ## 2026-05-29
+
+### 16. FEAT-015: Thêm mẫu email mới (popup trình soạn thảo)
+
+**Tính năng:**
+1. Nút **"Thêm mẫu"** trên trang Quản lý mẫu email.
+2. Modal form: Tên mẫu, Template key (auto-slug từ tên, có thể sửa tay), Tiêu đề, Nội dung (HtmlEditor 3 tabs).
+3. Insert vào bảng `email_templates` với `version = 1`.
+4. Validate `template_key` unique, toast lỗi nếu trùng.
+
+**Files sửa:**
+- `webapp/src/pages/EmailTemplatesPage.tsx` — Thêm modal create, logic insert Supabase, auto-slug helper
+
+---
+
+### 17. FEAT-014: Quản lý mẫu email dạng danh sách (list view + modal edit)
+
+**Tính năng:**
+1. Chuyển `EmailTemplatesPage` từ dạng card mở sẵn editor → bảng danh sách gọn (`# | Tên mẫu | Template key | Tiêu đề | Hành động`).
+2. Click "Chỉnh sửa" → mở modal soạn thảo (dùng `Modal` component + `HtmlEditor`).
+3. Click "Xem trước" → mở modal preview riêng render HTML với placeholders.
+4. Giữ chức năng Lưu mẫu (update DB) như cũ.
+
+**Files sửa:**
+- `webapp/src/pages/EmailTemplatesPage.tsx` — Refactor toàn bộ UI
+
+---
+
+### 25. FEAT-018: ComposeTemplateModal — Refactor email section (1 section, 4 emails, copy từng email)
+
+**Tính năng:**
+1. Bỏ 2 cột "Agent | T1 Cũ", thay bằng 1 section **"Email liên quan"**.
+2. 4 dòng: Agent, T1 mới, T1 cũ, T1 tạm.
+3. Có email → hiện email + icon Copy. Không có → "—".
+4. Nút "Copy email" footer copy toàn bộ email có dữ liệu.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`
+
+---
+
+### 24. Thêm placeholder `{{oldT1StaffId}}` và `{{tempT1StaffId}}`
+
+**Thay đổi:**
+- `EmailTemplatesPage`: Thêm `{{oldT1StaffId}}`, `{{tempT1StaffId}}` vào `defaultPlaceholders` và `previewData`.
+- `ComposeTemplateModal`: Thêm `.replace(/{{oldT1StaffId}}/g, t1Old?.staff_id ?? '')` và `.replace(/{{tempT1StaffId}}/g, t1Old?.staff_id ?? '')` trong `rendered`.
+
+**Files sửa:**
+- `webapp/src/pages/EmailTemplatesPage.tsx`
+- `webapp/src/components/ComposeTemplateModal.tsx`
+
+---
+
+### 23. FEAT-017: Dashboard B2 — Search bar + nút "Tạo email mẫu"
+
+**Tính năng:**
+1. Section **"B2 đủ điều kiện xác nhận thay đổi"** thêm search bar (tìm theo tên/mã agent, T1 cũ, T1 mới) giống M1 Transition.
+2. Thêm nút **"Tạo email mẫu"** mỗi row B2 → mở `ComposeTemplateModal` để soạn/copy nội dung.
+3. Hiển thị số lượng B2 eligible trong tiêu đề.
+4. Empty state khi search không có kết quả.
+
+**Files sửa:**
+- `webapp/src/pages/DashboardPage.tsx`
+
+---
+
+### 22. BUG-013: ComposeTemplateModal hiển thị raw HTML tags, copy ra mã
+
+**Bug:** Khung "Nội dung đã soạn" dùng `<textarea readOnly>` hiển thị HTML string → user thấy raw tags (`<div>`, `<b>`, style...).
+
+**Fix:**
+- Thay `<textarea readOnly>` bằng `<div dangerouslySetInnerHTML>` → render HTML đẹp.
+- Nút "Copy nội dung" strip HTML tags (dùng DOM tạm `div.innerHTML = html; div.innerText`) trước khi copy → paste ra chỉ có plain text.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`
+
+---
+
+### 21. FEAT-016: Thêm nút xóa cho Ranks và Divisions (có kiểm tra agents)
+
+**Tính năng:**
+1. `RanksPage`: Thêm nút **Xóa** mỗi row. Trước khi xóa, query đếm agents đang dùng `rank_id`. Nếu > 0 → toast lỗi, chặn xóa.
+2. `DivisionsPage`: Thêm nút **Xóa** mỗi row (ẩn với division `is_default`). Trước khi xóa, query đếm agents thuộc `division_id`. Nếu > 0 → toast lỗi, chặn xóa.
+3. Cả 2 đều có modal confirm đơn giản (không countdown), màu đỏ, loading state.
+
+**Lý do chặn xóa khi có agents:**
+- `agents.rank_id` → `REFERENCES ranks(id)` (không có ON DELETE) → xóa rank đang dùng sẽ lỗi FK.
+- `agents.division_id` → `REFERENCES divisions(id) ON DELETE CASCADE` → xóa division đang có agent sẽ xóa luôn agents. Để tránh mất data, chặn ở app layer.
+
+**Files sửa:**
+- `webapp/src/pages/RanksPage.tsx`
+- `webapp/src/pages/DivisionsPage.tsx`
+
+---
+
+### 20. BUG-012: EmailTemplatesPage — Preview modal bị đẩy lên, thiếu nút X, text không xuống dòng
+
+**Bug phát sinh sau FEAT-014 (refactor list view).**
+
+**Hiện tượng:**
+1. Modal "Xem trước mẫu" bị đẩy lên gần header, tiêu đề và nút ✕ bị cắt khỏi viewport.
+2. Mẫu email cũ (plain text) hiển thị `\n\n` thay vì xuống dòng đúng.
+
+**Root cause:**
+1. Preview modal vẫn dùng inline `fixed inset-0 flex items-center justify-center` thay vì component `Modal` chuẩn.
+2. `getPreviewHtml` replace placeholders trên `template.body` trực tiếp, không convert plain text → HTML.
+
+**Fix:**
+- Thay inline preview modal bằng component `<Modal>` (portal, focus trap, Escape, backdrop click).
+- Export `plainTextToHtml` từ `HtmlEditor.tsx`, dùng trong `getPreviewHtml` để wrap plain text thành `<p>` + `<br>`.
+
+**Files sửa:**
+- `webapp/src/pages/EmailTemplatesPage.tsx`
+- `webapp/src/components/HtmlEditor.tsx`
+
+---
+
+### 19. Tạm ẩn tính năng gửi email (Resend)
+
+**Lý do:** Chờ IT verify domain `myera.com.vn` trên Resend trước khi bật production.
+
+**Thay đổi:**
+- Comment nút **"Gửi email"** trong `ComposeTemplateModal` (không mở `SendEmailModal`).
+- Giữ nguyên nút **"Tạo email mẫu"** / **"Gửi lại email"** trong Dashboard M1 Transition (vẫn mở `ComposeTemplateModal` để soạn/copy nội dung).
+- Tính năng soạn mẫu email (`EmailTemplatesPage`) vẫn hoạt động bình thường.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`
+- `webapp/src/pages/DashboardPage.tsx`
+
+---
+
+### 18. BUG-011: HtmlEditor text bị đảo chiều khi nhập (hello → olleh)
+
+**Bug:** Trong tab Soạn thảo của `HtmlEditor`, gõ `hello` thành `olleh` do con trỏ bị reset về đầu mỗi lần nhập.
+
+**Root cause:** `useEffect` sync `innerHTML` mỗi khi prop `value` thay đổi. Mỗi ký tự user nhập → `onInput` → `onChange` → state update → `value` prop mới → useEffect chạy lại → ghi đè `innerHTML` → selection bị mất → browser đặt con trỏ về đầu → text bị đảo.
+
+**Fix:**
+- Dùng `useRef` flag `isInternalChangeRef` để phân biệt change từ bên trong editor (đang gõ/format/chèn placeholder) vs bên ngoài.
+- Chỉ sync `innerHTML` khi `!isInternalChangeRef.current`.
+- Reset flag sau mỗi lần useEffect chạy.
+
+**Files sửa:**
+- `webapp/src/components/HtmlEditor.tsx` — Thêm `isInternalChangeRef`, skip sync khi change nội bộ
+
+**Lesson learned:** Không bao giờ set `innerHTML` từ `useEffect` trong khi user đang tương tác với `contentEditable`.
+
+---
+
+### 14. BUG-010: M1 Transition query trả về rỗng do join cột `reason` không tồn tại
+
+**Bug phát sinh trong lúc dev FEAT-013.**
+
+**Hiện tượng:** Card M1 Transition hiển thị 0 item sau khi deploy code FEAT-013, dù DB vẫn có data.
+
+**Root cause:** Query `.select()` join `parent_request:parent_request_id(reason)` nhưng bảng `t1_requests` trên DB production không có cột `reason` → PostgREST trả lỗi 400 → toàn bộ query fail.
+
+**Fix:**
+- Bỏ join `parent_request` khỏi query, chỉ dùng `parent_request_id` để hiển thị badge lý do.
+- Thêm `tasksError` log để query fail sẽ hiện toast.
+
+**Lesson learned:** Phải verify schema DB production trước khi dùng embedded resource join. Không trust migration local blindly.
+
+**Files sửa:** `src/pages/DashboardPage.tsx`
+
+---
+
+### 15. FEAT-013: M1 Transition — Search, T1 cũ + Lý do, Email Tracking
+
+**Tính năng:**
+1. **Search bar** trên card M1 Transition (Dashboard): tìm nhanh theo tên M1, mã nhân viên, T1 tạm, T1 cũ. Filter client-side với debounce.
+2. **Hiển thị T1 cũ**: Query join `departed_agent:departed_agent_id`, hiển thị tên + mã T1 cũ trên mỗi row. Click tên → navigate Agent Detail.
+3. **Hiển thị Lý do**: Badge "T1 cũ thay đổi" (nếu từ `t1_request`) hoặc "Deactivate agent" (nếu từ deactivate). Query join `parent_request:parent_request_id(reason)`.
+4. **Email tracking**: ALTER TABLE `m1_transition_tasks` thêm `email_sent_count` (DEFAULT 0) và `last_email_sent_at` (TIMESTAMPTZ).
+   - UI hiển thị icon Mail + số lần đã gửi. Tooltip hiển thị thờigian gửi gần nhất.
+   - Nút đổi label: "Tạo email mẫu" (chưa gửi) → "Gửi lại email" (đã gửi).
+   - Sau mỗi lần gửi qua `SendEmailModal` → tự động `+1` count + update timestamp.
+
+**Schema:**
+- `supabase/migrations/015_m1_email_tracking.sql` — ALTER TABLE + index.
+
+**Files sửa/tạo:**
+- `webapp/supabase/migrations/015_m1_email_tracking.sql` — Mới
+- `webapp/src/types/index.ts` — Thêm `email_sent_count`, `last_email_sent_at` vào `M1TransitionTask`
+- `webapp/src/pages/DashboardPage.tsx` — Search bar, filter logic, cột T1 cũ/Lý do/Email, grid layout responsive
+- `webapp/src/components/SendEmailModal.tsx` — Nhận `m1TaskId`, update count sau gửi thành công
+- `webapp/src/components/ComposeTemplateModal.tsx` — Nhận và truyền `m1TaskId`
+- `webapp/docs/PLAN-feature-dev.md` — Cập nhật FEAT-013 status
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
+### 13. FEAT-001: Tích hợp gửi email thật (Resend + HTML Editor + CC)
+
+**Tính năng:**
+1. **Gửi email trực tiếp** từ `ComposeTemplateModal` qua nút [Gửi email]. Mở `SendEmailModal` với To (agent email), CC (dynamic list thêm/xóa nhiều ngườii), Subject rendered từ template, Body preview HTML.
+2. **Resend + Supabase Edge Function** (`supabase/functions/send-email/index.ts`): Gọi Resend API, lưu log vào `email_logs`, xử lý CORS, lấy `sent_by` từ JWT token.
+3. **HtmlEditor component** (3 tabs):
+   - Visual: `contentEditable` + toolbar (Bold, Italic, Underline, Link, Text Color, Align, Undo, Placeholder dropdown).
+   - Code: textarea hiển thị HTML raw.
+   - Preview: `dangerouslySetInnerHTML` với dynamic values replaced.
+   - Auto-convert plain text → HTML (backward-compatible với templates cũ).
+4. **EmailTemplatesPage** đã chuyển từ textarea plain text sang `HtmlEditor` cho phần nội dung mẫu. Preview modal render HTML thay vì `whitespace-pre-wrap`.
+5. **Schema** `014_email_logs.sql`: Bảng `email_logs` + cột `cc_emails` (jsonb) + indexes + RLS policies.
+
+**Lưu ý triển khai:**
+- Cần chạy migration `014_email_logs.sql` trên Supabase SQL Editor.
+- Cần deploy Edge Function: `supabase functions deploy send-email`.
+- Cần thêm `RESEND_API_KEY` vào Supabase Secrets.
+- From email mặc định: `opt@myera.com.vn` — cần verify domain trên Resend trước khi dùng production. Trong lúc chờ IT: dùng `onboarding@resend.dev` để test.
+
+**Files sửa/tạo:**
+- `webapp/supabase/migrations/014_email_logs.sql` — Mới
+- `webapp/supabase/functions/send-email/index.ts` — Mới
+- `webapp/src/types/index.ts` — Thêm `EmailLog`
+- `webapp/src/components/HtmlEditor.tsx` — Mới
+- `webapp/src/components/SendEmailModal.tsx` — Mới
+- `webapp/src/components/ComposeTemplateModal.tsx` — Thêm nút Gửi email
+- `webapp/src/pages/EmailTemplatesPage.tsx` — Dùng HtmlEditor
+- `webapp/docs/PLAN-feature-dev.md` — Cập nhật FEAT-001 status
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
 
 ### 12. Refactor: AgentDetailPage 2-tab layout
 

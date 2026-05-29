@@ -141,6 +141,8 @@ export interface M1TransitionTask {
   new_request_id: string | null
   resolved_at: string | null
   depth: number
+  email_sent_count: number
+  last_email_sent_at: string | null
   created_at: string
 }
 
@@ -257,6 +259,22 @@ export interface Notification {
   link: string | null
   read: boolean
   created_at: string
+}
+
+// FEAT-001: Email Logs
+
+export interface EmailLog {
+  id: string
+  sent_at: string
+  sent_by: string | null
+  recipient_email: string
+  cc_emails: string[]
+  recipient_agent_id: string | null
+  template_key: string
+  subject: string
+  body: string
+  status: 'sent' | 'failed'
+  error_message: string | null
 }
 
 // FEAT-007: Agent Deactivation

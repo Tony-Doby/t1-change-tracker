@@ -5,9 +5,11 @@ import { supabase } from '../lib/supabase'
 import { useToast } from './Toast'
 import { formatDate } from '../lib/date-utils'
 import type { EmailTemplate } from '../types'
+import SendEmailModal from './SendEmailModal'
 
 interface Props {
   agentId: string
+  m1TaskId?: string
   onClose: () => void
 }
 
@@ -49,7 +51,7 @@ Phòng Vận Hành ERA`,
   },
 ]
 
-export default function ComposeTemplateModal({ agentId, onClose }: Props) {
+export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Props) {
   const { show } = useToast()
   const [agent, setAgent] = useState<any>(null)
   const [t1Old, setT1Old] = useState<any>(null)
@@ -57,6 +59,7 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [templates, setTemplates] = useState(defaultTemplates)
   const [selectedKey, setSelectedKey] = useState(defaultTemplates[0].key)
+  const [showSendModal, setShowSendModal] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -120,6 +123,7 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
       .replace(/{{staffId}}/g, agent?.staff_id ?? '')
       .replace(/{{oldT1Name}}/g, t1Old?.full_name ?? '')
       .replace(/{{oldT1Email}}/g, t1Old?.email ?? '')
+      .replace(/{{oldT1StaffId}}/g, t1Old?.staff_id ?? '')
       .replace(/{{newT1Name}}/g, newT1?.full_name ?? '')
       .replace(/{{newT1Email}}/g, newT1?.email ?? '')
       .replace(/{{newT1StaffId}}/g, newT1?.staff_id ?? '')
@@ -127,15 +131,20 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
       .replace(/{{deadlineDate}}/g, formatDate(new Date(Date.now() + 30 * 86400000)))
       .replace(/{{notifyDate}}/g, formatDate(new Date()))
       .replace(/{{tempT1Name}}/g, t1Old?.full_name ?? '')
+      .replace(/{{tempT1StaffId}}/g, t1Old?.staff_id ?? '')
   }, [template, agent, t1Old, newT1])
 
   const copyContent = () => {
-    navigator.clipboard.writeText(rendered)
+    // Strip HTML tags to copy plain text
+    const tmp = document.createElement('div')
+    tmp.innerHTML = rendered
+    const plain = tmp.innerText || tmp.textContent || ''
+    navigator.clipboard.writeText(plain)
     show('Đã copy nội dung', 'success')
   }
 
   const copyEmails = () => {
-    const emails = [agent?.email, t1Old?.email].filter(Boolean).join(', ')
+    const emails = [agent?.email, newT1?.email, t1Old?.email].filter(Boolean).join(', ')
     navigator.clipboard.writeText(emails)
     show('Đã copy email', 'success')
   }
@@ -163,24 +172,78 @@ export default function ComposeTemplateModal({ agentId, onClose }: Props) {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-neutral-50 rounded-lg p-3 text-sm"><p className="text-xs text-neutral-500 mb-1">Agent</p><p className="text-neutral-900 font-medium">{agent.email ?? '—'}</p></div>
-            <div className="bg-neutral-50 rounded-lg p-3 text-sm"><p className="text-xs text-neutral-500 mb-1">T1 Cũ</p><p className="text-neutral-900 font-medium">{t1Old?.email ?? '—'}</p></div>
+          <div>
+            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">Email liên quan</label>
+            <div className="space-y-2">
+              {[
+                { label: 'Agent', email: agent?.email },
+                { label: 'T1 mới', email: newT1?.email },
+                { label: 'T1 cũ', email: t1Old?.email },
+                { label: 'T1 tạm', email: t1Old?.email },
+              ].map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between bg-neutral-50 rounded-lg p-3 text-sm">
+                  <div>
+                    <p className="text-xs text-neutral-500 mb-0.5">{item.label}</p>
+                    <p className="text-neutral-900 font-medium">{item.email ?? '—'}</p>
+                  </div>
+                  {item.email && (
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(item.email)
+                        show('Đã copy email', 'success')
+                      }}
+                      className="p-1.5 rounded-md hover:bg-neutral-200 text-neutral-500 hover:text-neutral-700 transition-colors"
+                      title="Copy email"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">Nội dung đã soạn</label>
-            <textarea readOnly value={rendered} rows={10} className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm font-mono bg-neutral-50 text-neutral-800 resize-none" />
+            <div
+              className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm bg-neutral-50 text-neutral-800 prose prose-sm max-w-none overflow-y-auto"
+              style={{ maxHeight: '240px' }}
+              dangerouslySetInnerHTML={{ __html: rendered }}
+            />
           </div>
         </div>
 
         <div className="flex justify-end gap-3 p-5 border-t border-neutral-100">
           <button onClick={copyContent} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50 flex items-center gap-2"><Copy className="w-4 h-4" /> Copy nội dung</button>
-          <button onClick={copyEmails} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover flex items-center gap-2"><Mail className="w-4 h-4" /> Copy email</button>
+          <button onClick={copyEmails} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50 flex items-center gap-2"><Mail className="w-4 h-4" /> Copy email</button>
+          {/* Email sending temporarily disabled */}
+          {/* <button
+            onClick={() => setShowSendModal(true)}
+            disabled={!agent?.email}
+            className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Send className="w-4 h-4" /> Gửi email
+          </button> */}
         </div>
       </div>
     </div>
   )
 
-  return createPortal(content, document.body)
+  return (
+    <>
+      {createPortal(content, document.body)}
+      {showSendModal && agent && (
+        <SendEmailModal
+          agent={agent}
+          t1Old={t1Old}
+          newT1={newT1}
+          templateSubject={template.subject}
+          templateBody={template.body}
+          templateKey={selectedKey}
+          m1TaskId={m1TaskId}
+          onClose={() => setShowSendModal(false)}
+        />
+      )}
+    </>
+  )
 }

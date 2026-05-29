@@ -57,21 +57,10 @@ export function SkeletonTableRow({ cols = 6 }: { cols?: number }) {
 
 export function SkeletonTable({ rows = 5, cols = 6 }: { rows?: number; cols?: number }) {
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="bg-neutral-50 border-b border-neutral-300">
-          {Array.from({ length: cols }).map((_, i) => (
-            <th key={i} className="px-4 py-3 text-left">
-              <Skeleton variant="text" height={14} width="60%" />
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {Array.from({ length: rows }).map((_, i) => (
-          <SkeletonTableRow key={i} cols={cols} />
-        ))}
-      </tbody>
-    </table>
+    <>
+      {Array.from({ length: rows }).map((_, i) => (
+        <SkeletonTableRow key={i} cols={cols} />
+      ))}
+    </>
   )
 }

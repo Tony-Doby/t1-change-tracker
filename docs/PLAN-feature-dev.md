@@ -62,82 +62,111 @@
 
 | ID | Tiêu đề | Status | Đề xuất | Hoàn thành |
 |----|---------|--------|---------|------------|
-| 001 | Tích hợp gửi email thật (SendGrid/Resend) | backlog | 2026-05-28 | — |
+| 001 | Tích hợp gửi email thật (Resend + HTML editor) | done | 2026-05-28 | 2026-05-29 |
 | 002 | Supabase Realtime updates (comments, status) | backlog | 2026-05-28 | — |
 | 003 | In-app Notifications (badge, dropdown) | done | 2026-05-28 | 2026-05-29 |
 | 004 | Refactor pages sang TanStack Query | partial | 2026-05-28 | — |
 | 005 | Search/Filter server-side cho presets phức tạp | backlog | 2026-05-28 | — |
-| 006 | Schema v2 — Align agents table with eravnTrans | partial | 2026-05-28 | — |
+| 006 | Schema v2 — Align agents table with eravnTrans | done | 2026-05-28 | 2026-05-29 |
 | 007 | Agent Deactivation với Restore Point & Downline Transition | done | 2026-05-28 | 2026-05-29 |
 | 008 | Division Safety Net — Force Recompute & getAgentDivision RPC | fixed | 2026-05-29 | 2026-05-29 |
 | 009 | Dashboard stat cards navigation (→ Agents / Requests / Filter) | done | 2026-05-29 | 2026-05-29 |
 | 010 | Requests multi-choice status filter (toggle on/off) | done | 2026-05-29 | 2026-05-29 |
 | 011 | Ranks modal CRUD (popup Thêm/Sửa, bỏ footer form) | done | 2026-05-29 | 2026-05-29 |
 | 012 | Divisions modal CRUD + table height (popup Thêm/Sửa, bỏ max-h) | done | 2026-05-29 | 2026-05-29 |
+| 013 | M1 Transition — Search, T1 cũ + Lý do, Email Tracking | done | 2026-05-29 | 2026-05-29 |
+| 014 | Quản lý mẫu email dạng danh sách (list view + modal edit) | done | 2026-05-29 | 2026-05-29 |
+| 015 | Thêm mẫu email mới (popup trình soạn thảo) | done | 2026-05-29 | 2026-05-29 |
+| 017 | Dashboard B2: Thêm search bar và nút "Tạo email mẫu" | done | 2026-05-29 | 2026-05-29 |
+| 018 | ComposeTemplateModal: Refactor email section (1 section, 4 emails, copy từng email) | done | 2026-05-29 | 2026-05-29 |
 
 ---
 
-## FEAT-001: Tích hợp gửi email thật (SendGrid/Resend)
+## FEAT-001: Tích hợp gửi email thật (Resend + HTML editor)
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `backlog`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-05-29
+
+### Current Status (as of 2026-05-29)
+
+**Đã làm:**
+- `supabase/migrations/014_email_logs.sql` — Bảng `email_logs` + `cc_emails` (jsonb) + indexes + RLS.
+- `supabase/functions/send-email/index.ts` — Edge Function gọi Resend API, lưu log, xử lý CORS.
+- `src/types/index.ts` — Thêm interface `EmailLog` với `cc_emails`.
+- `src/components/HtmlEditor.tsx` — **Mới** — Editor 3 tabs: Visual (contentEditable + toolbar), Code (HTML raw), Preview (rendered with dynamic values). Hỗ trợ bold, italic, underline, link, text color, align, undo, chèn placeholder dropdown. Tự động convert plain text → HTML (\n\n → `<p>`, \n → `<br>`).
+- `src/components/SendEmailModal.tsx` — **Mới** — Popup gửi email: To (editable), CC (dynamic list thêm/xóa), Subject (readonly rendered), Body (HtmlEditor preview mode), nút Gửi gọi Edge Function.
+- `src/components/ComposeTemplateModal.tsx` — Thêm nút [Gửi email] mở `SendEmailModal`. Giữ nguyên Copy nội dung + Copy email.
+- `src/pages/EmailTemplatesPage.tsx` — Thay textarea plain text bằng `HtmlEditor`, preview modal render HTML thay vì `whitespace-pre-wrap`.
+
+**Chưa làm / Chờ IT:**
+- Verify domain `myera.com.vn` với Resend (cần IT thêm DNS records SPF/DKIM/DMARC).
+- Trong lúc chờ: dùng `onboarding@resend.dev` để test, sau đó đổi `from` thành `opt@myera.com.vn`.
+- Cần chạy migration `014_email_logs.sql` trên DB production.
+- Cần deploy Edge Function lên Supabase.
 
 ### 1. Mô tả feature
-Hiện tại chức năng "Soạn mẫu thông báo" chỉ copy nội dung + email ngườii nhận ra clipboard. Feature này cho phép gửi email trực tiếp từ app thông qua dịch vụ gửi email (SendGrid hoặc Resend).
+Gửi email trực tiếp từ app qua Resend, sử dụng mẫu email HTML có sẵn với dynamic values (`{{agentName}}`, `{{staffId}}`, v.v.). Ngườii dùng có thể soạn email HTML trong `EmailTemplatesPage` (3 chế độ: Visual, Code, Preview) và gửi từ `ComposeTemplateModal` với khả năng thêm CC.
 
 ### 2. Motivation / Why
-- Giảm thao tác thủ công cho admin/operator.
-- Đảm bảo email được gửi đúng template, đúng ngườii nhận.
-- Có lịch sử gửi email để trace.
+- Giảm thao tác thủ công (không cần copy ra Gmail/Outlook).
+- Email gửi từ `opt@myera.com.vn` — chuyên nghiệp, đồng bộ thương hiệu.
+- Lưu lịch sử gửi email để audit.
+- Hỗ trợ HTML: format đẹp, link clickable, màu sắc.
 
 ### 3. Scope
 
 **In scope:**
-- Chọn provider (Resend khuyến nghị vì dễ setup, free tier 3000 emails/tháng).
-- Tạo backend endpoint (Vercel Serverless Function hoặc Supabase Edge Function) để gửi email.
-- Mở rộng modal "Soạn mẫu" thêm nút "Gửi email".
-- Lưu lịch sử gửi email vào bảng mới `email_logs`.
+- Resend qua Supabase Edge Function.
+- From: `opt@myera.com.vn` (sau khi verify domain) hoặc `onboarding@resend.dev` (test).
+- HTML editor 3 tabs trong `EmailTemplatesPage`.
+- SendEmailModal với To, CC nhiều ngườii, Subject rendered, Body preview.
+- Lưu log vào `email_logs` (bao gồm `cc_emails`).
 
 **Out of scope:**
-- Queue/retry mechanism phức tạp (làm sau nếu cần).
+- Gửi hàng loạt / bulk email (backlog sau).
+- Queue/retry mechanism.
 - Attachment gửi kèm.
 - Email scheduling.
 
 ### 4. Technical Design
-**Option A — Supabase Edge Function (Khuyến nghị):**
-- Tạo Edge Function `send-email` trong Supabase.
-- Function nhận `to`, `subject`, `body`, `template_key`.
-- Gọi Resend API từ Edge Function.
-- Ưu điểm: Không cần backend riêng, chạy gần DB (Singapore).
+**Supabase Edge Function:**
+- Nhận payload: `to`, `cc[]`, `from`, `subject`, `html`, `template_key`, `agent_id`.
+- Gọi `https://api.resend.com/emails` bằng `fetch`.
+- Sau khi gửi: insert log vào `email_logs` qua `service_role` key.
+- Lấy `sent_by` từ JWT token trong request header.
 
-**Option B — Vercel Serverless Function:**
-- Tạo API route `/api/send-email` trong project.
-- Cũng gọi Resend API.
-- Nhược điểm: Cần config CORS giữa frontend và API.
-
-**Chọn Option A.**
+**HtmlEditor:**
+- Visual mode: `contentEditable` div + `document.execCommand` cho formatting.
+- Code mode: `<textarea>` hiển thị HTML raw.
+- Preview mode: `dangerouslySetInnerHTML` với placeholders replaced.
+- Auto-convert plain text → HTML khi load để backward-compatible với templates cũ.
 
 ### 5. UI/UX
-- Trong `ComposeTemplateModal`, thêm nút "📧 Gửi email" bên cạnh nút "Copy".
-- Sau khi gửi thành công: toast "Đã gửi email đến ...".
-- Nếu lỗi: toast lỗi, log chi tiết trong console.
+- `EmailTemplatesPage`: Soạn mẫu bằng HtmlEditor, placeholder dropdown trong toolbar, preview render HTML.
+- `ComposeTemplateModal`: [Copy nội dung] [Copy email] [Gửi email]. Nút Gửi disabled nếu agent không có email.
+- `SendEmailModal`: To (default = agent.email), CC (thêm/xóa từng dòng), Subject auto-rendered, Body preview HTML, [Gửi] có loading spinner.
 
 ### 6. Files cần sửa / tạo
 | File | Thay đổi |
 |------|----------|
-| `supabase/functions/send-email/index.ts` | Edge Function mới |
-| `src/components/ComposeTemplateModal.tsx` | Thêm nút "Gửi email", gọi Edge Function |
-| `supabase/migrations/005_add_email_logs.sql` | Bảng `email_logs` mới |
-| `src/types/index.ts` | Thêm type `EmailLog` |
+| `supabase/functions/send-email/index.ts` | **Mới** — Edge Function gọi Resend + lưu log |
+| `supabase/migrations/014_email_logs.sql` | **Mới** — Bảng `email_logs` với `cc_emails` jsonb |
+| `src/types/index.ts` | Thêm `EmailLog` interface |
+| `src/components/HtmlEditor.tsx` | **Mới** — 3-tabs HTML editor |
+| `src/components/SendEmailModal.tsx` | **Mới** — Popup gửi email với CC |
+| `src/components/ComposeTemplateModal.tsx` | Thêm nút [Gửi email], import SendEmailModal |
+| `src/pages/EmailTemplatesPage.tsx` | Thay textarea → HtmlEditor, preview render HTML |
 
 ### 7. Schema / SQL changes
 ```sql
-CREATE TABLE public.email_logs (
+CREATE TABLE IF NOT EXISTS public.email_logs (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   sent_at timestamptz DEFAULT now(),
   sent_by uuid REFERENCES auth.users(id),
   recipient_email text NOT NULL,
+  cc_emails jsonb DEFAULT '[]',
   recipient_agent_id uuid REFERENCES agents(id),
   template_key text NOT NULL,
   subject text NOT NULL,
@@ -145,6 +174,9 @@ CREATE TABLE public.email_logs (
   status text NOT NULL CHECK (status IN ('sent', 'failed')),
   error_message text
 );
+
+CREATE INDEX idx_email_logs_sent_at ON public.email_logs(sent_at DESC);
+CREATE INDEX idx_email_logs_recipient ON public.email_logs(recipient_agent_id, sent_at DESC);
 
 ALTER TABLE public.email_logs ENABLE ROW LEVEL SECURITY;
 
@@ -156,28 +188,35 @@ CREATE POLICY "Allow all authenticated to insert email_logs"
 ```
 
 ### 8. API / Integration changes
-- Tạo Supabase Edge Function `send-email`.
-- Cần biến môi trường `RESEND_API_KEY` trong Supabase Dashboard → Edge Functions → Secrets.
-- Resend SDK hoặc fetch trực tiếp `https://api.resend.com/emails`.
+- Edge Function: `POST /functions/v1/send-email`
+- Secret: `RESEND_API_KEY` trong Supabase Dashboard → Edge Functions → Secrets
+- Secret: `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (cho insert log)
 
 ### 9. Test Plan
-1. Setup `RESEND_API_KEY` trong Supabase Secrets.
-2. Deploy Edge Function.
-3. Mở modal soạn thư → bấm "Gửi email".
-4. Verify email đến hộp thư ngườii nhận (dùng email test).
-5. Verify row được insert vào `email_logs` với `status = 'sent'`.
-6. Test case lỗi: sai API key → `status = 'failed'`, có `error_message`.
+1. Chạy migration `014_email_logs.sql` trên Supabase SQL Editor.
+2. Deploy Edge Function: `supabase functions deploy send-email`.
+3. Thêm `RESEND_API_KEY` vào Supabase Secrets.
+4. Mở EmailTemplatesPage → soạn mẫu HTML → Lưu.
+5. Mở ComposeTemplateModal → bấm [Gửi email].
+6. Điền To + CC → bấm Gửi.
+7. Verify email đến hộp thư (check spam nếu dùng `onboarding@resend.dev`).
+8. Verify `email_logs` có row mới với `status = 'sent'` và `cc_emails` đúng.
+9. Test lỗi: sai API key → `status = 'failed'`, có `error_message`.
 
 ### 10. Rollout Plan
-1. Tạo bảng `email_logs` trên Supabase.
+1. Chạy migration SQL trên Supabase.
 2. Deploy Edge Function.
-3. Cấu hình API key.
-4. Test trên dev trước khi merge vào main.
+3. Config `RESEND_API_KEY` trong Secrets.
+4. Test với `onboarding@resend.dev`.
+5. Khi IT verify domain `myera.com.vn` xong: đổi `from` trong `SendEmailModal` thành `opt@myera.com.vn`.
+6. Build + deploy frontend.
 
 ### 11. Notes
-- Cần xác nhận domain sender trong Resend (hoặc dùng `onboarding@resend.dev` để test).
-- Rate limit Resend free: 3.000 emails/tháng. Nếu vượt cần nâng plan.
-- `sent_by` lấy từ `supabase.auth.getUser()` trong Edge Function.
+- **Domain verify:** `opt@myera.com.vn` cần verify DNS trước khi dùng production. Dùng `onboarding@resend.dev` để dev/test.
+- **Rate limit:** Resend free = 3.000 emails/tháng.
+- **Plain text → HTML:** Templates cũ (plain text) sẽ tự động convert khi load vào HtmlEditor lần đầu. Sau khi lưu lại sẽ thành HTML.
+- **CC format:** `cc_emails` lưu dạng JSON array trong DB, hiển thị là string array trong TypeScript.
+- **2026-05-29**: Thêm placeholder `{{oldT1StaffId}}` và `{{tempT1StaffId}}` vào `ComposeTemplateModal` (replace bằng `t1Old?.staff_id`).
 
 ---
 
@@ -576,8 +615,9 @@ $$;
 ## FEAT-006: Schema v2 — Align agents table with eravnTrans
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `partial`
+- **Status**: `done`
 - **Priority**: `high`
+- **Hoàn thành**: 2026-05-29
 
 ### Current Status (as of 2026-05-29)
 
@@ -590,12 +630,12 @@ $$;
   - Update RPC `check_eligibility` + `get_t1_capacity` hỗ trợ schema mới
   - RLS policies + indexes
 - `src/types/index.ts` — `Agent` interface đã cập nhật đầy đủ cột mới.
-
-**Chưa làm:**
-- Chưa chạy migration trên DB production (file chỉ local) — **bắt buộc chạy thủ công trong Supabase SQL Editor**.
-- Chưa seed data `ranks` từ eravnTrans (chỉ seed từ `rank_name` hiện có).
-
-**Đã cập nhật (2026-05-29):**
+- `AgentDetailPage` — Đã hiển thị đầy đủ 3 section: Thông tin cá nhân, Ngân hàng & Thuế, Nghề nghiệp.
+- `UploadPage` — Đã có OPTIONAL_HEADERS cho ~25 cột schema v2.
+- `AgentsPage`/`DashboardPage` — Đã dùng pattern `referrer_id ?? current_t1_id` và `rank_name ?? rankNamesMap[rank_id]`.
+- `RanksPage`/`DivisionsPage` — Đã có UI quản lý đầy đủ.
+- Seed data `ranks` tự động từ `rank_name` hiện có trong DB.
+- Migration chạy thủ công trên Supabase SQL Editor (do user xác nhận đã chạy).
 - `AgentDetailPage` — Đã thêm section "Thông tin cá nhân" (CCCD, ngày sinh, giới tính, ngày cấp, nơi cấp, nguyên quán, địa chỉ), "Ngân hàng & Thuế" (ngân hàng, số TK, chi nhánh, mã số thuế), "Nghề nghiệp" (khu vực, kinh nghiệm BĐS, chứng chỉ MG, hết hạn, seminar).
 - `UploadPage` — Đã có đầy đủ OPTIONAL_HEADERS cho ~25 cột mới của schema v2.
 - `AgentsPage`/`DashboardPage` — Đã dùng pattern `referrer_id ?? current_t1_id` và `rank_name ?? rankNamesMap[rank_id]`.
@@ -1519,3 +1559,308 @@ Không cần.
 ### 11. Notes
 - Nếu divisions tăng lên >30 rows trong tương lai, có thể cân nhắc thêm pagination hoặc search sau.
 - `CountdownConfirmModal` cho "Tính lại Division" giữ nguyên, không ảnh hưởng.
+
+---
+
+---
+
+## FEAT-013: M1 Transition — Search, T1 cũ + Lý do, Email Tracking
+
+- **Đề xuất**: 2026-05-29
+- **Status**: `planned`
+- **Priority**: `medium`
+
+### 1. Mô tả feature
+Cải tiến card **M1 Transition** trên Dashboard với 3 tính năng:
+1. **Search bar** tìm agent nhanh trong danh sách transition tasks.
+2. **Hiển thị T1 cũ + Lý do** — biết agent bị transition vì T1 cũ đổi đi hay bị deactivate.
+3. **Email tracking** — đánh dấu đã gửi email nhắc nhở M1 bao nhiêu lần, hỗ trợ resend.
+
+### 2. Motivation / Why
+- List M1 transition có thể dài (nhiều M1 cùng bị ảnh hưởng khi 1 T1 đổi/nghỉ) → khó tìm agent bằng mắt thường.
+- Hiện tại không biết `departed_agent_id` là ai → không biết T1 cũ là ai.
+- Không biết transition phát sinh từ đâu: từ request đổi T1 hay từ deactivate agent.
+- Không track số lần đã nhắc email → dễ gửi trùng hoặc bỏ sót.
+
+### 3. Scope
+
+**In scope:**
+- Search bar **client-side** trên M1 Transition card (filter theo tên/M1/T1 cũ/mã nhân viên).
+- Query thêm `departed_agent` (T1 cũ) và `parent_request` (lý do) từ Supabase.
+- Thêm cột "T1 cũ" và "Lý do" vào UI.
+- ALTER TABLE `m1_transition_tasks`: thêm `email_sent_count` + `last_email_sent_at`.
+- Update `email_sent_count` khi user gửi email qua `SendEmailModal` từ M1 Transition row.
+- UI hiển thị số lần gửi + thờigian gửi gần nhất.
+
+**Out of scope:**
+- Server-side pagination/search cho M1 Transition (số lượng task ở dashboard thường nhỏ).
+- Thay đổi flow tạo M1 transition task (trigger/function).
+- Bulk email cho nhiều M1 cùng lúc.
+- Email scheduling / reminder tự động.
+
+### 4. Technical Design
+
+#### 4.1 Search bar (client-side filter)
+- State: `const [m1Search, setM1Search] = useState('')`.
+- Debounce 300ms (dùng `useEffect` timer hoặc `useDebounce` nếu đã có).
+- Filter array `transitions` qua `useMemo`:
+  ```ts
+  const filtered = useMemo(() => {
+    const q = m1Search.trim().toLowerCase()
+    if (!q) return transitions
+    return transitions.filter(t =>
+      t.m1_agent?.full_name?.toLowerCase().includes(q) ||
+      t.m1_agent?.staff_id?.toLowerCase().includes(q) ||
+      t.temp_t1?.full_name?.toLowerCase().includes(q) ||
+      t.temp_t1?.staff_id?.toLowerCase().includes(q) ||
+      t.departed_agent?.full_name?.toLowerCase().includes(q) ||
+      t.departed_agent?.staff_id?.toLowerCase().includes(q)
+    )
+  }, [transitions, m1Search])
+  ```
+
+#### 4.2 T1 cũ + Lý do
+- **Query update** trong `DashboardPage.tsx`:
+  ```ts
+  .select(`
+    *,
+    m1_agent: m1_agent_id(full_name, staff_id, contract_signing_date, rank_name),
+    temp_t1: temp_t1_id(full_name, staff_id),
+    departed_agent: departed_agent_id(full_name, staff_id),
+    parent_request: parent_request_id(reason)
+  `)
+  ```
+- **T1 cũ**: hiển thị `departed_agent.full_name` + `staff_id`.
+- **Lý do**:
+  - Nếu `parent_request_id != null` → "T1 cũ thay đổi" + `(parent_request.reason ?? '')`.
+  - Nếu `parent_request_id == null` → "Deactivate agent".
+  - Render dạng badge/pill text ngắn gọn.
+
+#### 4.3 Email tracking
+- **Schema change:**
+  ```sql
+  ALTER TABLE public.m1_transition_tasks
+  ADD COLUMN IF NOT EXISTS email_sent_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_email_sent_at TIMESTAMPTZ;
+  ```
+- **Update flow:** Sau khi `SendEmailModal` gửi thành công → gọi:
+  ```ts
+  await supabase
+    .from('m1_transition_tasks')
+    .update({
+      email_sent_count: (task.email_sent_count ?? 0) + 1,
+      last_email_sent_at: new Date().toISOString()
+    })
+    .eq('id', task.id)
+  ```
+- **UI display:**
+  - `email_sent_count === 0`: "Chưa gửi email" (text mờ / gray).
+  - `email_sent_count > 0`: Icon 📧 + "Đã gửi N lần" + tooltip hiển thị `last_email_sent_at`.
+  - Nút action: nếu `count > 0` → label "Gửi lại email"; nếu `0` → "Tạo email mẫu".
+
+### 5. UI/UX
+- **Search bar**: Input ngắn ở header card M1 Transition, placeholder `"Tìm theo tên, mã nhân viên..."`, icon 🔍 bên trái, nút × clear khi có text.
+- **Bảng M1 Transition** thêm 2 cột giữa "M1 Agent" và "T1 Tạm":
+  - **T1 cũ**: `full_name` clickable → `/agents/:id`.
+  - **Lý do**: badge nhỏ màu phù hợp (xanh dương = thay đổi, cam = deactivate).
+- **Cột Email**: chiếm ~100px, icon + count. Hover tooltip hiển thị thờigian gửi gần nhất.
+- **Responsive**: card M1 Transition đã ở `lg:col-span-2`, đủ rộng để thêm cột. Nếu màn hình nhỏ, ẩn cột "Lý do" + "Email" trên mobile (chỉ hiện trên `sm:` hoặc `md:`).
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/pages/DashboardPage.tsx` | Thêm search state + filter logic; update Supabase query; thêm cột T1 cũ, Lý do, Email tracking trong UI |
+| `src/components/ComposeTemplateModal.tsx` | Truyền callback `onEmailSent` hoặc tự update count sau khi gửi |
+| `src/components/SendEmailModal.tsx` | Nhận prop `m1TaskId?`; sau gửi thành công → update `m1_transition_tasks` |
+| `src/types/index.ts` | Update `M1TransitionTask` / `TransitionTask` interface thêm `departed_agent`, `parent_request`, `email_sent_count`, `last_email_sent_at` |
+| `supabase/migrations/015_m1_email_tracking.sql` | **Mới** — `ALTER TABLE m1_transition_tasks` thêm 2 cột |
+
+### 7. Schema / SQL changes
+```sql
+-- File: supabase/migrations/015_m1_email_tracking.sql
+ALTER TABLE public.m1_transition_tasks
+ADD COLUMN IF NOT EXISTS email_sent_count INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS last_email_sent_at TIMESTAMPTZ;
+
+-- Optional index để query nhanh task chưa gửi email
+CREATE INDEX IF NOT EXISTS idx_m1_tasks_email_count
+  ON public.m1_transition_tasks(email_sent_count, deadline_date);
+```
+> ⚠️ Chạy thủ công trên Supabase SQL Editor.
+
+### 8. API / Integration changes
+- Không cần API mới hay Edge Function mới.
+- Dùng `supabase.from('m1_transition_tasks').update()` trực tiếp từ frontend (đã có RLS).
+- `SendEmailModal` gọi Resend qua Edge Function `send-email` hiện có (FEAT-001), sau đó update count riêng.
+
+### 9. Test Plan
+1. **Search:** Nhập tên M1 → list filter chỉ hiện M1 đó. Nhập mã T1 cũ → filter theo T1 cũ. Bấm × → list reset.
+2. **T1 cũ:** Mở Dashboard → verify mỗi row hiển thị tên + mã T1 cũ. Click tên → navigate đúng Agent Detail.
+3. **Lý do:**
+   - Task từ deactivate → hiển thị "Deactivate agent".
+   - Task từ request đổi T1 → hiển thị "T1 cũ thay đổi" + reason nếu có.
+4. **Email tracking:**
+   - Row chưa gửi → hiển thị "Chưa gửi", nút "Tạo email mẫu".
+   - Bấm "Tạo email mẫu" → gửi email thành công → row update "Đã gửi 1 lần", tooltip có timestamp.
+   - Nút đổi thành "Gửi lại email". Bấm lại → "Đã gửi 2 lần".
+5. **Schema:** Verify `m1_transition_tasks` có 2 cột mới sau khi chạy migration.
+
+### 10. Rollout Plan
+1. Chạy migration `015_m1_email_tracking.sql` trên Supabase SQL Editor.
+2. Update `src/types/index.ts` trước để TypeScript không báo lỗi.
+3. Sửa `DashboardPage.tsx` + `ComposeTemplateModal.tsx` + `SendEmailModal.tsx`.
+4. Test local với sample data (ít nhất 1 task từ deactivate, 1 task từ request).
+5. Build + deploy khi được yêu cầu.
+
+### 11. Notes
+- **`parent_request.reason` có thể NULL hoặc rỗng** → fallback hiển thị "T1 cũ thay đổi" không chi tiết.
+- **Email tracking chỉ áp dụng khi gửi qua `SendEmailModal`** (tích hợp Resend). Nếu user chỉ dùng [Copy nội dung] + paste vào Gmail thì không track được — chấp nhận giới hạn này.
+- **RLS:** `m1_transition_tasks` đã có RLS policies cho `admin`/`operator`/`viewer`. Cột mới không cần policy riêng vì dùng policy existing trên table.
+- **Backward compatibility:** Cột mới có `DEFAULT 0` và nullable (`last_email_sent_at`) → không break data/task hiện có.
+
+---
+
+---
+
+## FEAT-014: Quản lý mẫu email dạng danh sách (list view + modal edit)
+
+- **Đề xuất**: 2026-05-29
+- **Status**: `done`
+- **Priority**: `medium`
+- **Hoàn thành**: 2026-05-29
+
+### 1. Mô tả feature
+Chuyển trang `EmailTemplatesPage` từ dạng **card mở sẵn editor** sang dạng **danh sách gọn**, click vào row để mở modal chỉnh sửa.
+
+### 2. Motivation
+- Hiện tại mỗi template render thành 1 card lớn, editor luôn mở → page dài, khó quan sát nhiều mẫu.
+- User cần overview nhanh trước khi chọn mẫu để sửa.
+
+### 3. Scope
+**In scope:**
+- Table/list hiển thị: STT, Tên mẫu, Template key, Tiêu đề, Nút "Chỉnh sửa" + "Xem trước".
+- Click row hoặc nút "Chỉnh sửa" → mở modal soạn thảo (re-use `HtmlEditor` + `Modal` component).
+- Giữ nút "Xem trước" trong modal (mở preview modal riêng).
+- Giữ nút "Lưu mẫu" trong modal.
+
+**Out of scope:**
+- Không đổi schema DB.
+- Không đổi cách `ComposeTemplateModal` dùng template.
+
+### 4. UI/UX
+- Bảng đơn giản: `# | Tên mẫu | Template key | Tiêu đề | Hành động`.
+- Modal chỉnh sửa: Tên mẫu, Template key (disabled), Tiêu đề, Nội dung (HtmlEditor đầy đủ), Preview, Lưu.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/pages/EmailTemplatesPage.tsx` | Refactor UI: list table + modal editor thay vì card mở sẵn |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Load trang → hiển thị danh sách gọn, không có editor mở sẵn.
+2. Click "Chỉnh sửa" → modal mở với đúng nội dung mẫu.
+3. Sửa subject/body → bấm Lưu → toast success, list cập nhật.
+4. Bấm Xem trước trong list → modal preview hiển thị đúng rendered HTML.
+
+### 8. Notes
+- Dùng component `Modal.tsx` chung để đảm bảo consistency (portal, focus trap, Escape).
+- **2026-05-29**: Thêm placeholder `{{oldT1StaffId}}` và `{{tempT1StaffId}}` vào `defaultPlaceholders` + `previewData` (cập nhật sau khi FEAT-014/015 hoàn thành).
+
+---
+
+---
+
+## FEAT-015: Thêm mẫu email mới (popup trình soạn thảo)
+
+- **Đề xuất**: 2026-05-29
+- **Status**: `done`
+- **Priority**: `medium`
+- **Hoàn thành**: 2026-05-29
+
+### 1. Mô tả feature
+Thêm chức năng tạo mẫu email mới từ trang Quản lý mẫu email. Hiện tại chỉ có sửa mẫu đã có, chưa có tạo mới.
+
+### 2. Scope
+**In scope:**
+- Nút **"Thêm mẫu"** trên `EmailTemplatesPage`.
+- Modal form: Tên mẫu, Template key (auto-slug từ tên, có thể sửa tay), Tiêu đề, Nội dung (HtmlEditor).
+- Insert vào bảng `email_templates` (Supabase).
+- Validate: `template_key` unique, không để trống tên/tiêu đề.
+
+**Out of scope:**
+- Không cho phép xóa template.
+- Không hỗ trợ đổi `template_key` sau khi tạo.
+
+### 3. UI/UX
+- Nút "Thêm mẫu" màu primary, góc trên phải trang.
+- Modal giống modal sửa, thêm field **Tên mẫu** và **Template key**.
+- Template key tự động sinh từ tên (slug: lowercase, dấu `-`, bỏ dấu tiếng Việt). User có thể sửa lại.
+
+### 4. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/pages/EmailTemplatesPage.tsx` | Thêm nút "Thêm mẫu", modal create với form + HtmlEditor, insert Supabase |
+
+### 5. Schema / SQL changes
+Không cần. Dùng bảng `email_templates` sẵn có.
+
+### 6. Test Plan
+1. Bấm "Thêm mẫu" → modal mở.
+2. Nhập Tên mẫu = `Thông báo test` → verify Template key auto-fill = `thong-bao-test`.
+3. Sửa Template key = `custom_key`.
+4. Nhập tiêu đề, soạn body bằng HtmlEditor.
+5. Bấm Tạo mẫu → toast success, mẫu xuất hiện trong list.
+6. Refresh trang → verify mẫu vẫn còn (đã lưu DB).
+7. Thử tạo `template_key` trùng → toast lỗi unique constraint.
+
+### 7. Notes
+- Template key sau khi tạo không cho sửa để tránh break `ComposeTemplateModal` đang query theo `template_key`.
+- `version` mặc định = 1 khi insert.
+
+---
+
+---
+
+## FEAT-018: ComposeTemplateModal — Refactor email section (1 section, 4 emails, copy từng email)
+
+- **Đề xuất**: 2026-05-29
+- **Status**: `planned`
+- **Priority**: `medium`
+
+### 1. Mô tả feature
+Refactor phần hiển thị email trong `ComposeTemplateModal`:
+- Bỏ 2 cột "Agent | T1 Cũ" hiện tại.
+- Thay bằng 1 section duy nhất **"Email liên quan"** với 4 dòng:
+  - 👤 Agent
+  - 🆕 T1 mới
+  - 📍 T1 cũ
+  - 📝 T1 tạm
+- Dòng nào có email thì hiện email + icon Copy. Dòng nào null thì hiện "—" (không có nút Copy).
+- Nút **"Copy email"** ở footer vẫn copy toàn bộ email có trong danh sách (cách nhau dấu phẩy).
+
+### 2. Scope
+**In scope:**
+- Sửa layout `ComposeTemplateModal.tsx`.
+- Thêm icon Copy (lucide `Copy`) cho từng email.
+- Hiển thị/ẩn dựa trên dữ liệu thực tế.
+
+**Out of scope:**
+- Không đổi logic `rendered` body/subject.
+- Không đổi nút "Gửi email" (vẫn ẩn).
+
+### 3. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/ComposeTemplateModal.tsx` | Refactor email section + thêm copy từng email |
+
+### 4. Test Plan
+1. Mở ComposeTemplateModal với agent có đầy đủ T1 cũ, T1 mới, T1 tạm → hiển thị 4 dòng, 3 nút Copy.
+2. Agent không có T1 cũ (old_t1 = null) → dòng T1 cũ hiện "—", không có nút Copy.
+3. Bấm Copy từng email → clipboard chỉ có email đó.
+4. Bấm "Copy email" ở footer → clipboard có toàn bộ email (có dữ liệu), cách nhau dấu phẩy.
+
+### 5. Notes
+- T1 tạm hiện tại lấy từ `t1Old` (referrer_id hoặc current_t1_id). Nếu sau này có field `temp_t1` riêng thì cập nhật.

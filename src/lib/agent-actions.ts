@@ -42,10 +42,19 @@ export async function deactivateAgent({ agentId, endDate, reason, userId }: Deac
     created_at: now,
   })
 
-  // 4. Query M1s and create transition tasks
+  // 4. Query deactivated agent's T1 (will become temp T1 for M1s)
+  const { data: deactivatedAgent } = await supabase
+    .from('agents')
+    .select('referrer_id, current_t1_id')
+    .eq('id', agentId)
+    .single()
+
+  const deactivatedAgentT1 = deactivatedAgent?.referrer_id ?? deactivatedAgent?.current_t1_id ?? null
+
+  // 5. Query M1s and create transition tasks
   const { data: m1s } = await supabase
     .from('agents')
-    .select('id, referrer_id, current_t1_id')
+    .select('id')
     .or(`referrer_id.eq.${agentId},current_t1_id.eq.${agentId}`)
     .is('deleted_at', null)
     .eq('status', 'active')
@@ -56,7 +65,7 @@ export async function deactivateAgent({ agentId, endDate, reason, userId }: Deac
       parent_request_id: null as string | null,
       departed_agent_id: agentId,
       m1_agent_id: m1.id,
-      temp_t1_id: m1.referrer_id ?? m1.current_t1_id ?? null,
+      temp_t1_id: deactivatedAgentT1,
       notify_date: now,
       deadline_date: deadline,
       status: 'pending' as const,
