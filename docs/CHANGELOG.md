@@ -5,6 +5,48 @@
 
 ---
 
+## 2026-05-29
+
+### 10. FEAT-009 + FEAT-010 + FEAT-011 + FEAT-012: Dashboard navigation, Requests multi-filter, Ranks/Divisions modal CRUD
+
+**Tính năng:**
+
+1. **FEAT-009 — Dashboard navigation:**
+   - 4 stat cards (Tổng Agent, Tổng Requests, Đang xử lý, Hoàn tất) thêm `onClick` navigate sang `/agents` hoặc `/requests?status=...`.
+   - Chart "Trạng thái đề xuất": click từng bar navigate `/requests?status=xxx`.
+   - Style hover cho cards và chart rows.
+
+2. **FEAT-010 — Requests multi-choice status filter:**
+   - Đổi `statusFilter` từ single-select → `RequestStatus[]` (multi-choice).
+   - Click status button → toggle chọn/bỏ chọn.
+   - "Tất cả" button → clear filter.
+   - Đồng bộ URL query param `?status=step1,step2` khi filter thay đổi.
+   - `RequestsPage` đọc `status` param từ URL để set initial filter.
+
+3. **FEAT-011 — Ranks modal CRUD:**
+   - Bỏ inline form footer.
+   - Thêm/Sửa mở popup `Modal` component.
+   - Giữ nguyên fields: Tên, Loại, Thứ tự.
+
+4. **FEAT-012 — Divisions modal CRUD + table height:**
+   - Bỏ inline form footer.
+   - Thêm/Sửa mở popup `Modal` component (giữ searchable dropdown head agent).
+   - Bỏ `max-h-[400px]` trên bảng → chiều cao tự nhiên như RanksPage.
+
+**Fix nhỏ đi kèm:**
+- `Modal.tsx`: Thêm `createPortal` render ra `document.body` để tránh stacking context issue với `PageTransition`.
+
+**Files sửa:**
+- `webapp/src/components/Modal.tsx` — createPortal
+- `webapp/src/pages/DashboardPage.tsx` — stat cards + chart navigation
+- `webapp/src/pages/RequestsPage.tsx` — multi-choice filter + URL sync
+- `webapp/src/pages/RanksPage.tsx` — modal CRUD
+- `webapp/src/pages/DivisionsPage.tsx` — modal CRUD + table height
+- `webapp/docs/PLAN-feature-dev.md` — Cập nhật status 4 feature
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
 ## 2026-05-28
 
 ### Docs Cleanup: Archive `PLAN-ui-improvements.md`

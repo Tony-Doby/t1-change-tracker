@@ -4,6 +4,7 @@ import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
+import Modal from '../components/Modal'
 import CountdownConfirmModal from '../components/CountdownConfirmModal'
 import { Inbox, Shield, Search, X, RefreshCw } from 'lucide-react'
 
@@ -16,6 +17,7 @@ export default function DivisionsPage() {
   const [editing, setEditing] = useState<any | null>(null)
   const [form, setForm] = useState({ name: '', head_agent_id: '', is_official: false })
   const [showRecomputeConfirm, setShowRecomputeConfirm] = useState(false)
+  const [showModal, setShowModal] = useState(false)
 
   const role = user?.role ?? 'viewer'
 
@@ -154,6 +156,7 @@ export default function DivisionsPage() {
     setForm({ name: '', head_agent_id: '', is_official: false })
     setSearchTerm('')
     setShowDropdown(false)
+    setShowModal(false)
     loadDivisions()
   }
 
@@ -166,9 +169,20 @@ export default function DivisionsPage() {
     })
     setSearchTerm('')
     setShowDropdown(false)
+    setShowModal(true)
   }
 
-  const resetForm = () => {
+  const openAddModal = () => {
+    setEditing(null)
+    setForm({ name: '', head_agent_id: '', is_official: false })
+    setSearchTerm('')
+    setSearchResults([])
+    setShowDropdown(false)
+    setShowModal(true)
+  }
+
+  const closeModal = () => {
+    setShowModal(false)
     setEditing(null)
     setForm({ name: '', head_agent_id: '', is_official: false })
     setSearchTerm('')
@@ -191,7 +205,7 @@ export default function DivisionsPage() {
             </button>
           )}
           <button
-            onClick={resetForm}
+            onClick={openAddModal}
             className="px-3 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover"
           >
             + Thêm mới
@@ -199,9 +213,9 @@ export default function DivisionsPage() {
         </div>
       </div>
 
-      {/* Table with scroll */}
+      {/* Table */}
       <div className="bg-white rounded-lg shadow-card overflow-hidden">
-        <div className="max-h-[400px] overflow-y-auto overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[600px]">
             <thead className="sticky top-0 z-10">
               <tr className="bg-neutral-50 border-b border-neutral-300">
@@ -240,93 +254,92 @@ export default function DivisionsPage() {
         </div>
       </div>
 
-      {/* Form */}
-      <div className="bg-white rounded-lg shadow-card p-5">
-        <h3 className="text-sm font-semibold text-neutral-900 mb-3">{editing ? 'Sửa division' : 'Thêm division mới'}</h3>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Tên division</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-48"
-            />
-          </div>
-
-          {/* Searchable Head Agent Dropdown */}
-          <div className="relative" ref={searchRef}>
-            <label className="block text-xs text-neutral-500 mb-1">Trưởng nhóm</label>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+      {showModal && (
+        <Modal onClose={closeModal} title={editing ? 'Sửa division' : 'Thêm division mới'} maxWidth="max-w-md">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Tên division</label>
               <input
                 type="text"
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value)
-                  if (form.head_agent_id) {
-                    // User started typing again → clear previous selection
-                    setForm((f) => ({ ...f, head_agent_id: '' }))
-                  }
-                }}
-                onFocus={() => {
-                  if (searchTerm.trim() && searchResults.length > 0) setShowDropdown(true)
-                }}
-                placeholder="Tìm theo tên hoặc mã NV..."
-                className="h-9 pl-9 pr-8 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-64"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
               />
-              {searchTerm && (
-                <button
-                  onClick={clearAgent}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+            </div>
+
+            {/* Searchable Head Agent Dropdown */}
+            <div className="relative" ref={searchRef}>
+              <label className="block text-xs text-neutral-500 mb-1">Trưởng nhóm</label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value)
+                    if (form.head_agent_id) {
+                      setForm((f) => ({ ...f, head_agent_id: '' }))
+                    }
+                  }}
+                  onFocus={() => {
+                    if (searchTerm.trim() && searchResults.length > 0) setShowDropdown(true)
+                  }}
+                  placeholder="Tìm theo tên hoặc mã NV..."
+                  className="h-9 pl-9 pr-8 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={clearAgent}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown results */}
+              {showDropdown && (
+                <div className="absolute z-20 mt-1 w-full bg-white border border-neutral-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {searchLoading ? (
+                    <div className="px-3 py-2 text-sm text-neutral-500">Đang tìm...</div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-neutral-500">Không tìm thấy</div>
+                  ) : (
+                    searchResults.map((agent) => (
+                      <button
+                        key={agent.id}
+                        onClick={() => selectAgent(agent)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center justify-between"
+                      >
+                        <span className="text-neutral-900 truncate">{agent.full_name}</span>
+                        <span className="text-neutral-500 text-xs ml-2 shrink-0">{agent.staff_id}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
               )}
             </div>
 
-            {/* Dropdown results */}
-            {showDropdown && (
-              <div className="absolute z-20 mt-1 w-64 bg-white border border-neutral-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                {searchLoading ? (
-                  <div className="px-3 py-2 text-sm text-neutral-500">Đang tìm...</div>
-                ) : searchResults.length === 0 ? (
-                  <div className="px-3 py-2 text-sm text-neutral-500">Không tìm thấy</div>
-                ) : (
-                  searchResults.map((agent) => (
-                    <button
-                      key={agent.id}
-                      onClick={() => selectAgent(agent)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center justify-between"
-                    >
-                      <span className="text-neutral-900 truncate">{agent.full_name}</span>
-                      <span className="text-neutral-500 text-xs ml-2 shrink-0">{agent.staff_id}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.is_official}
+                onChange={(e) => setForm((f) => ({ ...f, is_official: e.target.checked }))}
+                className="rounded border-neutral-300"
+              />
+              <span className="text-sm text-neutral-700">Chính thức</span>
+            </label>
+            <div className="flex items-center gap-2 pt-2">
+              <button onClick={handleSave} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">
+                {editing ? 'Cập nhật' : 'Thêm'}
+              </button>
+              <button onClick={closeModal} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">
+                Hủy
+              </button>
+            </div>
           </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.is_official}
-              onChange={(e) => setForm((f) => ({ ...f, is_official: e.target.checked }))}
-              className="rounded border-neutral-300"
-            />
-            <span className="text-sm text-neutral-700">Chính thức</span>
-          </label>
-          <button onClick={handleSave} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">
-            {editing ? 'Cập nhật' : 'Thêm'}
-          </button>
-          {editing && (
-            <button onClick={resetForm} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">
-              Hủy
-            </button>
-          )}
-        </div>
-      </div>
+        </Modal>
+      )}
 
       <div className="flex items-center gap-2 text-xs text-neutral-500 bg-neutral-50 rounded-lg p-3">
         <Shield className="w-4 h-4" />

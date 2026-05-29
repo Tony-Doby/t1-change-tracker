@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Search, Filter, Plus, Download, Inbox } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/date-utils'
 import { useDebounce } from '../hooks/useDebounce'
@@ -23,22 +23,39 @@ const statusColors: Record<string, string> = {
 }
 
 export default function RequestsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [requests, setRequests] = useState<any[]>([])
   const [t1Map, setT1Map] = useState<Record<string, { full_name: string; staff_id: string }>>({})
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
-  const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<RequestStatus[]>(() => {
+    const statusParam = searchParams.get('status')
+    if (statusParam) {
+      return statusParam.split(',').filter((s): s is RequestStatus => allStatuses.includes(s as RequestStatus))
+    }
+    return []
+  })
   const [showExport, setShowExport] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadRequests()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, debouncedSearch])
+
+  useEffect(() => {
+    if (statusFilter.length > 0) {
+      setSearchParams({ status: statusFilter.join(',') }, { replace: true })
+    } else {
+      setSearchParams({}, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter])
 
   async function loadRequests() {
     setLoading(true)
     let query = supabase.from('t1_requests').select('*, agent: agent_id(full_name, staff_id)').is('deleted_at', null)
-    if (statusFilter !== 'all') query = query.eq('status', statusFilter)
+    if (statusFilter.length > 0) query = query.in('status', statusFilter)
     query = query.order('created_at', { ascending: false })
     const { data, error } = await query
     if (error) console.error(error)
@@ -69,6 +86,12 @@ export default function RequestsPage() {
   const counts: Record<string, number> = {}
   allStatuses.forEach((s) => { counts[s] = requests.filter((r) => r.status === s).length })
 
+  const toggleStatus = (s: RequestStatus) => {
+    setStatusFilter((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    )
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -84,12 +107,12 @@ export default function RequestsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
           <input type="text" placeholder="Tìm kiếm..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 pr-3 h-9 w-[240px] border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" />
         </div>
-        <button onClick={() => setStatusFilter('all')} className={`flex items-center gap-1.5 px-3 h-9 border rounded-md text-sm ${statusFilter === 'all' ? 'border-primary text-primary bg-primary-light/30' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'}`}><Filter className="w-4 h-4" /> Tất cả</button>
+        <button onClick={() => setStatusFilter([])} className={`flex items-center gap-1.5 px-3 h-9 border rounded-md text-sm ${statusFilter.length === 0 ? 'border-primary text-primary bg-primary-light/30' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'}`}><Filter className="w-4 h-4" /> Tất cả</button>
       </div>
 
       <div className="flex flex-wrap gap-3">
         {allStatuses.map((s) => (
-          <button key={s} onClick={() => setStatusFilter(s === statusFilter ? 'all' : s)} className={`px-4 py-2 rounded-md text-sm font-medium transition-opacity ${statusColors[s]} ${statusFilter === s ? 'ring-2 ring-offset-1 ring-neutral-300' : 'hover:opacity-90'}`}>
+          <button key={s} onClick={() => toggleStatus(s)} className={`px-4 py-2 rounded-md text-sm font-medium transition-opacity ${statusColors[s]} ${statusFilter.includes(s) ? 'ring-2 ring-offset-1 ring-neutral-300' : 'hover:opacity-90'}`}>
             {statusLabels[s]}: {counts[s] ?? 0}
           </button>
         ))}
@@ -151,7 +174,7 @@ export default function RequestsPage() {
         </div>
       </div>
 
-      {showExport && <ExportModal title="Xuất danh sách Requests" onClose={() => setShowExport(false)} data={filtered.map((r) => ({ 'Mã': r.id.slice(0, 8), 'Agent': r.agent ? `${r.agent.full_name} - ${r.agent.staff_id}` : '—', 'T1 cũ': r.old_t1_id ? (t1Map[r.old_t1_id] ? `${t1Map[r.old_t1_id].full_name} - ${t1Map[r.old_t1_id].staff_id}` : r.old_t1_id) : '—', 'T1 mới': r.proposed_new_t1_id ? (t1Map[r.proposed_new_t1_id] ? `${t1Map[r.proposed_new_t1_id].full_name} - ${t1Map[r.proposed_new_t1_id].staff_id}` : r.proposed_new_t1_id) : '—', 'Bước': statusLabels[r.status], 'Ngày tạo': formatDate(r.created_at) }))} filename="requests" hasFilter={statusFilter !== 'all' || !!search} />}
+      {showExport && <ExportModal title="Xuất danh sách Requests" onClose={() => setShowExport(false)} data={filtered.map((r) => ({ 'Mã': r.id.slice(0, 8), 'Agent': r.agent ? `${r.agent.full_name} - ${r.agent.staff_id}` : '—', 'T1 cũ': r.old_t1_id ? (t1Map[r.old_t1_id] ? `${t1Map[r.old_t1_id].full_name} - ${t1Map[r.old_t1_id].staff_id}` : r.old_t1_id) : '—', 'T1 mới': r.proposed_new_t1_id ? (t1Map[r.proposed_new_t1_id] ? `${t1Map[r.proposed_new_t1_id].full_name} - ${t1Map[r.proposed_new_t1_id].staff_id}` : r.proposed_new_t1_id) : '—', 'Bước': statusLabels[r.status], 'Ngày tạo': formatDate(r.created_at) }))} filename="requests" hasFilter={statusFilter.length > 0 || !!search} />}
     </div>
   )
 }

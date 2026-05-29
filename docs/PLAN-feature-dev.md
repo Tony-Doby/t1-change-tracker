@@ -70,6 +70,10 @@
 | 006 | Schema v2 — Align agents table with eravnTrans | backlog | 2026-05-28 | — |
 | 007 | Agent Deactivation với Restore Point & Downline Transition | backlog | 2026-05-28 | — |
 | 008 | Division Safety Net — Force Recompute & getAgentDivision RPC | fixed | 2026-05-29 | 2026-05-29 |
+| 009 | Dashboard stat cards navigation (→ Agents / Requests / Filter) | done | 2026-05-29 | 2026-05-29 |
+| 010 | Requests multi-choice status filter (toggle on/off) | done | 2026-05-29 | 2026-05-29 |
+| 011 | Ranks modal CRUD (popup Thêm/Sửa, bỏ footer form) | done | 2026-05-29 | 2026-05-29 |
+| 012 | Divisions modal CRUD + table height (popup Thêm/Sửa, bỏ max-h) | done | 2026-05-29 | 2026-05-29 |
 
 ---
 
@@ -1157,3 +1161,290 @@ CREATE OR REPLACE FUNCTION public.recompute_all_divisions() RETURNS INTEGER ...
 - `recompute_all_divisions` loop qua toàn bộ agents (~2500 rows) → khoảng 2-5 giây. Chấp nhận được vì không chạy thường xuyên.
 - Nếu sau này scale lên >10k agents, cần optimize bằng cách pre-compute head map hoặc dùng batch update.
 - **Phụ thuộc:** BUG-009 (division_id UUID migration) phải đã chạy xong.
+
+
+---
+
+---
+
+## FEAT-009: Dashboard stat cards navigation (→ Agents / Requests / Filter)
+
+- **Đề xuất**: 2026-05-29
+- **Status**: `planned`
+- **Priority**: `medium`
+
+### 1. Mô tả feature
+Trên Dashboard, các stat cards và chart "Trạng thái đề xuất" hiện chỉ là UI tĩnh. Feature này cho phép bấm vào để navigate sang trang tương ứng với filter phù hợp.
+
+### 2. Motivation / Why
+- Giảm thao tác: admin/operator thấy số liệu tổng quan → muốn xem chi tiết ngay.
+- Trạng thái đề xuất trên Dashboard (step1, step2, step3, completed, cancelled) cần drill-down nhanh.
+
+### 3. Scope
+
+**In scope:**
+- Card "Tổng Agent" → click navigate `/agents`
+- Card "Tổng Requests" → click navigate `/requests`
+- Card "Đang xử lý" → click navigate `/requests?status=step1,step2,step3`
+- Card "Hoàn tất" → click navigate `/requests?status=completed`
+- Chart "Trạng thái đề xuất": click từng bar/status → navigate `/requests?status=xxx`
+
+**Out of scope:**
+- Không thêm filter bookmark từ Dashboard.
+- Không navigate từ B2 cards hay M1 Transition.
+
+### 4. Technical Design
+- Dùng `useNavigate` từ `react-router-dom`.
+- Wrap stat cards bằng `<button>` hoặc `onClick` trên card container.
+- Chart status bars: wrap mỗi row bằng `<button>` với `onClick={() => navigate('/requests?status=' + s)}`.
+- `RequestsPage` cần đọc query param `status` từ URL để set initial filter.
+
+### 5. UI/UX
+- Stat cards: thêm `cursor-pointer hover:shadow-md transition-shadow`.
+- Chart rows: thêm `cursor-pointer hover:bg-neutral-50`.
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/pages/DashboardPage.tsx` | Thêm `useNavigate`, onClick cho 4 stat cards + chart rows |
+| `src/pages/RequestsPage.tsx` | Đọc `status` query param từ URL, set initial `statusFilter` |
+
+### 7. Schema / SQL changes
+Không cần.
+
+### 8. API / Integration changes
+Không cần.
+
+### 9. Test Plan
+1. Dashboard → bấm "Tổng Agent" → navigate `/agents`.
+2. Dashboard → bấm "Tổng Requests" → navigate `/requests`.
+3. Dashboard → bấm "Đang xử lý" → navigate `/requests?status=step1,step2,step3`.
+4. Dashboard → bấm "Hoàn tất" → navigate `/requests?status=completed`.
+5. Dashboard → bấm bar "B1" → navigate `/requests?status=step1`.
+6. Refresh `/requests?status=step2` → filter tự động chọn `step2`.
+
+### 10. Rollout Plan
+1. Sửa `DashboardPage.tsx` + `RequestsPage.tsx`.
+2. Test local.
+3. Deploy khi được yêu cầu.
+
+### 11. Notes
+- `RequestsPage` hiện dùng single-select filter. Nếu FEAT-010 chưa triển khai, query param `status=step1` sẽ chỉ hoạt động ở chế độ single-select trước. Sau FEAT-010 mới hỗ trợ multi-status.
+- Card "Đang xử lý" cần map ra danh sách status: `step1,step2,step3`.
+
+---
+
+---
+
+## FEAT-010: Requests multi-choice status filter (toggle on/off)
+
+- **Đề xuất**: 2026-05-29
+- **Status**: `planned`
+- **Priority**: `medium`
+
+### 1. Mô tả feature
+Hiện tại `RequestsPage` chỉ cho phép chọn 1 status filter hoặc "Tất cả". Feature này cho phép chọn nhiều status cùng lúc (multi-choice), bấm lại lần nữa để bỏ chọn 1 status.
+
+### 2. Motivation / Why
+- User muốn xem đồng thờii nhiều trạng thái (ví dụ: B1 + B2).
+- Pattern toggle quen thuộc, dễ dùng.
+
+### 3. Scope
+
+**In scope:**
+- Đổi `statusFilter` từ `RequestStatus | 'all'` → `RequestStatus[]`.
+- Các status button: bấm → thêm vào mảng; bấm lại → xóa khỏi mảng.
+- "Tất cả" button: bấm → clear mảng (tương đương hiện tại).
+- Query DB: dùng `.in('status', statusFilter)` khi có filter.
+- URL query param: hỗ trợ `?status=step1,step2` (parse + stringify).
+
+**Out of scope:**
+- Không thay đổi UI layout lớn.
+- Không thêm filter theo ngày.
+
+### 4. Technical Design
+- State: `const [statusFilter, setStatusFilter] = useState<RequestStatus[]>([])`.
+- Toggle logic:
+  ```ts
+  const toggleStatus = (s: RequestStatus) => {
+    setStatusFilter(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
+  }
+  ```
+- Query: nếu `statusFilter.length > 0` thì `.in('status', statusFilter)`, ngược lại không filter.
+- URL sync: dùng `useSearchParams` để đọc/ghi query param.
+- UI active state: `statusFilter.includes(s)`.
+
+### 5. UI/UX
+- Status buttons giữ nguyên style hiện tại.
+- Active state: `ring-2 ring-offset-1 ring-neutral-300` khi được chọn.
+- Không chọn gì → hiển thị tất cả (tương đương "Tất cả").
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/pages/RequestsPage.tsx` | Đổi state `statusFilter`, toggle logic, query `.in()`, URL sync |
+
+### 7. Schema / SQL changes
+Không cần.
+
+### 8. API / Integration changes
+Không cần.
+
+### 9. Test Plan
+1. Vào RequestsPage → mặc định hiển thị tất cả.
+2. Bấm "B1" → chỉ hiện B1.
+3. Bấm "B2" → hiện B1 + B2.
+4. Bấm lại "B1" → chỉ hiện B2.
+5. Bấm "Tất cả" → hiện tất cả.
+6. URL `/requests?status=step1,step2` → hiển thị đúng B1 + B2.
+7. Export vẫn lấy đúng danh sách đã filter.
+
+### 10. Rollout Plan
+1. Sửa `RequestsPage.tsx`.
+2. Test local.
+3. Deploy khi được yêu cầu.
+
+### 11. Notes
+- Cần xử lý backward-compatible với FEAT-009: nếu URL có `status=step1` (single), parse thành mảng 1 phần tử.
+- Nếu `status` param rỗng hoặc không hợp lệ → fallback `[]`.
+
+---
+
+---
+
+## FEAT-011: Ranks modal CRUD (popup Thêm/Sửa, bỏ footer form)
+
+- **Đề xuất**: 2026-05-29
+- **Status**: `planned`
+- **Priority**: `medium`
+
+### 1. Mô tả feature
+Hiện tại `RanksPage` có form thêm/sửa nằm inline dưới bảng (footer). Feature này chuyển form sang popup modal, bỏ footer form.
+
+### 2. Motivation / Why
+- Giao diện gọn gàng hơn, bảng chiếm toàn bộ focus.
+- Consistent với pattern modal CRUD trong app (CreateRequestModal, ComposeTemplateModal...).
+
+### 3. Scope
+
+**In scope:**
+- Bỏ form inline ở dưới bảng (div `bg-white rounded-lg shadow-card p-5`).
+- Thêm modal component: tiêu đề "Thêm cấp bậc mới" / "Sửa cấp bậc".
+- Modal chứa 3 fields: Tên, Loại, Thứ tự (giữ nguyên inputs).
+- Nút "Thêm mới" ở header → mở modal (không có editing).
+- Nút "Sửa" trên row → mở modal (có editing data).
+- Nút "Hủy" / "×" đóng modal.
+
+**Out of scope:**
+- Không thay đổi schema DB.
+- Không thêm field mới.
+
+### 4. Technical Design
+- Tạo state `showModal: boolean`.
+- Form state giữ nguyên (`name`, `rank_type`, `sort_order`).
+- Khi `editing` thay đổi → mở modal.
+- Sau save → đóng modal, reload list.
+- Dùng `Modal` component sẵn có hoặc tự implement overlay (backdrop + centered panel).
+
+### 5. UI/UX
+- Modal: backdrop blur, panel trắng rounded-lg, width `max-w-md`.
+- Header modal: tiêu đề + nút X.
+- Footer modal: nút "Lưu" primary + "Hủy" secondary.
+- Bảng: bỏ footer → chỉ còn bảng + info bar cuối trang.
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/pages/RanksPage.tsx` | Bỏ inline form, thêm state modal, render modal với form fields |
+
+### 7. Schema / SQL changes
+Không cần.
+
+### 8. API / Integration changes
+Không cần.
+
+### 9. Test Plan
+1. Vào Ranks → bấm "+ Thêm mới" → modal mở, tiêu đề "Thêm cấp bậc mới".
+2. Nhập data → bấm "Thêm" → modal đóng, toast success, row mới xuất hiện.
+3. Bấm "Sửa" trên 1 row → modal mở, tiêu đề "Sửa cấp bậc", fields pre-filled.
+4. Sửa tên → bấm "Cập nhật" → modal đóng, row cập nhật.
+5. Bấm "Hủy" hoặc X → modal đóng không lưu.
+6. Bảng không còn form inline dưới.
+
+### 10. Rollout Plan
+1. Sửa `RanksPage.tsx`.
+2. Test local.
+3. Deploy khi được yêu cầu.
+
+### 11. Notes
+- Có thể tái sử dụng component `Modal.tsx` sẵn có (nếu đã có trong project) hoặc implement inline.
+- Giữ nguyên validation: `name` required.
+
+---
+
+---
+
+## FEAT-012: Divisions modal CRUD + table height (popup Thêm/Sửa, bỏ max-h)
+
+- **Đề xuất**: 2026-05-29
+- **Status**: `planned`
+- **Priority**: `medium`
+
+### 1. Mô tả feature
+1. Chuyển form thêm/sửa Division sang popup modal (tương tự FEAT-011).
+2. Bỏ `max-h-[400px]` trên bảng để chiều cao tự nhiên, tương đương với `RanksPage`.
+
+### 2. Motivation / Why
+- Giao diện đồng nhất: cả Ranks và Divisions đều dùng modal CRUD.
+- Bảng hiện bị giới hạn 400px → với ít division thì scroll không cần thiết, với nhiều division thì user muốn thấy nhiều hơn.
+
+### 3. Scope
+
+**In scope:**
+- Bỏ form inline trong `DivisionsPage`.
+- Thêm modal popup cho Thêm/Sửa division (fields: Tên, Trưởng nhóm searchable dropdown, Chính thức checkbox).
+- Bỏ `max-h-[400px]` trên container bảng → bảng hiển thị tự nhiên.
+- Giữ `overflow-x-auto` cho responsive.
+
+**Out of scope:**
+- Không thay đổi searchable dropdown logic (đã có từ BUG-008).
+- Không thêm pagination cho divisions.
+
+### 4. Technical Design
+- Tương tự FEAT-011: state `showModal`, form state giữ nguyên.
+- Bỏ div form inline (từ `{/* Form */}` đến hết div đó).
+- Bảng: sửa `max-h-[400px] overflow-y-auto` thành chỉ `overflow-x-auto` (hoặc bỏ hoàn toàn max-h giới hạn, giữ `overflow-x-auto` trên wrapper ngoài).
+- Giữ sticky header cho bảng.
+
+### 5. UI/UX
+- Modal giống FEAT-011: backdrop, panel `max-w-md`, header + X, footer Lưu/Hủy.
+- Searchable dropdown trong modal: giữ nguyên behavior (debounce, dropdown, clear).
+- Bảng: không còn scroll dọc giới hạn, chỉ scroll ngang khi cần.
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/pages/DivisionsPage.tsx` | Bỏ inline form → modal; bỏ `max-h-[400px]` bảng |
+
+### 7. Schema / SQL changes
+Không cần.
+
+### 8. API / Integration changes
+Không cần.
+
+### 9. Test Plan
+1. Vào Divisions → bấm "+ Thêm mới" → modal mở.
+2. Nhập tên + chọn head agent → bấm "Thêm" → modal đóng, row mới.
+3. Bấm "Sửa" → modal mở với data pre-filled, head agent hiển thị đúng label.
+4. Bấm "Hủy" → modal đóng không lưu.
+5. Bảng không còn form inline; chiều cao tự nhiên (không scroll dọc nếu < ~20 rows).
+6. Test searchable dropdown trong modal vẫn hoạt động.
+
+### 10. Rollout Plan
+1. Sửa `DivisionsPage.tsx`.
+2. Test local.
+3. Deploy khi được yêu cầu.
+
+### 11. Notes
+- Nếu divisions tăng lên >30 rows trong tương lai, có thể cân nhắc thêm pagination hoặc search sau.
+- `CountdownConfirmModal` cho "Tính lại Division" giữ nguyên, không ảnh hưởng.

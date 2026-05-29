@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 
@@ -26,7 +27,7 @@ export default function Modal({ children, onClose, title, maxWidth = 'max-w-lg',
     }
   }, [onClose])
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in"
@@ -55,6 +56,7 @@ export default function Modal({ children, onClose, title, maxWidth = 'max-w-lg',
         )}
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

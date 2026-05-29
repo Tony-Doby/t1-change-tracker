@@ -3,7 +3,7 @@ import { useToast } from '../components/Toast'
 import { Users, ClipboardList, Clock, CheckCircle, AlertTriangle, Star, ArrowRight, Inbox } from 'lucide-react'
 import { SkeletonCard, SkeletonText } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { BOOKMARKS_KEY } from '../lib/constants'
 import { addBusinessDays } from '../lib/eligibility'
@@ -66,6 +66,7 @@ interface B2Request {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const { show } = useToast()
   const [stats, setStats] = useState({ totalAgents: 0, totalRequests: 0, pending: 0, completed: 0 })
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({})
@@ -286,18 +287,22 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Tổng Agent', value: stats.totalAgents, icon: Users },
-          { label: 'Tổng Requests', value: stats.totalRequests, icon: ClipboardList },
-          { label: 'Đang xử lý', value: stats.pending, icon: Clock },
-          { label: 'Hoàn tất', value: stats.completed, icon: CheckCircle },
+          { label: 'Tổng Agent', value: stats.totalAgents, icon: Users, href: '/agents' },
+          { label: 'Tổng Requests', value: stats.totalRequests, icon: ClipboardList, href: '/requests' },
+          { label: 'Đang xử lý', value: stats.pending, icon: Clock, href: '/requests?status=step1,step2,step3' },
+          { label: 'Hoàn tất', value: stats.completed, icon: CheckCircle, href: '/requests?status=completed' },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-lg p-5 shadow-card">
+          <button
+            key={s.label}
+            onClick={() => navigate(s.href)}
+            className="text-left bg-white rounded-lg p-5 shadow-card cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+          >
             <div className="flex items-center gap-2 text-neutral-500 mb-2">
               <s.icon className="w-5 h-5 text-primary" />
               <span className="text-xs font-medium">{s.label}</span>
             </div>
             <p className="text-3xl font-bold text-neutral-900">{s.value}</p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -468,13 +473,17 @@ export default function DashboardPage() {
             const max = Math.max(...Object.values(statusCounts), 1)
             const pct = (count / max) * 100
             return (
-              <div key={s} className="flex items-center gap-3">
-                <span className="text-xs font-medium text-neutral-500 w-16">{statusLabels[s]}</span>
+              <button
+                key={s}
+                onClick={() => navigate(`/requests?status=${s}`)}
+                className="w-full flex items-center gap-3 cursor-pointer hover:bg-neutral-50 rounded-md px-1 py-1 transition-colors"
+              >
+                <span className="text-xs font-medium text-neutral-500 w-16 text-left">{statusLabels[s]}</span>
                 <div className="flex-1 h-2.5 bg-neutral-100 rounded-full overflow-hidden">
                   <div className={`h-full rounded-full ${statusColors[s]}`} style={{ width: `${pct}%` }} />
                 </div>
                 <span className="text-xs font-medium text-neutral-700 w-6 text-right">{count}</span>
-              </div>
+              </button>
             )
           })}
         </div>

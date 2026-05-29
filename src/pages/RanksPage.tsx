@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
+import Modal from '../components/Modal'
 import { Inbox, Shield } from 'lucide-react'
 
 export default function RanksPage() {
@@ -11,6 +12,7 @@ export default function RanksPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<any | null>(null)
   const [form, setForm] = useState({ name: '', rank_type: '', sort_order: '' })
+  const [showModal, setShowModal] = useState(false)
 
   useEffect(() => {
     loadRanks()
@@ -48,6 +50,7 @@ export default function RanksPage() {
     }
     setEditing(null)
     setForm({ name: '', rank_type: '', sort_order: '' })
+    setShowModal(false)
     loadRanks()
   }
 
@@ -58,6 +61,19 @@ export default function RanksPage() {
       rank_type: rank.rank_type ?? '',
       sort_order: rank.sort_order?.toString() ?? '',
     })
+    setShowModal(true)
+  }
+
+  const openAddModal = () => {
+    setEditing(null)
+    setForm({ name: '', rank_type: '', sort_order: '' })
+    setShowModal(true)
+  }
+
+  const closeModal = () => {
+    setShowModal(false)
+    setEditing(null)
+    setForm({ name: '', rank_type: '', sort_order: '' })
   }
 
   return (
@@ -65,7 +81,7 @@ export default function RanksPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Quản lý Cấp bậc</h1>
         <button
-          onClick={() => { setEditing(null); setForm({ name: '', rank_type: '', sort_order: '' }) }}
+          onClick={openAddModal}
           className="px-3 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover"
         >
           + Thêm mới
@@ -106,46 +122,47 @@ export default function RanksPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-card p-5">
-        <h3 className="text-sm font-semibold text-neutral-900 mb-3">{editing ? 'Sửa cấp bậc' : 'Thêm cấp bậc mới'}</h3>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Tên cấp bậc</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-48"
-            />
+      {showModal && (
+        <Modal onClose={closeModal} title={editing ? 'Sửa cấp bậc' : 'Thêm cấp bậc mới'} maxWidth="max-w-md">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Tên cấp bậc</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Loại</label>
+              <input
+                type="text"
+                value={form.rank_type}
+                onChange={(e) => setForm((f) => ({ ...f, rank_type: e.target.value }))}
+                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Thứ tự</label>
+              <input
+                type="number"
+                value={form.sort_order}
+                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
+              />
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button onClick={handleSave} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">
+                {editing ? 'Cập nhật' : 'Thêm'}
+              </button>
+              <button onClick={closeModal} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">
+                Hủy
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Loại</label>
-            <input
-              type="text"
-              value={form.rank_type}
-              onChange={(e) => setForm((f) => ({ ...f, rank_type: e.target.value }))}
-              className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-32"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Thứ tự</label>
-            <input
-              type="number"
-              value={form.sort_order}
-              onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
-              className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-24"
-            />
-          </div>
-          <button onClick={handleSave} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">
-            {editing ? 'Cập nhật' : 'Thêm'}
-          </button>
-          {editing && (
-            <button onClick={() => { setEditing(null); setForm({ name: '', rank_type: '', sort_order: '' }) }} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">
-              Hủy
-            </button>
-          )}
-        </div>
-      </div>
+        </Modal>
+      )}
 
       <div className="flex items-center gap-2 text-xs text-neutral-500 bg-neutral-50 rounded-lg p-3">
         <Shield className="w-4 h-4" />
