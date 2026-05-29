@@ -7,6 +7,21 @@
 
 ## 2026-05-29
 
+### 12. Refactor: AgentDetailPage 2-tab layout
+
+**Thay đổi:**
+- Header: `{full_name} - {staff_id}` + badge Active (xanh) / Inactive (đỏ)
+- Tab 1 — "Thông tin Agent": 2 cột
+  - Trái: 24 fields (Tên, Mã NV, Cấp bậc, Email, SĐT, Ngày ký HĐ, Ngày chấm dứt, Lý do chấm dứt, Email công việc, Ngày đăng ký, Ngày bắt đầu, Nguồn, CCCD, Ngày sinh, Giới tính, Ngày cấp CCCD, Nơi cấp CCCD, Nguyên quán, Địa chỉ thường trú, Ngân hàng, Số TK, Chi nhánh, Mã số thuế, Doanh số tích lũy)
+  - Phải: Ngườii giới thiệu, T1 hiện tại, Division, Khu vực hoạt động, Kinh nghiệm BĐS, Số chứng chỉ MG, Hết hạn chứng chỉ, Ngày seminar
+- Tab 2 — "Lịch sử": 3 sub-tab (Lịch sử T1 | M1 | Lịch sử làm T1) + Lịch sử chấm dứt nếu có
+
+**Files sửa:**
+- `webapp/src/pages/AgentDetailPage.tsx`
+- `webapp/docs/CHANGELOG.md`
+
+---
+
 ### 11. FEAT-003 + FEAT-006 + FEAT-007: In-app Notifications, Schema v2 UI polish, Agent Deactivation complete
 
 **FEAT-003 — In-app Notifications (hoàn thành):**
