@@ -188,7 +188,7 @@ export default function AgentDetailPage() {
 
         <div className="p-5">
           {mainTab === 'info' && (
-            <div className="flex flex-col lg:flex-row gap-x-16 gap-y-2">
+            <div className="flex flex-col lg:flex-row gap-x-32 gap-y-2">
               {/* Left column */}
               <div className="space-y-2">
                 <InfoRow label="Tên" value={agent.full_name} />
