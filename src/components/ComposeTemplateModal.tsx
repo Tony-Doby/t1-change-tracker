@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
-import { createPortal } from 'react-dom'
-import { X, Copy, Mail } from 'lucide-react'
+import { Copy, Mail } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useToast } from './Toast'
 import { formatDate } from '../lib/date-utils'
+import Modal from './Modal'
 import type { EmailTemplate } from '../types'
 import SendEmailModal from './SendEmailModal'
 
@@ -86,7 +86,7 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
     const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
     setAgent(a)
 
-    const t1Id = a?.referrer_id ?? a?.current_t1_id ?? null
+    const t1Id = a?.current_t1_id ?? null
     if (t1Id) {
       const { data: t1 } = await supabase.from('agents').select('*').eq('id', t1Id).single()
       setT1Old(t1)
@@ -135,7 +135,6 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
   }, [template, agent, t1Old, newT1])
 
   const copyContent = () => {
-    // Strip HTML tags to copy plain text
     const tmp = document.createElement('div')
     tmp.innerHTML = rendered
     const plain = tmp.innerText || tmp.textContent || ''
@@ -149,19 +148,22 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
     show('Đã copy email', 'success')
   }
 
-  const content = loading ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl p-6"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
-    </div>
-  ) : !agent ? null : (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-modal w-full max-w-[640px] my-auto">
-        <div className="flex items-center justify-between p-5 border-b border-neutral-100">
-          <h2 className="text-xl font-semibold text-neutral-900">Soạn mẫu thông báo</h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700"><X className="w-5 h-5" /></button>
+  if (loading) {
+    return (
+      <Modal onClose={onClose} title="Soạn mẫu thông báo" size="lg">
+        <div className="flex items-center justify-center py-8">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
+      </Modal>
+    )
+  }
 
-        <div className="p-5 space-y-5">
+  if (!agent) return null
+
+  return (
+    <>
+      <Modal onClose={onClose} title="Soạn mẫu thông báo" size="lg">
+        <div className="space-y-5">
           <div className="text-sm"><span className="text-neutral-500">Agent:</span>{' '}<span className="font-medium text-neutral-900">{agent.full_name} ({agent.staff_id})</span></div>
 
           <div>
@@ -213,25 +215,12 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 p-5 border-t border-neutral-100">
+        <div className="flex justify-end gap-3 pt-5 mt-5 border-t border-neutral-100">
           <button onClick={copyContent} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50 flex items-center gap-2"><Copy className="w-4 h-4" /> Copy nội dung</button>
           <button onClick={copyEmails} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50 flex items-center gap-2"><Mail className="w-4 h-4" /> Copy email</button>
-          {/* Email sending temporarily disabled */}
-          {/* <button
-            onClick={() => setShowSendModal(true)}
-            disabled={!agent?.email}
-            className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send className="w-4 h-4" /> Gửi email
-          </button> */}
         </div>
-      </div>
-    </div>
-  )
+      </Modal>
 
-  return (
-    <>
-      {createPortal(content, document.body)}
       {showSendModal && agent && (
         <SendEmailModal
           agent={agent}

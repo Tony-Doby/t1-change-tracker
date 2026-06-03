@@ -1,35 +1,23 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState } from 'react'
 import { useToast } from '../components/Toast'
 import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import Modal from '../components/Modal'
+import { useRanksListQuery, useSaveRankMutation, useDeleteRankMutation } from '../hooks/queries/useRanks'
+import { supabase } from '../lib/supabase'
 import { Inbox, Shield } from 'lucide-react'
 
 export default function RanksPage() {
   const { show } = useToast()
-  const [ranks, setRanks] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: ranks = [], isLoading } = useRanksListQuery()
+  const saveMut = useSaveRankMutation()
+  const deleteMut = useDeleteRankMutation()
+
   const [editing, setEditing] = useState<any | null>(null)
   const [form, setForm] = useState({ name: '', rank_type: '', sort_order: '' })
   const [showModal, setShowModal] = useState(false)
   const [deleting, setDeleting] = useState<any | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
-
-  useEffect(() => {
-    loadRanks()
-  }, [])
-
-  async function loadRanks() {
-    setLoading(true)
-    const { data, error } = await supabase.from('ranks').select('*').order('sort_order', { ascending: true })
-    if (error) {
-      show('Lỗi tải dữ liệu: ' + error.message, 'error')
-    } else {
-      setRanks(data ?? [])
-    }
-    setLoading(false)
-  }
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -41,19 +29,15 @@ export default function RanksPage() {
       rank_type: form.rank_type.trim() || null,
       sort_order: form.sort_order ? parseInt(form.sort_order) : null,
     }
-    if (editing) {
-      const { error } = await supabase.from('ranks').update(payload).eq('id', editing.id)
-      if (error) { show('Lỗi cập nhật: ' + error.message, 'error'); return }
-      show('Đã cập nhật cấp bậc', 'success')
-    } else {
-      const { error } = await supabase.from('ranks').insert(payload)
-      if (error) { show('Lỗi thêm mới: ' + error.message, 'error'); return }
-      show('Đã thêm cấp bậc mới', 'success')
+    try {
+      await saveMut.mutateAsync({ id: editing?.id, payload })
+      show(editing ? 'Đã cập nhật cấp bậc' : 'Đã thêm cấp bậc mới', 'success')
+      setEditing(null)
+      setForm({ name: '', rank_type: '', sort_order: '' })
+      setShowModal(false)
+    } catch (e: any) {
+      show(editing ? 'Lỗi cập nhật: ' + e.message : 'Lỗi thêm mới: ' + e.message, 'error')
     }
-    setEditing(null)
-    setForm({ name: '', rank_type: '', sort_order: '' })
-    setShowModal(false)
-    loadRanks()
   }
 
   const startEdit = (rank: any) => {
@@ -81,7 +65,6 @@ export default function RanksPage() {
   const handleDelete = async () => {
     if (!deleting) return
     setDeleteBusy(true)
-    // Check if any agent is using this rank
     const { count, error: countError } = await supabase
       .from('agents')
       .select('*', { count: 'exact', head: true })
@@ -98,28 +81,21 @@ export default function RanksPage() {
       setDeleting(null)
       return
     }
-    const { error } = await supabase.from('ranks').delete().eq('id', deleting.id)
-    if (error) {
-      show('Lỗi xóa: ' + error.message, 'error')
-      setDeleteBusy(false)
-      return
+    try {
+      await deleteMut.mutateAsync(deleting.id)
+      show('Đã xóa cấp bậc', 'success')
+    } catch (e: any) {
+      show('Lỗi xóa: ' + e.message, 'error')
     }
-    show('Đã xóa cấp bậc', 'success')
     setDeleteBusy(false)
     setDeleting(null)
-    loadRanks()
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Quản lý Cấp bậc</h1>
-        <button
-          onClick={openAddModal}
-          className="px-3 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover"
-        >
-          + Thêm mới
-        </button>
+        <button onClick={openAddModal} className="px-3 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">+ Thêm mới</button>
       </div>
 
       <div className="bg-white rounded-lg shadow-card overflow-hidden">
@@ -134,7 +110,7 @@ export default function RanksPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isLoading ? (
                 <SkeletonTable rows={5} cols={4} />
               ) : (
                 ranks.map((r) => (
@@ -151,7 +127,7 @@ export default function RanksPage() {
                   </tr>
                 ))
               )}
-              {!loading && ranks.length === 0 && (
+              {!isLoading && ranks.length === 0 && (
                 <tr><td colSpan={4}><EmptyState icon={<Inbox className="w-12 h-12" />} title="Chưa có cấp bậc nào" /></td></tr>
               )}
             </tbody>
@@ -162,21 +138,11 @@ export default function RanksPage() {
       {deleting && (
         <Modal onClose={() => setDeleting(null)} title="Xác nhận xóa" maxWidth="max-w-sm">
           <div className="space-y-4">
-            <p className="text-sm text-neutral-700">
-              Bạn có chắc muốn xóa cấp bậc <strong>{deleting.name}</strong>?
-            </p>
-            <p className="text-xs text-neutral-500">
-              Nếu cấp bậc đang được agent sử dụng, hệ thống sẽ từ chối xóa.
-            </p>
+            <p className="text-sm text-neutral-700">Bạn có chắc muốn xóa cấp bậc <strong>{deleting.name}</strong>?</p>
+            <p className="text-xs text-neutral-500">Nếu cấp bậc đang được agent sử dụng, hệ thống sẽ từ chối xóa.</p>
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button onClick={() => setDeleting(null)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">
-                Hủy
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteBusy}
-                className="px-4 h-9 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-60"
-              >
+              <button onClick={() => setDeleting(null)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
+              <button onClick={handleDelete} disabled={deleteBusy} className="px-4 h-9 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-60">
                 {deleteBusy ? 'Đang xóa...' : 'Xóa'}
               </button>
             </div>
@@ -189,38 +155,22 @@ export default function RanksPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-xs text-neutral-500 mb-1">Tên cấp bậc</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
-              />
+              <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full" />
             </div>
             <div>
               <label className="block text-xs text-neutral-500 mb-1">Loại</label>
-              <input
-                type="text"
-                value={form.rank_type}
-                onChange={(e) => setForm((f) => ({ ...f, rank_type: e.target.value }))}
-                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
-              />
+              <input type="text" value={form.rank_type} onChange={(e) => setForm((f) => ({ ...f, rank_type: e.target.value }))}
+                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full" />
             </div>
             <div>
               <label className="block text-xs text-neutral-500 mb-1">Thứ tự</label>
-              <input
-                type="number"
-                value={form.sort_order}
-                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
-                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
-              />
+              <input type="number" value={form.sort_order} onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full" />
             </div>
             <div className="flex items-center gap-2 pt-2">
-              <button onClick={handleSave} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">
-                {editing ? 'Cập nhật' : 'Thêm'}
-              </button>
-              <button onClick={closeModal} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">
-                Hủy
-              </button>
+              <button onClick={handleSave} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">{editing ? 'Cập nhật' : 'Thêm'}</button>
+              <button onClick={closeModal} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
             </div>
           </div>
         </Modal>

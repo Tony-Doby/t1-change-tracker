@@ -3,6 +3,7 @@ import {
   Bold, Italic, Underline, Link, AlignLeft, AlignCenter, AlignRight,
   Type, Code, Eye, ChevronDown, Undo2
 } from 'lucide-react'
+import DOMPurify from 'dompurify'
 
 interface Props {
   value: string
@@ -20,6 +21,17 @@ const defaultPlaceholders = [
   '{{newT1Name}}', '{{newT1Email}}', '{{newT1StaffId}}', '{{date}}',
   '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}',
 ]
+
+function sanitizeHtml(dirty: string): string {
+  return DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: [
+      'p', 'br', 'b', 'i', 'u', 'a', 'div', 'span', 'strong', 'em',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'ul', 'ol', 'li', 'font',
+    ],
+    ALLOWED_ATTR: ['href', 'target', 'style', 'color', 'size', 'face', 'align'],
+  }) as string
+}
 
 export function plainTextToHtml(text: string): string {
   if (!text) return ''
@@ -59,7 +71,7 @@ export default function HtmlEditor({
     document.execCommand(command, false, valueArg)
     if (editorRef.current) {
       isInternalChangeRef.current = true
-      onChange(editorRef.current.innerHTML)
+      onChange(sanitizeHtml(editorRef.current.innerHTML))
     }
   }, [onChange])
 
@@ -77,7 +89,7 @@ export default function HtmlEditor({
       sel.removeAllRanges()
       sel.addRange(range)
       isInternalChangeRef.current = true
-      onChange(editorRef.current.innerHTML)
+      onChange(sanitizeHtml(editorRef.current.innerHTML))
     }
     setShowPlaceholderMenu(false)
   }, [mode, onChange])
@@ -85,18 +97,18 @@ export default function HtmlEditor({
   const handleEditorInput = useCallback(() => {
     if (editorRef.current) {
       isInternalChangeRef.current = true
-      onChange(editorRef.current.innerHTML)
+      onChange(sanitizeHtml(editorRef.current.innerHTML))
     }
   }, [onChange])
 
   const getPreviewHtml = () => {
     const html = plainTextToHtml(value)
-    if (!previewData) return html
+    if (!previewData) return sanitizeHtml(html)
     let result = html
     Object.entries(previewData).forEach(([key, val]) => {
       result = result.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), val)
     })
-    return result
+    return sanitizeHtml(result)
   }
 
   const ToolbarButton = ({

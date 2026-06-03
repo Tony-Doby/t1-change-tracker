@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { X, Download, Loader2 } from 'lucide-react'
+import { Download, Loader2 } from 'lucide-react'
 import { useToast } from './Toast'
+import Modal from './Modal'
 
 interface Props {
   title: string
@@ -38,15 +39,8 @@ export default function ExportModal({ title, onClose, data, filename, hasFilter 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-modal w-full max-w-[400px] p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-neutral-900">{title}</h3>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+    <Modal onClose={onClose} title={title} size="sm">
+      <div className="space-y-4">
         <div className="space-y-3">
           <label className="flex items-start gap-3 p-3 border border-neutral-200 rounded-lg cursor-pointer hover:bg-neutral-50">
             <input
@@ -96,6 +90,6 @@ export default function ExportModal({ title, onClose, data, filename, hasFilter 
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

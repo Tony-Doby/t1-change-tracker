@@ -15,6 +15,7 @@ import {
   Search,
   Award,
   Building2,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
@@ -63,6 +64,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Holidays', icon: Calendar, path: '/holidays', roles: ['admin'] },
     { label: 'Ranks', icon: Award, path: '/ranks', roles: ['admin'] },
     { label: 'Divisions', icon: Building2, path: '/divisions', roles: ['admin'] },
+    { label: 'Excel Generator', icon: FileSpreadsheet, path: '/excel-generator', roles: ['admin', 'operator', 'viewer'] },
   ]
 
   const visibleNav = navItems.filter((n) => n.roles.includes(role))

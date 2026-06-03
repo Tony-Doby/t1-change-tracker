@@ -5,7 +5,151 @@
 
 ---
 
+## 2026-06-03
+
+### 31. FEAT-019: Mail Merge Generator (template + data → file Excel)
+
+**Tính năng:**
+1. Trang mới `/excel-generator` với 3 tabs: Generate, Lịch sử, Quản lý Template (admin).
+2. **Upload template** (admin): Dropzone upload file `.xlsx`, auto-detect placeholder `{{...}}`, lưu metadata vào `excel_templates` + file vào Storage bucket `excel-templates`.
+3. **Generate** (tất cả user): Chọn template từ dropdown, upload file data `.xlsx/.csv`, preview match status (✅/⚠️), preview bảng ~10 dòng đầu sau replace.
+4. **Generate flow**: Đọc template row chứa placeholder → replicate theo số dòng data → replace placeholder → xuất file `.xlsx`.
+5. **Tên file generate**: `{template_name}_{YY}{MM}{DD}_{HH}{MM}.xlsx` (sanitize tiếng Việt, lowercase, space → `_`).
+6. **Lưu lịch sử**: File data gốc + file generate upload vào Storage bucket `excel-generations`, metadata vào `excel_generation_logs`.
+7. **Lịch sử**: Bảng hiển thị template, file gốc, file generate, số dòng, ngày tạo. Nút Download từng dòng. Admin có thể xóa.
+8. **Xóa template**: Admin xóa row DB + file Storage.
+
+**Schema:**
+- `supabase/migrations/017_excel_templates.sql` — Bảng `excel_templates` + `excel_generation_logs` + indexes + RLS policies (DROP POLICY IF EXISTS trước CREATE).
+- Storage buckets cần tạo thủ công: `excel-templates`, `excel-generations`.
+
+**Files sửa/tạo:**
+- `webapp/supabase/migrations/017_excel_templates.sql` — Mới
+- `webapp/src/types/index.ts` — Thêm `ExcelTemplate`, `ExcelGenerationLog`
+- `webapp/src/lib/excel-generator.ts` — Mới (loadXlsx, detectPlaceholders, readDataFile, getTemplateRowIndex, replacePlaceholdersInRow, generateWorkbook, buildPreview, sanitizeFileName, formatGenerateFileName)
+- `webapp/src/components/excel-generator/TemplateUploadModal.tsx` — Mới
+- `webapp/src/components/excel-generator/TemplateManager.tsx` — Mới
+- `webapp/src/components/excel-generator/GeneratePanel.tsx` — Mới
+- `webapp/src/components/excel-generator/GenerationHistory.tsx` — Mới
+- `webapp/src/pages/ExcelGeneratorPage.tsx` — Mới
+- `webapp/src/App.tsx` — Thêm route `/excel-generator`
+- `webapp/src/components/Layout.tsx` — Thêm menu "Excel Generator"
+- `webapp/docs/PLAN-feature-dev.md` — Cập nhật FEAT-019 status
+- `webapp/docs/CHANGELOG.md` — File này
+
+---
+
 ## 2026-05-30
+
+### 30. REFACTOR-004: Phase 4 — Backend-Frontend Alignment & Performance
+
+**Mục tiêu:** Loại bỏ duplicate logic, fix N+1, unify T1 field, unify modal pattern, proactive M1 processing.
+
+**Thay đổi:**
+1. **Consolidate Eligibility Logic:**
+   - Thêm `checkEligibilityRpc()` trong `src/lib/eligibility.ts` — wrapper gọi RPC `check_eligibility` (single source of truth).
+   - `CreateRequestModal` chuyển sang dùng RPC thay vì client-side `checkEligibility`.
+   - `getAgentT1` chỉ trả về `current_t1_id`.
+2. **Fix N+1 Queries:**
+   - `useAgents.ts`: Dùng FK embedding `agents:current_t1_id(full_name, staff_id)` thay vì batch query T1 riêng.
+   - `useDashboardStats.ts`: Dùng RPC `get_dashboard_stats()` — giảm 4 queries xuống 1.
+3. **Resolve Dual T1 Fields:**
+   - Xóa toàn bộ update `referrer_id` từ frontend. Frontend chỉ đọc/ghi `current_t1_id`.
+   - Audit và sửa: `request-actions.ts`, `agent-actions.ts`, `DashboardPage.tsx`, `AgentsPage.tsx`, `AgentDetailPage.tsx`, `AgentInfoTab.tsx`, `CreateRequestModal.tsx`, `ComposeTemplateModal.tsx`, `DeactivateAgentModal.tsx`, `RestoreAgentModal.tsx`, `UploadPage.tsx`, `useAgents.ts`, `useAgentDetail.ts`.
+   - `types/index.ts`: Thêm comment document rõ về dual field.
+4. **Unify Modal Pattern:**
+   - Thêm `size` prop vào `<Modal>` component.
+   - Refactor 6 modal sang dùng `<Modal>` chuẩn: `CreateRequestModal`, `ExportModal`, `ComposeTemplateModal`, `SendEmailModal`, `DeactivateAgentModal`, `RestoreAgentModal`.
+5. **M1 Transition Proactive:**
+   - Migration `016_phase4_rpc_and_cron.sql`: RPC `get_dashboard_stats()` + cron job `pg_cron` chạy `process_expired_m1_transitions` hàng ngày.
+
+**Files sửa/tạo:**
+- `webapp/src/components/Modal.tsx` — Thêm `size` prop
+- `webapp/src/lib/eligibility.ts` — Thêm `checkEligibilityRpc`, refactor `getAgentT1`
+- `webapp/src/types/index.ts` — Comment dual T1 fields
+- `webapp/src/lib/request-actions.ts` — Xóa `referrer_id` updates
+- `webapp/src/lib/agent-actions.ts` — Xóa `referrer_id` updates/queries
+- `webapp/src/pages/DashboardPage.tsx` — `applyT2` chỉ update `current_t1_id`
+- `webapp/src/hooks/queries/useAgents.ts` — FK embedding, filter `current_t1_id`
+- `webapp/src/hooks/queries/useDashboardStats.ts` — Dùng RPC
+- `webapp/src/hooks/queries/useAgentDetail.ts` — Chỉ dùng `current_t1_id`
+- `webapp/src/pages/AgentsPage.tsx` — Chỉ dùng `current_t1_id`
+- `webapp/src/pages/AgentDetailPage.tsx` — Chỉ dùng `current_t1_id`
+- `webapp/src/components/agent-detail/AgentInfoTab.tsx` — Chỉ dùng `current_t1_id`
+- `webapp/src/components/CreateRequestModal.tsx` — Dùng `<Modal>`, RPC eligibility
+- `webapp/src/components/ExportModal.tsx` — Dùng `<Modal>`
+- `webapp/src/components/ComposeTemplateModal.tsx` — Dùng `<Modal>`, `current_t1_id`
+- `webapp/src/components/SendEmailModal.tsx` — Dùng `<Modal>`
+- `webapp/src/components/DeactivateAgentModal.tsx` — Dùng `<Modal>`, `current_t1_id`
+- `webapp/src/components/RestoreAgentModal.tsx` — Dùng `<Modal>`, `current_t1_id`
+- `webapp/src/pages/UploadPage.tsx` — Xóa sync `referrer_id`, xóa `referrer_id`/`agent_code` khỏi OPTIONAL_HEADERS
+- `webapp/supabase/migrations/016_phase4_rpc_and_cron.sql` — RPC + cron job
+
+---
+
+### 29. REFACTOR-003: Phase 3 — Page Decomposition
+
+**Mục tiêu:** Không page nào >250 dòng. Tách UI thành sub-components.
+
+**Thay đổi:**
+1. **DashboardPage** (544 → ~170 dòng) — Tách thành:
+   - `DashboardStats`, `B2PendingAlert`, `B2EligibleList`, `M1TransitionList`, `BookmarkedAgentsCard`, `StatusChart`
+2. **AgentDetailPage** (280 → ~110 dòng) — Tách thành:
+   - `AgentInfoTab`, `AgentHistoryTab`, `T1History`, `M1List`, `AsT1History`, `DeactivationHistory`
+3. **RequestDetailPage** (402 → ~170 dòng) — Tách thành:
+   - `RequestInfoCard`, `RequestProgress`, `DeadlineInfo`, `RequestComments`, `StepHistory`, `NotificationChecklist`
+4. **EmailTemplatesPage** (237 → ~80 dòng) — Tách thành:
+   - `TemplateList`, `TemplateEditModal`, `TemplatePreviewModal`
+
+**Files sửa/tạo:**
+- `webapp/src/components/dashboard/*` — 6 components mới
+- `webapp/src/components/agent-detail/*` — 6 components mới
+- `webapp/src/components/request-detail/*` — 6 components mới
+- `webapp/src/components/email-templates/*` — 3 components mới
+- `webapp/src/pages/DashboardPage.tsx`, `AgentDetailPage.tsx`, `RequestDetailPage.tsx`, `EmailTemplatesPage.tsx` — Refactor sử dụng components
+
+---
+
+### 28. REFACTOR-002: Phase 2 — TanStack Query Data Layer
+
+**Mục tiêu:** Dừng dùng `useState + useEffect` thủ công. Dùng cache, background refetch, invalidation.
+
+**Thay đổi:**
+1. **Custom query hooks** — Tạo/cập nhật:
+   - `useAgents.ts`, `useAgentDetail.ts`, `useRequests.ts`, `useRequestDetail.ts`, `useDashboardStats.ts`, `useM1Transitions.ts`, `useB2Requests.ts`, `useStatusCounts.ts`
+   - `useActivityLogs.ts`, `useTrash.ts`, `useHolidays.ts` (list + set), `useRanks.ts` (map + list + mutations), `useDivisions.ts` (map + list + mutations), `useEmailTemplates.ts`
+2. **Refactor pages sang hooks:**
+   - `AgentsPage.tsx`, `RequestsPage.tsx`, `DashboardPage.tsx`
+   - `AgentDetailPage.tsx`, `RequestDetailPage.tsx`
+   - `ActivityLogPage.tsx`, `TrashPage.tsx`, `HolidaysPage.tsx`, `RanksPage.tsx`, `DivisionsPage.tsx`, `EmailTemplatesPage.tsx`
+3. **Mutations** — Tất cả create/update/delete dùng `useMutation` + `queryClient.invalidateQueries()` thay vì `setState` manual.
+4. **Type safety** — Fix null index types (`rankNamesMap[agent.rank_id]` → null-safe), remove unused variables.
+
+**Files sửa/tạo:**
+- `webapp/src/hooks/queries/*` — 13 hooks (mới/cập nhật)
+- `webapp/src/pages/AgentsPage.tsx`, `RequestsPage.tsx`, `DashboardPage.tsx`, `AgentDetailPage.tsx`, `RequestDetailPage.tsx`
+- `webapp/src/pages/ActivityLogPage.tsx`, `TrashPage.tsx`, `HolidaysPage.tsx`, `RanksPage.tsx`, `DivisionsPage.tsx`, `EmailTemplatesPage.tsx`
+
+---
+
+### 27. REFACTOR-001: Phase 1 — Hotfixes & Safety
+
+**Mục tiêu:** Fix lỗi crash và rủi ro bảo mật trước khi đụng vào architecture.
+
+**Thay đổi:**
+1. **Fix `LoginPage.tsx` broken import** — Di chuyển `import { supabase }` từ cuối file lên đầu file.
+2. **HtmlEditor XSS sanitization** — Cài `dompurify`, thêm `sanitizeHtml()` helper. Sanitize output trước khi gọi `onChange` (visual mode) và trước khi render `dangerouslySetInnerHTML` (preview mode).
+3. **Add Root Error Boundary** — Tạo `src/components/ErrorBoundary.tsx` (class component + fallback UI có nút "Tải lại trang"). Wrap `<Routes>` trong `App.tsx`.
+4. **Cleanup dead CSS** — Xóa toàn bộ file `src/App.css` (CSS starter từ Vite template, không được import ở đâu).
+
+**Files sửa/tạo:**
+- `webapp/src/pages/LoginPage.tsx`
+- `webapp/src/components/HtmlEditor.tsx`
+- `webapp/src/components/ErrorBoundary.tsx` — Mới
+- `webapp/src/App.tsx`
+- `webapp/src/App.css` — Xóa
+
+---
 
 ### 26. BUG-014: Fix `temp_t1_id` trong Deactivation bị set sai
 

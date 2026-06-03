@@ -45,17 +45,17 @@ export async function deactivateAgent({ agentId, endDate, reason, userId }: Deac
   // 4. Query deactivated agent's T1 (will become temp T1 for M1s)
   const { data: deactivatedAgent } = await supabase
     .from('agents')
-    .select('referrer_id, current_t1_id')
+    .select('current_t1_id')
     .eq('id', agentId)
     .single()
 
-  const deactivatedAgentT1 = deactivatedAgent?.referrer_id ?? deactivatedAgent?.current_t1_id ?? null
+  const deactivatedAgentT1 = deactivatedAgent?.current_t1_id ?? null
 
   // 5. Query M1s and create transition tasks
   const { data: m1s } = await supabase
     .from('agents')
     .select('id')
-    .or(`referrer_id.eq.${agentId},current_t1_id.eq.${agentId}`)
+    .eq('current_t1_id', agentId)
     .is('deleted_at', null)
     .eq('status', 'active')
 
@@ -135,8 +135,8 @@ export async function restoreAgent({ agentId, mode, userId }: RestoreInput) {
   if (mode === 'full') {
     const { error: restoreError } = await supabase
       .from('agents')
-      .update({ current_t1_id: agentId, referrer_id: agentId })
-      .or(`referrer_id.eq.${agentId},current_t1_id.eq.${agentId}`)
+      .update({ current_t1_id: agentId })
+      .eq('current_t1_id', agentId)
       .is('deleted_at', null)
     if (restoreError) throw restoreError
   } else {
@@ -151,7 +151,7 @@ export async function restoreAgent({ agentId, mode, userId }: RestoreInput) {
       const m1Ids = pendingM1s.map((t) => t.m1_agent_id)
       const { error: lightError } = await supabase
         .from('agents')
-        .update({ current_t1_id: agentId, referrer_id: agentId })
+        .update({ current_t1_id: agentId })
         .in('id', m1Ids)
       if (lightError) throw lightError
     }

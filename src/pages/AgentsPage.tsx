@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Search, Filter, Download, Mail, Star } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import { useAgentsQuery } from '../hooks/queries/useAgents'
+import { useRanksMapQuery } from '../hooks/queries/useRanks'
+import { useDivisionsMapQuery } from '../hooks/queries/useDivisions'
 import ExportModal from '../components/ExportModal'
 import ComposeTemplateModal from '../components/ComposeTemplateModal'
 import DeactivateAgentModal from '../components/DeactivateAgentModal'
@@ -28,25 +32,20 @@ const filterPresets: { key: QuickFilter; label: string; emoji: string }[] = [
 export default function AgentsPage() {
   const { user } = useAuth()
   const { show } = useToast()
-  const [agents, setAgents] = useState<any[]>([])
-  const [t1Map, setT1Map] = useState<Record<string, { full_name: string; staff_id: string }>>({})
+  const queryClient = useQueryClient()
+
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
   const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [page, setPage] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
-  const [loading, setLoading] = useState(true)
   const [showExport, setShowExport] = useState(false)
   const [showCompose, setShowCompose] = useState(false)
   const [deactivateAgentId, setDeactivateAgentId] = useState<string | null>(null)
   const [restoreAgentId, setRestoreAgentId] = useState<string | null>(null)
-  const [rankNamesMap, setRankNamesMap] = useState<Record<string, string>>({})
-  const [divisionMap, setDivisionMap] = useState<Record<string, string>>({})
 
   const role = user?.role ?? 'viewer'
-
   const bookmarks: string[] = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) || '[]')
 
   // Debounce search 300ms
@@ -58,95 +57,21 @@ export default function AgentsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  useEffect(() => {
-    loadAgents()
-    loadRanks()
-    loadDivisions()
-  }, [debouncedSearch, page, quickFilter])
+  const { data, isLoading, isError, error } = useAgentsQuery({
+    search: debouncedSearch,
+    filter: quickFilter,
+    page,
+    bookmarks,
+  })
+  const { data: rankNamesMap = {} } = useRanksMapQuery()
+  const { data: divisionMap = {} } = useDivisionsMapQuery()
 
-  async function loadRanks() {
-    const { data } = await supabase.from('ranks').select('id, name')
-    const map: Record<string, string> = {}
-    data?.forEach((r: any) => { map[r.id] = r.name })
-    setRankNamesMap(map)
-  }
+  const agents = data?.agents ?? []
+  const t1Map = data?.t1Map ?? {}
+  const totalCount = data?.totalCount ?? 0
 
-  async function loadDivisions() {
-    const { data } = await supabase.from('divisions').select('id, name')
-    const map: Record<string, string> = {}
-    data?.forEach((d: any) => { map[d.id] = d.name })
-    setDivisionMap(map)
-  }
-
-  async function loadAgents() {
-    setLoading(true)
-
-    // Count query (server-side)
-    let countQuery = supabase
-      .from('agents')
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null)
-
-    if (quickFilter === 'no_t1') {
-      countQuery = countQuery.or('referrer_id.is.null,current_t1_id.is.null')
-    }
-    if (quickFilter === 'bookmarked') countQuery = countQuery.in('id', bookmarks)
-
-    if (debouncedSearch.trim()) {
-      const q = `%${debouncedSearch.trim()}%`
-      countQuery = countQuery.or(`full_name.ilike.${q},staff_id.ilike.${q},email.ilike.${q}`)
-    }
-
-    const { count } = await countQuery
-
-    // Data query (server-side pagination + search)
-    let query = supabase
-      .from('agents')
-      .select('*')
-      .is('deleted_at', null)
-
-    if (quickFilter === 'no_t1') {
-      query = query.or('referrer_id.is.null,current_t1_id.is.null')
-    }
-    if (quickFilter === 'bookmarked') query = query.in('id', bookmarks)
-
-    if (debouncedSearch.trim()) {
-      const q = `%${debouncedSearch.trim()}%`
-      query = query.or(`full_name.ilike.${q},staff_id.ilike.${q},email.ilike.${q}`)
-    }
-
-    const from = (page - 1) * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
-
-    const { data, error } = await query
-      .order('created_at', { ascending: false })
-      .range(from, to)
-
-    if (error) {
-      show('Lỗi tải dữ liệu: ' + error.message, 'error')
-      setAgents([])
-      setT1Map({})
-    } else {
-      const list = data ?? []
-      setAgents(list)
-
-      // Load T1 info only for current page agents
-      const t1Ids = [...new Set(list.map((a: any) => a.referrer_id ?? a.current_t1_id).filter(Boolean))]
-      if (t1Ids.length > 0) {
-        const { data: t1Data } = await supabase
-          .from('agents')
-          .select('id, full_name, staff_id')
-          .in('id', t1Ids)
-        const map: Record<string, { full_name: string; staff_id: string }> = {}
-        t1Data?.forEach((a: any) => { map[a.id] = a })
-        setT1Map(map)
-      } else {
-        setT1Map({})
-      }
-    }
-
-    setTotalCount(count ?? 0)
-    setLoading(false)
+  if (isError && error) {
+    show('Lỗi tải dữ liệu: ' + (error as Error).message, 'error')
   }
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
@@ -161,7 +86,19 @@ export default function AgentsPage() {
       show('Đã thêm vào danh sách theo dõi', 'success')
     }
     localStorage.setItem(BOOKMARKS_KEY, JSON.stringify([...next]))
-    if (quickFilter === 'bookmarked') loadAgents()
+    if (quickFilter === 'bookmarked') {
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+    }
+  }
+
+  const handleDeactivateClose = () => {
+    setDeactivateAgentId(null)
+    queryClient.invalidateQueries({ queryKey: ['agents'] })
+  }
+
+  const handleRestoreClose = () => {
+    setRestoreAgentId(null)
+    queryClient.invalidateQueries({ queryKey: ['agents'] })
   }
 
   // Fetch all matching data for export (loop through pages to bypass max-rows)
@@ -177,7 +114,7 @@ export default function AgentsPage() {
         .is('deleted_at', null)
 
       if (quickFilter === 'no_t1') {
-        query = query.or('referrer_id.is.null,current_t1_id.is.null')
+        query = query.is('current_t1_id', null)
       }
       if (quickFilter === 'bookmarked') query = query.in('id', bookmarks)
 
@@ -197,7 +134,7 @@ export default function AgentsPage() {
     }
 
     // Build T1 map for all exported rows
-    const t1Ids = [...new Set(all.map((a: any) => a.referrer_id ?? a.current_t1_id).filter(Boolean))]
+    const t1Ids = [...new Set(all.map((a: any) => a.current_t1_id).filter(Boolean))]
     const t1MapAll: Record<string, { full_name: string; staff_id: string }> = {}
     if (t1Ids.length > 0) {
       const { data: t1Data } = await supabase
@@ -212,10 +149,10 @@ export default function AgentsPage() {
       'Họ tên': a.full_name,
       'Cấp bậc': a.rank_name ?? rankNamesMap[a.rank_id] ?? '—',
       'Ngày ký HĐ': formatDate(a.contract_signing_date),
-      'T1 hiện tại': (a.referrer_id ?? a.current_t1_id)
-        ? t1MapAll[a.referrer_id ?? a.current_t1_id]
-          ? `${t1MapAll[a.referrer_id ?? a.current_t1_id].full_name} - ${t1MapAll[a.referrer_id ?? a.current_t1_id].staff_id}`
-          : (a.referrer_id ?? a.current_t1_id)
+      'T1 hiện tại': a.current_t1_id
+        ? t1MapAll[a.current_t1_id]
+          ? `${t1MapAll[a.current_t1_id].full_name} - ${t1MapAll[a.current_t1_id].staff_id}`
+          : a.current_t1_id
         : '—',
       'Division': divisionMap[a.division_id] ?? '—',
       'Trạng thái': a.status,
@@ -308,11 +245,12 @@ export default function AgentsPage() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {isLoading ? (
               <SkeletonTable rows={5} cols={8} />
             ) : (
               agents.map((agent) => {
                 const isBookmarked = bookmarks.includes(agent.id)
+                const t1Id = agent.current_t1_id
                 return (
                   <tr key={agent.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
                     <td className="px-4 py-3">
@@ -339,16 +277,16 @@ export default function AgentsPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-neutral-900">{agent.full_name}</td>
-                    <td className="px-4 py-3 text-neutral-700">{agent.rank_name ?? rankNamesMap[agent.rank_id] ?? '—'}</td>
+                    <td className="px-4 py-3 text-neutral-700">{agent.rank_name ?? rankNamesMap[agent.rank_id ?? ''] ?? '—'}</td>
                     <td className="px-4 py-3 text-neutral-700">{formatDate(agent.contract_signing_date)}</td>
                     <td className="px-4 py-3 text-neutral-700">
-                      {(agent.referrer_id ?? agent.current_t1_id)
-                        ? (t1Map[agent.referrer_id ?? agent.current_t1_id]
-                          ? `${t1Map[agent.referrer_id ?? agent.current_t1_id].full_name} - ${t1Map[agent.referrer_id ?? agent.current_t1_id].staff_id}`
-                          : (agent.referrer_id ?? agent.current_t1_id).slice(0, 8))
+                      {t1Id
+                        ? (t1Map[t1Id]
+                          ? `${t1Map[t1Id].full_name} - ${t1Map[t1Id].staff_id}`
+                          : t1Id.slice(0, 8))
                         : '—'}
                     </td>
-                    <td className="px-4 py-3 text-neutral-700">{divisionMap[agent.division_id] ?? '—'}</td>
+                    <td className="px-4 py-3 text-neutral-700">{divisionMap[agent.division_id ?? ''] ?? '—'}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${agent.status === 'active' ? 'bg-success-light text-success' : 'bg-neutral-100 text-neutral-500'}`}>
                         {agent.status === 'active' ? 'Active' : 'Inactive'}
@@ -379,7 +317,7 @@ export default function AgentsPage() {
                 )
               })
             )}
-            {!loading && agents.length === 0 && (
+            {!isLoading && agents.length === 0 && (
               <tr><td colSpan={role === 'admin' ? 9 : 8}><EmptyState icon={<Inbox className="w-12 h-12" />} title="Không tìm thấy agent nào" subtitle="Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm" /></td></tr>
             )}
           </tbody>
@@ -400,19 +338,22 @@ export default function AgentsPage() {
         <ExportModal
           title="Xuất danh sách Agent"
           onClose={() => setShowExport(false)}
-          data={agents.map((a) => ({
-            'Mã NV': a.staff_id,
-            'Họ tên': a.full_name,
-            'Cấp bậc': a.rank_name,
-            'Ngày ký HĐ': formatDate(a.contract_signing_date),
-            'T1 hiện tại': (a.referrer_id ?? a.current_t1_id)
-              ? (t1Map[a.referrer_id ?? a.current_t1_id]
-                ? `${t1Map[a.referrer_id ?? a.current_t1_id].full_name} - ${t1Map[a.referrer_id ?? a.current_t1_id].staff_id}`
-                : (a.referrer_id ?? a.current_t1_id))
-              : '—',
-            'Division': divisionMap[a.division_id] ?? '—',
-            'Trạng thái': a.status,
-          }))}
+          data={agents.map((a) => {
+            const t1Id = a.current_t1_id
+            return {
+              'Mã NV': a.staff_id,
+              'Họ tên': a.full_name,
+              'Cấp bậc': a.rank_name,
+              'Ngày ký HĐ': formatDate(a.contract_signing_date),
+              'T1 hiện tại': t1Id
+                ? (t1Map[t1Id]
+                  ? `${t1Map[t1Id].full_name} - ${t1Map[t1Id].staff_id}`
+                  : t1Id)
+                : '—',
+              'Division': divisionMap[a.division_id ?? ''] ?? '—',
+              'Trạng thái': a.status,
+            }
+          })}
           filename="agents"
           hasFilter={quickFilter !== 'all' || !!debouncedSearch}
           fetchData={fetchExportData}
@@ -422,10 +363,10 @@ export default function AgentsPage() {
         <ComposeTemplateModal agentId={selected[0]} onClose={() => setShowCompose(false)} />
       )}
       {deactivateAgentId && (
-        <DeactivateAgentModal agentId={deactivateAgentId} onClose={() => { setDeactivateAgentId(null); loadAgents() }} />
+        <DeactivateAgentModal agentId={deactivateAgentId} onClose={handleDeactivateClose} />
       )}
       {restoreAgentId && (
-        <RestoreAgentModal agentId={restoreAgentId} onClose={() => { setRestoreAgentId(null); loadAgents() }} />
+        <RestoreAgentModal agentId={restoreAgentId} onClose={handleRestoreClose} />
       )}
     </div>
   )

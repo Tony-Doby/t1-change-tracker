@@ -1,3 +1,4 @@
+import { supabase } from './supabase'
 import type { EligibilityResult } from '../types'
 
 function isNotASC(rankName: string | null, rankId: string | null, rankNamesMap?: Map<string, string>): boolean {
@@ -41,8 +42,31 @@ interface ChangeLike {
   deleted_at: string | null
 }
 
+/** Source of truth for T1 is `current_t1_id`. `referrer_id` is kept for backward compatibility and synced via DB trigger. */
 function getAgentT1(agent: AgentLike): string | null {
-  return agent.referrer_id ?? agent.current_t1_id ?? null
+  return agent.current_t1_id ?? null
+}
+
+/**
+ * Call the RPC `check_eligibility` on Supabase — this is the single source of truth for eligibility rules.
+ * Use this for the main eligibility check in UI. For offline bulk calc (M1 impact preview), use `checkCanChooseNewT1`.
+ */
+export async function checkEligibilityRpc(
+  agentId: string,
+  proposedT1Id: string | null
+): Promise<EligibilityResult> {
+  const { data, error } = await supabase.rpc('check_eligibility', {
+    p_agent_id: agentId,
+    p_proposed_t1_id: proposedT1Id,
+  })
+  if (error) {
+    return { eligible: false, reasons: ['Lỗi kiểm tra điều kiện: ' + error.message] }
+  }
+  const result = data as { eligible: boolean; reasons: string[] } | null
+  if (!result) {
+    return { eligible: false, reasons: ['Không nhận được kết quả từ server'] }
+  }
+  return { eligible: result.eligible, reasons: result.reasons }
 }
 
 export function checkEligibility(

@@ -1,24 +1,10 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Filter, Search, Inbox } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { formatDate, formatTime } from '../lib/date-utils'
 import { useDebounce } from '../hooks/useDebounce'
+import { useActivityLogsQuery } from '../hooks/queries/useActivityLogs'
 import EmptyState from '../components/EmptyState'
-
-interface LogItem {
-  id: string
-  created_at: string
-  action_type: string
-  description: string | null
-  old_t1_id: string | null
-  new_t1_id: string | null
-  old_t1: { full_name: string; staff_id: string } | null
-  new_t1: { full_name: string; staff_id: string } | null
-  request_id: string | null
-  agent_id: string | null
-  agent_name?: string
-}
 
 const actionTypeLabels: Record<string, { label: string; color: string; dot: string }> = {
   t1_changed: { label: 'Đổi T1', color: 'bg-primary-light text-primary', dot: 'bg-primary' },
@@ -31,28 +17,11 @@ const actionTypeLabels: Record<string, { label: string; color: string; dot: stri
 }
 
 export default function ActivityLogPage() {
-  const [logs, setLogs] = useState<LogItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: logs = [], isLoading } = useActivityLogsQuery()
   const [filterType, setFilterType] = useState('all')
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
   const [showFilter, setShowFilter] = useState(false)
-
-  useEffect(() => {
-    loadLogs()
-  }, [])
-
-  async function loadLogs() {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('activity_logs')
-      .select('*, agent: agent_id(full_name, staff_id), old_t1: old_t1_id(full_name, staff_id), new_t1: new_t1_id(full_name, staff_id)')
-      .order('created_at', { ascending: false })
-      .limit(500)
-    if (error) { console.error(error); setLoading(false); return }
-    setLogs((data ?? []).map((l: any) => ({ ...l, agent_name: l.agent?.full_name ?? null })))
-    setLoading(false)
-  }
 
   const allTypes = useMemo(() => {
     const types = new Set(logs.map((l) => l.action_type))
@@ -72,10 +41,10 @@ export default function ActivityLogPage() {
       )
     }
     return list
-  }, [filterType, search, logs])
+  }, [filterType, debouncedSearch, logs])
 
   const grouped = useMemo(() => {
-    const g: Record<string, LogItem[]> = {}
+    const g: Record<string, typeof filtered> = {}
     filtered.forEach((item) => {
       const date = formatDate(item.created_at)
       if (!g[date]) g[date] = []
@@ -84,7 +53,7 @@ export default function ActivityLogPage() {
     return g
   }, [filtered])
 
-  if (loading) {
+  if (isLoading) {
     return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
   }
 

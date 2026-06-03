@@ -79,6 +79,7 @@
 | 015 | Thêm mẫu email mới (popup trình soạn thảo) | done | 2026-05-29 | 2026-05-29 |
 | 017 | Dashboard B2: Thêm search bar và nút "Tạo email mẫu" | done | 2026-05-29 | 2026-05-29 |
 | 018 | ComposeTemplateModal: Refactor email section (1 section, 4 emails, copy từng email) | done | 2026-05-29 | 2026-05-29 |
+| 019 | Mail Merge Generator (template + data → file Excel) | done | 2026-06-02 | 2026-06-03 |
 
 ---
 
@@ -1864,3 +1865,261 @@ Refactor phần hiển thị email trong `ComposeTemplateModal`:
 
 ### 5. Notes
 - T1 tạm hiện tại lấy từ `t1Old` (referrer_id hoặc current_t1_id). Nếu sau này có field `temp_t1` riêng thì cập nhật.
+
+
+---
+
+## FEAT-019: Mail Merge Generator (template + data → file Excel)
+
+- **Đề xuất**: 2026-06-02
+- **Status**: `done`
+- **Priority**: `medium`
+- **Hoàn thành**: 2026-06-03
+
+### 1. Mô tả feature
+Tính năng riêng biệt cho phép ngườii dùng:
+1. **Lưu file Excel mẫu (template)** vào app — file này chứa placeholder dạng `{{columnName}}` trong các ô (chỉ admin quản lý).
+2. **Upload file Excel data** chứa dữ liệu (các cột tương ứng với placeholder).
+3. **Preview trước** — hiển thị bảng preview ~10 dòng đầu tiên sau khi đã replace placeholder, để user kiểm tra trước khi generate.
+4. **Bấm Generate** → app đọc template + data, replace placeholder theo từng dòng data, xuất file Excel mới.
+5. **Lưu lịch sử** — file data gốc và file generate đều được lưu vào Storage + DB. Tên file generate theo quy tắc: `{template_name}_{YY}{MM}{DD}_{HH}{MM}.xlsx` (ví dụ: `bao_cao_260602_1453.xlsx`).
+6. **Download** file kết quả về máy từ lịch sử hoặc ngay sau generate.
+
+### 2. Motivation / Why
+- Giảm thao tác thủ công: thay vì copy-paste từng dòng vào mẫu Excel, app sẽ tự động fill.
+- Dùng cho các báo cáo định kỳ, giấy tờ, hợp đồng có cấu trúc cố định nhưng data thay đổi.
+- Tách biệt hoàn toàn với flow import agents — không ảnh hưởng đến DB agents.
+
+### 3. Scope
+
+**In scope:**
+- Quản lý template Excel (admin): upload, đặt tên, xem placeholder đã detect, xóa.
+- Trang generate (tất cả authenticated user): chọn template, upload file data, preview placeholder match, preview bảng kết quả, generate, download.
+- Placeholder format: `{{columnName}}` trong cell values (sheet đầu tiên).
+- Output: 1 file Excel với template row được replicate theo số dòng data.
+- Lưu lịch sử generate: file data gốc + file generate vào Storage, metadata vào DB.
+- Tên file generate: `{template_name}_{YY}{MM}{DD}_{HH}{MM}.xlsx`.
+
+**Out of scope:**
+- Không hỗ trợ placeholder trong tên sheet, header/footer, hay công thức Excel.
+- Không hỗ trợ nhiều sheet template (chỉ sheet đầu tiên).
+- Không integrate với agents DB hay gửi email.
+- Không chỉnh sửa file đã generate sau khi lưu (chỉ download lại).
+
+### 4. Technical Design
+
+#### 4.1 Storage
+- **Supabase Storage bucket `excel-templates`** để lưu file template `.xlsx` (binary).
+- **Supabase Storage bucket `excel-generations`** để lưu file data gốc và file generate `.xlsx`.
+- **Bảng `excel_templates`** lưu metadata template:
+  - `id`, `name`, `description`, `storage_path`, `placeholders` (JSONB), `created_by`, `created_at`, `updated_at`.
+- **Bảng `excel_generation_logs`** lưu lịch sử generate:
+  - `id`, `template_id` (FK → excel_templates), `original_file_name`, `original_storage_path`, `generated_file_name`, `generated_storage_path`, `row_count`, `matched_placeholders` (JSONB), `created_by`, `created_at`.
+- Khi upload template mới:
+  1. Upload file lên Storage bucket `excel-templates` → lấy `storage_path`.
+  2. Đọc file bằng SheetJS, quét toàn bộ cell values tìm pattern `\{\{([^}]+)\}\}`.
+  3. Lưu metadata + danh sách placeholders vào DB.
+- Khi generate:
+  1. Upload file data lên Storage bucket `excel-generations/originals/{uuid}.xlsx`.
+  2. Sau khi generate xong, upload file kết quả lên Storage bucket `excel-generations/generated/{uuid}.xlsx`.
+  3. Insert row vào `excel_generation_logs` với metadata đầy đủ.
+
+#### 4.2 Generate Flow
+```
+User chọn template → Upload file data (.xlsx/.csv)
+  → App đọc template (fetch từ Storage → ArrayBuffer → SheetJS workbook)
+  → App đọc data file (SheetJS → headers[] + rows[])
+  → Tìm row template trong workbook (row chứa ít nhất 1 placeholder)
+  → Build preview data: replace placeholder cho ~10 dòng đầu → hiển thị bảng preview
+  → User xem preview đúng → bấm Generate
+  → Với toàn bộ row data:
+      - Clone template row
+      - Replace {{columnName}} → dataRow[columnName] (nếu có)
+      - Insert vào workbook
+  → Tên file: {template_name}_{YY}{MM}{DD}_{HH}{MM}.xlsx
+  → Ghi workbook mới → upload lên Storage bucket excel-generations/generated
+  → Insert log vào excel_generation_logs
+  → Auto-download file kết quả
+```
+
+#### 4.3 Placeholder Matching Rules
+- Case-insensitive match giữa placeholder `{{columnName}}` và header trong file data.
+- Nếu data không có cột tương ứng → placeholder giữ nguyên (không replace).
+- Hiển thị preview: danh sách placeholder trong template + cột nào được match với data (✅ / ⚠️).
+
+#### 4.4 Preview Table
+- Sau khi upload data, app build preview từ ~10 dòng data đầu tiên.
+- Hiển thị dạng bảng HTML (không phải render Excel) với các cột từ template sau khi đã replace placeholder.
+- Nếu placeholder không match → hiển thị chính placeholder đó (ví dụ: `{{email}}`) để user dễ nhận biết.
+- Nút "Generate" chỉ active sau khi preview đã render (user đã xem qua).
+
+#### 4.5 Tên file generate
+- Format: `{template_name}_{YY}{MM}{DD}_{HH}{MM}.xlsx`
+- Ví dụ: Template tên `bao_cao` → `bao_cao_260602_1453.xlsx`
+- `template_name`: sanitize (bỏ dấu, space → `_`, lowercase) từ `excel_templates.name`.
+- Thờigian lấy theo giờ hiện tại của client (GMT+7 / `Asia/Ho_Chi_Minh`).
+
+#### 4.6 Libraries
+- `xlsx` (SheetJS) — đã có trong project (dùng ở UploadPage).
+- Không cần thêm dependency mới.
+
+### 5. UI/UX
+
+#### 5.1 Trang mới: `/excel-generator`
+- **Tab 1 — Generate:**
+  - Dropdown chọn template (load từ DB).
+  - Khi chọn template → hiển thị: tên, mô tả, danh sách placeholder đã detect.
+  - Dropzone upload file data (chỉ nhận .xlsx, .csv).
+  - Sau upload → 2 phần preview:
+    - **Match status:** danh sách placeholder + cột data tương ứng (✅ matched / ⚠️ not found).
+    - **Preview table:** bảng HTML hiển thị ~10 dòng đầu tiên sau khi đã replace placeholder.
+  - Nút **"Generate"** (disabled nếu chưa chọn template, chưa upload data, hoặc chưa có preview).
+  - Sau generate → toast thành công + auto-trigger download.
+- **Tab 2 — Lịch sử Generate:**
+  - Bảng danh sách: Template, File gốc, File generate (tên theo quy tắc `template_yymmdd_hhmm`), Số dòng, Ngày tạo, Ngườii tạo, Hành động.
+  - Nút **"Download"** cho từng dòng lịch sử.
+  - Pagination nếu nhiều hơn 20 dòng.
+- **Tab 3 — Quản lý Template (chỉ admin):**
+  - Bảng danh sách template: Tên, Số placeholder, Ngày tạo, Hành động.
+  - Nút **"Thêm template"** → modal upload file + đặt tên + mô tả.
+  - Nút **"Xóa"** → confirm xóa (xóa cả DB + Storage).
+
+#### 5.2 Navigation
+- Thêm menu item **"Excel Generator"** trong sidebar (dưới Upload, trên Emails).
+
+### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `webapp/supabase/migrations/017_excel_templates.sql` | **Mới** — Bảng `excel_templates` + `excel_generation_logs` + RLS policies |
+| `webapp/src/types/index.ts` | Thêm `ExcelTemplate` interface |
+| `webapp/src/pages/ExcelGeneratorPage.tsx` | **Mới** — Trang chính với 2 tabs |
+| `webapp/src/components/excel-generator/GeneratePanel.tsx` | **Mới** — Tab generate: chọn template, upload data, preview match + preview table, generate, download |
+| `webapp/src/components/excel-generator/GenerationHistory.tsx` | **Mới** — Tab lịch sử generate: bảng + download |
+| `webapp/src/components/excel-generator/TemplateManager.tsx` | **Mới** — Tab quản lý template (admin only) |
+| `webapp/src/components/excel-generator/TemplateUploadModal.tsx` | **Mới** — Modal upload template mới |
+| `webapp/src/lib/excel-generator.ts` | **Mới** — Logic đọc template, detect placeholder, generate file Excel |
+| `webapp/src/components/Layout.tsx` | Thêm menu item "Excel Generator" trong sidebar |
+
+### 7. Schema / SQL changes
+
+```sql
+-- Bảng metadata template
+CREATE TABLE IF NOT EXISTS public.excel_templates (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name text NOT NULL,
+  description text,
+  storage_path text NOT NULL,
+  placeholders jsonb DEFAULT '[]',
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX idx_excel_templates_created_by ON public.excel_templates(created_by);
+CREATE INDEX idx_excel_templates_name ON public.excel_templates(name);
+
+ALTER TABLE public.excel_templates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all authenticated to read excel_templates"
+  ON public.excel_templates FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Allow admin to insert excel_templates"
+  ON public.excel_templates FOR INSERT TO authenticated WITH CHECK (
+    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
+CREATE POLICY "Allow admin to delete excel_templates"
+  ON public.excel_templates FOR DELETE TO authenticated USING (
+    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
+-- Bảng lịch sử generate
+CREATE TABLE IF NOT EXISTS public.excel_generation_logs (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  template_id uuid NOT NULL REFERENCES public.excel_templates(id) ON DELETE SET NULL,
+  original_file_name text NOT NULL,
+  original_storage_path text NOT NULL,
+  generated_file_name text NOT NULL,
+  generated_storage_path text NOT NULL,
+  row_count integer NOT NULL DEFAULT 0,
+  matched_placeholders jsonb DEFAULT '[]',
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX idx_excel_generation_logs_created_by ON public.excel_generation_logs(created_by);
+CREATE INDEX idx_excel_generation_logs_template ON public.excel_generation_logs(template_id);
+CREATE INDEX idx_excel_generation_logs_created_at ON public.excel_generation_logs(created_at DESC);
+
+ALTER TABLE public.excel_generation_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all authenticated to read own excel_generation_logs"
+  ON public.excel_generation_logs FOR SELECT TO authenticated USING (
+    created_by = auth.uid() OR
+    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
+CREATE POLICY "Allow all authenticated to insert excel_generation_logs"
+  ON public.excel_generation_logs FOR INSERT TO authenticated WITH CHECK (created_by = auth.uid());
+
+CREATE POLICY "Allow admin to delete excel_generation_logs"
+  ON public.excel_generation_logs FOR DELETE TO authenticated USING (
+    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+```
+
+**Supabase Storage:**
+- Tạo bucket `excel-templates` (private hoặc restricted) — lưu file template.
+- Tạo bucket `excel-generations` (private) — lưu file data gốc và file generate.
+- Policies bucket `excel-templates`:
+  - `SELECT`: authenticated
+  - `INSERT`: admin
+  - `DELETE`: admin
+- Policies bucket `excel-generations`:
+  - `SELECT`: owner (check user id trong path) hoặc admin
+  - `INSERT`: authenticated
+  - `DELETE`: admin
+
+### 8. API / Integration changes
+- Không cần API mới ngoài Supabase Storage + DB.
+- Frontend đọc template trực tiếp từ Storage qua `supabase.storage.from('excel-templates').download(path)`.
+
+### 9. Test Plan
+1. **Upload template (admin):**
+   - Upload file `.xlsx` có placeholder `{{họ_tên}}`, `{{email}}`, `{{mã_nv}}`.
+   - Verify DB lưu đúng metadata + placeholders = `["họ_tên", "email", "mã_nv"]`.
+   - Verify file xuất hiện trong Storage bucket `excel-templates`.
+2. **Preview (user):**
+   - Chọn template vừa upload.
+   - Upload file data có headers: `họ_tên`, `email`, `mã_nv` + 5 dòng data.
+   - Verify hiển thị ✅ matched cho cả 3 placeholder.
+   - Verify bảng preview hiển thị đúng ~5 dòng đầu tiên sau khi replace.
+3. **Missing column:**
+   - Upload file data thiếu cột `email`.
+   - Verify preview hiển thị ⚠️ not found cho `{{email}}`.
+   - Verify bảng preview hiển thị `{{email}}` nguyên văn trong cell.
+4. **Generate + Download:**
+   - Bấm Generate → verify toast thành công + auto download file.
+   - Verify tên file đúng format: `ten_template_yymmdd_hhmm.xlsx`.
+   - Verify file generate có đúng số dòng data.
+5. **Lịch sử:**
+   - Vào tab "Lịch sử Generate" → verify dòng mới xuất hiện với đúng template, file gốc, file generate.
+   - Bấm Download từ lịch sử → verify tải về đúng file.
+6. **Xóa template:**
+   - Admin bấm xóa → verify row DB bị xóa + file Storage bucket `excel-templates` bị xóa.
+
+### 10. Rollout Plan
+1. Chạy migration `017_excel_templates.sql` trên Supabase SQL Editor.
+2. Tạo bucket `excel-templates` trong Supabase Dashboard → Storage.
+3. Tạo bucket `excel-generations` trong Supabase Dashboard → Storage.
+4. Set Storage policies cho cả 2 bucket.
+5. Deploy code frontend.
+6. Test với template mẫu + data mẫu.
+
+### 11. Notes
+- **SheetJS (`xlsx`) đã có sẵn** trong project (UploadPage đang import).
+- **File template nên đơn giản:** 1 sheet, placeholder trong cell values (không trong công thức).
+- **Performance:** File data < 5000 dòng nên xử lý ngay trong browser. Nếu data lớn hơn, cân nhắt dùng Web Worker (out of scope hiện tại).
+- **Encoding:** Hỗ trợ UTF-8 để tiếng Việt không bị lỗi font.
+- **Future enhancement:** Hỗ trợ nhiều sheet, placeholder trong header/footer.

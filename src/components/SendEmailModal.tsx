@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
-import { createPortal } from 'react-dom'
-import { X, Send, Plus, Trash2, Loader2 } from 'lucide-react'
+import { Send, Plus, Trash2, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useToast } from './Toast'
+import Modal from './Modal'
 import HtmlEditor from './HtmlEditor'
 import type { Agent } from '../types'
 
@@ -105,7 +105,6 @@ export default function SendEmailModal({
       } else {
         show('Đã gửi email thành công', 'success')
 
-        // FEAT-013: Update email sent count for M1 transition task
         if (m1TaskId) {
           try {
             const { data: taskData } = await supabase
@@ -138,110 +137,95 @@ export default function SendEmailModal({
     }
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-modal w-full max-w-[720px] my-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-neutral-100">
-          <h2 className="text-xl font-semibold text-neutral-900">Gửi email</h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700"><X className="w-5 h-5" /></button>
+  return (
+    <Modal onClose={onClose} title="Gửi email" size="xl">
+      <div className="space-y-4">
+        <div className="text-sm">
+          <span className="text-neutral-500">Gửi cho:</span>{' '}
+          <span className="font-medium text-neutral-900">{agent.full_name} ({agent.staff_id})</span>
         </div>
 
-        <div className="p-5 space-y-4">
-          {/* Agent info */}
-          <div className="text-sm">
-            <span className="text-neutral-500">Gửi cho:</span>{' '}
-            <span className="font-medium text-neutral-900">{agent.full_name} ({agent.staff_id})</span>
-          </div>
+        <div>
+          <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">To</label>
+          <input
+            type="email"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+            placeholder="email@example.com"
+          />
+        </div>
 
-          {/* To */}
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">To</label>
-            <input
-              type="email"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
-              placeholder="email@example.com"
-            />
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500">CC</label>
+            <button type="button" onClick={addCc} className="text-xs text-primary hover:text-primary-hover flex items-center gap-1">
+              <Plus className="w-3 h-3" /> Thêm CC
+            </button>
           </div>
-
-          {/* CC */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500">CC</label>
-              <button type="button" onClick={addCc} className="text-xs text-primary hover:text-primary-hover flex items-center gap-1">
-                <Plus className="w-3 h-3" /> Thêm CC
-              </button>
-            </div>
-            <div className="space-y-2">
-              {ccList.map((cc, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <input
-                    type="email"
-                    value={cc}
-                    onChange={(e) => updateCc(idx, e.target.value)}
-                    className="flex-1 h-10 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
-                    placeholder="cc@example.com"
-                  />
-                  {ccList.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeCc(idx)}
-                      className="h-10 w-10 flex items-center justify-center text-danger hover:bg-danger-light rounded-md transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Subject */}
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">Tiêu đề</label>
-            <input
-              type="text"
-              value={renderedSubject}
-              readOnly
-              className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm bg-neutral-50 text-neutral-700"
-            />
-          </div>
-
-          {/* Body preview */}
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">Nội dung</label>
-            <HtmlEditor
-              value={renderedBody}
-              onChange={() => {}}
-              placeholders={defaultPlaceholders}
-              previewData={previewData}
-              height="240px"
-              readOnly
-            />
+          <div className="space-y-2">
+            {ccList.map((cc, idx) => (
+              <div key={idx} className="flex gap-2">
+                <input
+                  type="email"
+                  value={cc}
+                  onChange={(e) => updateCc(idx, e.target.value)}
+                  className="flex-1 h-10 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+                  placeholder="cc@example.com"
+                />
+                {ccList.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeCc(idx)}
+                    className="h-10 w-10 flex items-center justify-center text-danger hover:bg-danger-light rounded-md transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex justify-end gap-3 p-5 border-t border-neutral-100">
-          <button
-            onClick={onClose}
-            className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50"
-          >
-            Hủy
-          </button>
-          <button
-            onClick={handleSend}
-            disabled={sending || !to}
-            className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {sending ? 'Đang gửi...' : 'Gửi email'}
-          </button>
+        <div>
+          <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">Tiêu đề</label>
+          <input
+            type="text"
+            value={renderedSubject}
+            readOnly
+            className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm bg-neutral-50 text-neutral-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">Nội dung</label>
+          <HtmlEditor
+            value={renderedBody}
+            onChange={() => {}}
+            placeholders={defaultPlaceholders}
+            previewData={previewData}
+            height="240px"
+            readOnly
+          />
         </div>
       </div>
-    </div>,
-    document.body
+
+      <div className="flex justify-end gap-3 pt-5 mt-5 border-t border-neutral-100">
+        <button
+          onClick={onClose}
+          className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50"
+        >
+          Hủy
+        </button>
+        <button
+          onClick={handleSend}
+          disabled={sending || !to}
+          className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          {sending ? 'Đang gửi...' : 'Gửi email'}
+        </button>
+      </div>
+    </Modal>
   )
 }

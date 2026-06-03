@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { X, Search, AlertTriangle } from 'lucide-react'
+import { Search, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { checkEligibility, getT1Capacity, getM1ImpactSummary } from '../lib/eligibility'
+import { checkEligibilityRpc, getT1Capacity, getM1ImpactSummary } from '../lib/eligibility'
 import { createNotificationsForAdmins } from '../lib/notifications'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from './Toast'
+import Modal from './Modal'
 import type { EligibilityResult } from '../types'
 import type { T1Capacity, M1ImpactSummary } from '../lib/eligibility'
 
@@ -49,10 +50,9 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
       supabase.from('agents').select('*').is('deleted_at', null).limit(10000),
       supabase.from('agents').select('*').eq('id', agentId).single(),
       supabase.from('t1_changes').select('*').is('deleted_at', null).limit(10000),
-      supabase.from('agents').select('*').or(`referrer_id.eq.${agentId},current_t1_id.eq.${agentId}`).is('deleted_at', null),
+      supabase.from('agents').select('*').eq('current_t1_id', agentId).is('deleted_at', null),
       supabase.from('ranks').select('id, name'),
     ])
-    // Merge all agents, ensure main agent and M1s are present
     const merged = new Map<string, any>()
     ;(agentsData ?? []).forEach((a) => merged.set(a.id, a))
     ;(m1Agents ?? []).forEach((a) => merged.set(a.id, a))
@@ -72,7 +72,6 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
     setLoading(false)
   }
 
-  // Server-side search for dropdown
   useEffect(() => {
     if (!showDropdown || search.trim().length < 1) {
       setDropdownAgents([])
@@ -88,7 +87,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
         .or(`full_name.ilike.%${q}%,staff_id.ilike.%${q}%`)
         .limit(20)
       const filtered = (data ?? []).filter(
-        (a) => a.id !== agentId && a.id !== (agent?.referrer_id ?? agent?.current_t1_id)
+        (a) => a.id !== agentId && a.id !== agent?.current_t1_id
       )
       setDropdownAgents(filtered)
       setSearchingDropdown(false)
@@ -96,7 +95,6 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
     return () => clearTimeout(timer)
   }, [search, showDropdown, agentId, agent])
 
-  // Ensure selected T1 exists in agents array for eligibility/capacity calculations
   useEffect(() => {
     if (!selectedT1Id) {
       setResult(null)
@@ -121,8 +119,8 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
       return
     }
     setChecking(true)
-    const timer = setTimeout(() => {
-      const res = checkEligibility(agentId, selectedT1Id, agents, t1Changes, rankNamesMap)
+    const timer = setTimeout(async () => {
+      const res = await checkEligibilityRpc(agentId, selectedT1Id)
       const cap = getT1Capacity(selectedT1Id, agents, t1Changes)
       setResult(res)
       setCapacity(cap)
@@ -136,7 +134,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
     setSubmitting(true)
     const { error } = await supabase.from('t1_requests').insert({
       agent_id: agentId,
-      old_t1_id: agent.referrer_id ?? agent.current_t1_id,
+      old_t1_id: agent.current_t1_id,
       proposed_new_t1_id: selectedT1Id,
       status: 'step1',
       created_by: user?.id,
@@ -164,148 +162,143 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-xl p-6"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
-      </div>
+      <Modal onClose={onClose} title="Tạo đề xuất đổi T1" size="md">
+        <div className="flex items-center justify-center py-8">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      </Modal>
     )
   }
 
   if (!agent) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-modal w-full max-w-[560px] max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-neutral-100">
-          <h2 className="text-xl font-semibold text-neutral-900">Tạo đề xuất đổi T1</h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700"><X className="w-5 h-5" /></button>
+    <Modal onClose={onClose} title="Tạo đề xuất đổi T1" size="lg">
+      <div className="space-y-5">
+        <div className="bg-neutral-50 rounded-lg p-3 text-sm space-y-1">
+          <p><span className="text-neutral-500">Agent:</span> <span className="font-medium text-neutral-900">{agent.full_name} ({agent.staff_id})</span></p>
+          <p><span className="text-neutral-500">T1 hiện tại:</span> <span className="font-medium text-neutral-900">{getAgentName(agent.current_t1_id)}</span></p>
         </div>
 
-        <div className="p-5 space-y-5">
-          <div className="bg-neutral-50 rounded-lg p-3 text-sm space-y-1">
-            <p><span className="text-neutral-500">Agent:</span> <span className="font-medium text-neutral-900">{agent.full_name} ({agent.staff_id})</span></p>
-            <p><span className="text-neutral-500">T1 hiện tại:</span> <span className="font-medium text-neutral-900">{getAgentName(agent.referrer_id ?? agent.current_t1_id)}</span></p>
+        <div className="relative">
+          <label className="block text-xs font-medium uppercase tracking-wide text-neutral-700 mb-1.5">Chọn T1 mới <span className="text-danger">*</span></label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+            <input type="text" placeholder="Tìm theo mã hoặc tên..." value={selectedT1Id ? getAgentName(selectedT1Id) : search}
+              onChange={(e) => { setSearch(e.target.value); setSelectedT1Id(null); setShowDropdown(true) }}
+              onFocus={() => setShowDropdown(true)}
+              className="w-full h-10 pl-9 pr-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" />
           </div>
 
-          <div className="relative">
-            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-700 mb-1.5">Chọn T1 mới <span className="text-danger">*</span></label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-              <input type="text" placeholder="Tìm theo mã hoặc tên..." value={selectedT1Id ? getAgentName(selectedT1Id) : search}
-                onChange={(e) => { setSearch(e.target.value); setSelectedT1Id(null); setShowDropdown(true) }}
-                onFocus={() => setShowDropdown(true)}
-                className="w-full h-10 pl-9 pr-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" />
-            </div>
+          {showDropdown && !selectedT1Id && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
+              <div className="absolute left-0 right-0 mt-1 bg-white rounded-lg shadow-dropdown border border-neutral-300 z-20 max-h-56 overflow-y-auto">
+                {searchingDropdown && (
+                  <div className="px-3 py-2 text-sm text-neutral-500 flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> Đang tìm...
+                  </div>
+                )}
+                {!searchingDropdown && dropdownAgents.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-neutral-500">{search.trim().length < 1 ? 'Nhập để tìm kiếm...' : 'Không tìm thấy'}</div>
+                )}
+                {dropdownAgents.map((c) => (
+                  <button key={c.id} onClick={() => { setSelectedT1Id(c.id); setShowDropdown(false); setSearch('') }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-bold">{c.full_name.charAt(0)}</div>
+                    <div><p className="font-medium text-neutral-900">{c.full_name}</p><p className="text-xs text-neutral-500">{c.staff_id} • {c.rank_name ?? rankNamesMap.get(c.rank_id) ?? '—'}</p></div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
-            {showDropdown && !selectedT1Id && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
-                <div className="absolute left-0 right-0 mt-1 bg-white rounded-lg shadow-dropdown border border-neutral-300 z-20 max-h-56 overflow-y-auto">
-                  {searchingDropdown && (
-                    <div className="px-3 py-2 text-sm text-neutral-500 flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> Đang tìm...
-                    </div>
-                  )}
-                  {!searchingDropdown && dropdownAgents.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-neutral-500">{search.trim().length < 1 ? 'Nhập để tìm kiếm...' : 'Không tìm thấy'}</div>
-                  )}
-                  {dropdownAgents.map((c) => (
-                    <button key={c.id} onClick={() => { setSelectedT1Id(c.id); setShowDropdown(false); setSearch('') }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-bold">{c.full_name.charAt(0)}</div>
-                      <div><p className="font-medium text-neutral-900">{c.full_name}</p><p className="text-xs text-neutral-500">{c.staff_id} • {c.rank_name ?? rankNamesMap.get(c.rank_id) ?? '—'}</p></div>
-                    </button>
-                  ))}
+        {capacity && (
+          <div className={`rounded-lg p-3 text-sm space-y-1 ${capacity.warning ? 'bg-warning-light' : 'bg-neutral-50'}`}>
+            <p className="font-medium text-neutral-900 flex items-center gap-1.5">T1 Capacity {capacity.warning && <AlertTriangle className="w-4 h-4 text-warning" />}</p>
+            <p className="text-neutral-700">Số agent đang dưới trướng: <span className="font-medium">{capacity.menteeCount}</span></p>
+            <p className="text-neutral-700">Số lần nhận agent trong 30 ngày qua: <span className="font-medium">{capacity.recentAcceptCount}</span></p>
+            {capacity.warning && <p className="text-warning text-xs font-medium">⚠️ Cảnh báo: T1 này có thể đang quá tải</p>}
+          </div>
+        )}
+
+        {selectedT1Id && (
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-700 mb-2">Kiểm tra điều kiện</p>
+            <div className="border border-neutral-200 rounded-lg divide-y divide-neutral-100">
+              {checking ? (
+                <div className="px-4 py-6 flex items-center justify-center gap-2 text-sm text-neutral-500">
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> Đang kiểm tra...
                 </div>
-              </>
+              ) : result ? (
+                result.reasons.map((reason, idx) => (
+                  <div key={idx} className="px-4 py-2.5 text-sm flex items-center gap-2">
+                    <span className="text-base">{reason.startsWith('✅') ? '✅' : reason.startsWith('❌') ? '❌' : '•'}</span>
+                    <span className={reason.startsWith('❌') ? 'text-danger' : 'text-neutral-700'}>{reason.replace(/^[✅❌]\s*/, '')}</span>
+                  </div>
+                ))
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {m1Impact && m1Impact.total > 0 && (
+          <div className="border border-neutral-200 rounded-lg p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-700 mb-2">Tác động đến ngưởi dưới line</p>
+            <p className="text-xs text-neutral-500 mb-2">
+              ℹ️ Agent trong 90 ngày đầu không bị giới hạn cấp bậc (ASC vẫn được phép đổi T1).
+            </p>
+            <p className="text-sm text-neutral-700">
+              Agent này đang là T1 của: <span className="font-medium text-neutral-900">{m1Impact.total} ngưởi</span>
+            </p>
+            <p className="text-sm text-neutral-700">
+              <span className="text-success font-medium">{m1Impact.eligibleCount} ngưởi</span> đủ điều kiện chọn T1 mới
+            </p>
+            <p className="text-sm text-neutral-700">
+              <span className="text-danger font-medium">{m1Impact.ineligibleCount} ngưởi</span> không đủ điều kiện (sẽ ở lại với T2)
+            </p>
+            <button
+              onClick={() => setShowM1Detail((v) => !v)}
+              className="mt-2 text-xs text-primary hover:underline"
+            >
+              {showM1Detail ? 'Thu gọn' : 'Xem chi tiết'}
+            </button>
+            {showM1Detail && (
+              <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
+                {m1Impact.details.map((d) => (
+                  <div key={d.agent.id} className="flex items-start gap-2 text-sm">
+                    <span>{d.eligible ? '✅' : '❌'}</span>
+                    <div>
+                      <p className="font-medium text-neutral-900">
+                        {d.agent.full_name ?? '—'} ({d.agent.staff_id ?? '—'})
+                      </p>
+                      {d.reasons.length > 0 && (
+                        <p className="text-xs text-red-600">
+                          {d.reasons.join('; ')}
+                        </p>
+                      )}
+                      {d.notes.length > 0 && (
+                        <p className="text-xs text-primary">
+                          {d.notes.join('; ')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-
-          {capacity && (
-            <div className={`rounded-lg p-3 text-sm space-y-1 ${capacity.warning ? 'bg-warning-light' : 'bg-neutral-50'}`}>
-              <p className="font-medium text-neutral-900 flex items-center gap-1.5">T1 Capacity {capacity.warning && <AlertTriangle className="w-4 h-4 text-warning" />}</p>
-              <p className="text-neutral-700">Số agent đang dưới trướng: <span className="font-medium">{capacity.menteeCount}</span></p>
-              <p className="text-neutral-700">Số lần nhận agent trong 30 ngày qua: <span className="font-medium">{capacity.recentAcceptCount}</span></p>
-              {capacity.warning && <p className="text-warning text-xs font-medium">⚠️ Cảnh báo: T1 này có thể đang quá tải</p>}
-            </div>
-          )}
-
-          {selectedT1Id && (
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-700 mb-2">Kiểm tra điều kiện</p>
-              <div className="border border-neutral-200 rounded-lg divide-y divide-neutral-100">
-                {checking ? (
-                  <div className="px-4 py-6 flex items-center justify-center gap-2 text-sm text-neutral-500">
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> Đang kiểm tra...
-                  </div>
-                ) : result ? (
-                  result.reasons.map((reason, idx) => (
-                    <div key={idx} className="px-4 py-2.5 text-sm flex items-center gap-2">
-                      <span className="text-base">{reason.startsWith('✅') ? '✅' : reason.startsWith('❌') ? '❌' : '•'}</span>
-                      <span className={reason.startsWith('❌') ? 'text-danger' : 'text-neutral-700'}>{reason.replace(/^[✅❌]\s*/, '')}</span>
-                    </div>
-                  ))
-                ) : null}
-              </div>
-            </div>
-          )}
-
-          {m1Impact && m1Impact.total > 0 && (
-            <div className="border border-neutral-200 rounded-lg p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-700 mb-2">Tác động đến ngưởi dưới line</p>
-              <p className="text-xs text-neutral-500 mb-2">
-                ℹ️ Agent trong 90 ngày đầu không bị giới hạn cấp bậc (ASC vẫn được phép đổi T1).
-              </p>
-              <p className="text-sm text-neutral-700">
-                Agent này đang là T1 của: <span className="font-medium text-neutral-900">{m1Impact.total} ngưởi</span>
-              </p>
-              <p className="text-sm text-neutral-700">
-                <span className="text-success font-medium">{m1Impact.eligibleCount} ngưởi</span> đủ điều kiện chọn T1 mới
-              </p>
-              <p className="text-sm text-neutral-700">
-                <span className="text-danger font-medium">{m1Impact.ineligibleCount} ngưởi</span> không đủ điều kiện (sẽ ở lại với T2)
-              </p>
-              <button
-                onClick={() => setShowM1Detail((v) => !v)}
-                className="mt-2 text-xs text-primary hover:underline"
-              >
-                {showM1Detail ? 'Thu gọn' : 'Xem chi tiết'}
-              </button>
-              {showM1Detail && (
-                <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
-                  {m1Impact.details.map((d) => (
-                    <div key={d.agent.id} className="flex items-start gap-2 text-sm">
-                      <span>{d.eligible ? '✅' : '❌'}</span>
-                      <div>
-                        <p className="font-medium text-neutral-900">
-                          {d.agent.full_name ?? '—'} ({d.agent.staff_id ?? '—'})
-                        </p>
-                        {d.reasons.length > 0 && (
-                          <p className="text-xs text-red-600">
-                            {d.reasons.join('; ')}
-                          </p>
-                        )}
-                        {d.notes.length > 0 && (
-                          <p className="text-xs text-primary">
-                            {d.notes.join('; ')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-3 p-5 border-t border-neutral-100">
-          <button onClick={onClose} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
-          <button onClick={handleSubmit} disabled={!result?.eligible || !selectedT1Id || submitting}
-            className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed">
-            {submitting ? 'Đang tạo...' : 'Tạo đề xuất'}
-          </button>
-        </div>
+        )}
       </div>
-    </div>
+
+      <div className="flex items-center justify-end gap-3 pt-5 mt-5 border-t border-neutral-100">
+        <button onClick={onClose} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
+        <button onClick={handleSubmit} disabled={!result?.eligible || !selectedT1Id || submitting}
+          className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed">
+          {submitting ? 'Đang tạo...' : 'Tạo đề xuất'}
+        </button>
+      </div>
+    </Modal>
   )
 }

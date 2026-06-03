@@ -1,61 +1,43 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Plus, Trash2, X, Inbox } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import { formatDate } from '../lib/date-utils'
+import { useHolidaysListQuery, useAddHolidayMutation, useDeleteHolidayMutation } from '../hooks/queries/useHolidays'
 import EmptyState from '../components/EmptyState'
-
-interface Holiday {
-  id: string
-  holiday_date: string
-  name: string
-  year: number
-}
 
 export default function HolidaysPage() {
   const { show } = useToast()
-  const [holidays, setHolidays] = useState<Holiday[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: holidays = [], isLoading } = useHolidaysListQuery()
+  const addMut = useAddHolidayMutation()
+  const delMut = useDeleteHolidayMutation()
+
   const [showAdd, setShowAdd] = useState(false)
   const [newDate, setNewDate] = useState('')
   const [newName, setNewName] = useState('')
 
-  useEffect(() => {
-    loadHolidays()
-  }, [])
-
-  async function loadHolidays() {
-    setLoading(true)
-    const { data, error } = await supabase.from('holidays').select('*').order('holiday_date', { ascending: true })
-    if (error) { show('Lỗi tải dữ liệu: ' + error.message, 'error'); setLoading(false); return }
-    setHolidays(data ?? [])
-    setLoading(false)
-  }
-
   const addHoliday = async () => {
     if (!newDate || !newName.trim()) return
-    const d = new Date(newDate)
-    const { data, error } = await supabase.from('holidays').insert({
-      holiday_date: newDate,
-      name: newName.trim(),
-      year: d.getFullYear(),
-    }).select()
-    if (error) { show('Lỗi thêm: ' + error.message, 'error'); return }
-    setHolidays((prev) => [...prev, ...(data ?? [])].sort((a, b) => a.holiday_date.localeCompare(b.holiday_date)))
-    setNewDate('')
-    setNewName('')
-    setShowAdd(false)
-    show('Đã thêm ngày lễ', 'success')
+    try {
+      await addMut.mutateAsync({ holiday_date: newDate, name: newName.trim() })
+      setNewDate('')
+      setNewName('')
+      setShowAdd(false)
+      show('Đã thêm ngày lễ', 'success')
+    } catch (e: any) {
+      show('Lỗi thêm: ' + e.message, 'error')
+    }
   }
 
   const deleteHoliday = async (id: string) => {
-    const { error } = await supabase.from('holidays').delete().eq('id', id)
-    if (error) { show('Lỗi xóa: ' + error.message, 'error'); return }
-    setHolidays((prev) => prev.filter((h) => h.id !== id))
-    show('Đã xóa ngày lễ', 'info')
+    try {
+      await delMut.mutateAsync(id)
+      show('Đã xóa ngày lễ', 'info')
+    } catch (e: any) {
+      show('Lỗi xóa: ' + e.message, 'error')
+    }
   }
 
-  if (loading) {
+  if (isLoading) {
     return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
   }
 

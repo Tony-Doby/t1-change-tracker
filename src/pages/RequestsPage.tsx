@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Search, Filter, Plus, Download, Inbox } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/date-utils'
 import { useDebounce } from '../hooks/useDebounce'
+import { useRequestsQuery } from '../hooks/queries/useRequests'
 import ExportModal from '../components/ExportModal'
 import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
@@ -24,8 +24,6 @@ const statusColors: Record<string, string> = {
 
 export default function RequestsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [requests, setRequests] = useState<any[]>([])
-  const [t1Map, setT1Map] = useState<Record<string, { full_name: string; staff_id: string }>>({})
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
   const [statusFilter, setStatusFilter] = useState<RequestStatus[]>(() => {
@@ -36,51 +34,16 @@ export default function RequestsPage() {
     return []
   })
   const [showExport, setShowExport] = useState(false)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadRequests()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, debouncedSearch])
+  const { data, isLoading } = useRequestsQuery({ statusFilter })
 
-  useEffect(() => {
-    if (statusFilter.length > 0) {
-      setSearchParams({ status: statusFilter.join(',') }, { replace: true })
-    } else {
-      setSearchParams({}, { replace: true })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter])
-
-  async function loadRequests() {
-    setLoading(true)
-    let query = supabase.from('t1_requests').select('*, agent: agent_id(full_name, staff_id)').is('deleted_at', null)
-    if (statusFilter.length > 0) query = query.in('status', statusFilter)
-    query = query.order('created_at', { ascending: false })
-    const { data, error } = await query
-    if (error) console.error(error)
-    const list = data ?? []
-    setRequests(list)
-
-    const t1Ids = [...new Set(list.flatMap((r: any) => [r.old_t1_id, r.proposed_new_t1_id]).filter(Boolean))]
-    if (t1Ids.length > 0) {
-      const { data: t1Data } = await supabase
-        .from('agents')
-        .select('id, full_name, staff_id')
-        .in('id', t1Ids)
-      const map: Record<string, { full_name: string; staff_id: string }> = {}
-      t1Data?.forEach((a: any) => { map[a.id] = a })
-      setT1Map(map)
-    } else {
-      setT1Map({})
-    }
-    setLoading(false)
-  }
+  const requests = data?.requests ?? []
+  const t1Map = data?.t1Map ?? {}
 
   const filtered = requests.filter((r) => {
     if (!debouncedSearch.trim()) return true
     const q = debouncedSearch.toLowerCase()
-    return r.id?.toLowerCase().includes(q) || r.agent?.full_name?.toLowerCase().includes(q)
+    return r.id?.toLowerCase().includes(q) || (r.agent as any)?.full_name?.toLowerCase().includes(q)
   })
 
   const counts: Record<string, number> = {}
@@ -90,6 +53,16 @@ export default function RequestsPage() {
     setStatusFilter((prev) =>
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
     )
+  }
+
+  // Sync URL params
+  const handleSetStatusFilter = (next: RequestStatus[]) => {
+    setStatusFilter(next)
+    if (next.length > 0) {
+      setSearchParams({ status: next.join(',') }, { replace: true })
+    } else {
+      setSearchParams({}, { replace: true })
+    }
   }
 
   return (
@@ -107,7 +80,7 @@ export default function RequestsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
           <input type="text" placeholder="Tìm kiếm..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 pr-3 h-9 w-[240px] border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" />
         </div>
-        <button onClick={() => setStatusFilter([])} className={`flex items-center gap-1.5 px-3 h-9 border rounded-md text-sm ${statusFilter.length === 0 ? 'border-primary text-primary bg-primary-light/30' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'}`}><Filter className="w-4 h-4" /> Tất cả</button>
+        <button onClick={() => handleSetStatusFilter([])} className={`flex items-center gap-1.5 px-3 h-9 border rounded-md text-sm ${statusFilter.length === 0 ? 'border-primary text-primary bg-primary-light/30' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'}`}><Filter className="w-4 h-4" /> Tất cả</button>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -131,7 +104,7 @@ export default function RequestsPage() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {isLoading ? (
               <SkeletonTable rows={5} cols={5} />
             ) : (
               filtered.map((r) => (
@@ -166,7 +139,7 @@ export default function RequestsPage() {
                 </tr>
               ))
             )}
-            {!loading && filtered.length === 0 && (
+            {!isLoading && filtered.length === 0 && (
               <tr><td colSpan={5}><EmptyState icon={<Inbox className="w-12 h-12" />} title="Không có đề xuất nào" subtitle="Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm" /></td></tr>
             )}
           </tbody>

@@ -43,10 +43,10 @@ export async function completeRequestAction(
   })
   if (changeError) throw changeError
 
-  // 3. Update agent current T1 (both old and new field for backward compatibility)
+  // 3. Update agent current T1 (referrer_id synced via DB trigger)
   const { error: agentError } = await supabase
     .from('agents')
-    .update({ current_t1_id: request.proposed_new_t1_id, referrer_id: request.proposed_new_t1_id })
+    .update({ current_t1_id: request.proposed_new_t1_id })
     .eq('id', request.agent_id)
   if (agentError) throw agentError
 
@@ -87,7 +87,7 @@ export async function completeRequestAction(
   // 6. Move M1s under temp T1 (or set null if agent had no old T1)
   const { error: m1UpdateError } = await supabase
     .from('agents')
-    .update({ current_t1_id: request.old_t1_id, referrer_id: request.old_t1_id })
+    .update({ current_t1_id: request.old_t1_id })
     .eq('current_t1_id', request.agent_id)
     .is('deleted_at', null)
   if (m1UpdateError) throw m1UpdateError

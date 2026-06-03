@@ -6,14 +6,18 @@ import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import Modal from '../components/Modal'
 import CountdownConfirmModal from '../components/CountdownConfirmModal'
+import { useDivisionsListQuery, useSaveDivisionMutation, useDeleteDivisionMutation, useRecomputeDivisionsMutation } from '../hooks/queries/useDivisions'
 import { Inbox, Shield, Search, X, RefreshCw } from 'lucide-react'
 
 export default function DivisionsPage() {
   const { show } = useToast()
   const { user } = useAuth()
-  const [divisions, setDivisions] = useState<any[]>([])
+  const { data: divisions = [], isLoading } = useDivisionsListQuery()
+  const saveMut = useSaveDivisionMutation()
+  const deleteMut = useDeleteDivisionMutation()
+  const recomputeMut = useRecomputeDivisionsMutation()
+
   const [agents, setAgents] = useState<Record<string, { full_name: string; staff_id: string }>>({})
-  const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<any | null>(null)
   const [form, setForm] = useState({ name: '', head_agent_id: '', is_official: false })
   const [showRecomputeConfirm, setShowRecomputeConfirm] = useState(false)
@@ -23,86 +27,52 @@ export default function DivisionsPage() {
 
   const role = user?.role ?? 'viewer'
 
-  // Searchable dropdown state
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
+  // Load head agents when divisions change
   useEffect(() => {
-    loadDivisions()
-  }, [])
+    const headIds = [...new Set(divisions.map((d) => d.head_agent_id).filter(Boolean))]
+    if (headIds.length === 0) { setAgents({}); return }
+    supabase.from('agents').select('id, full_name, staff_id').in('id', headIds).then(({ data }) => {
+      const map: Record<string, { full_name: string; staff_id: string }> = {}
+      data?.forEach((a: any) => { map[a.id] = a })
+      setAgents(map)
+    })
+  }, [divisions])
 
-  // Debounced search
   useEffect(() => {
-    if (!searchTerm.trim()) {
-      setSearchResults([])
-      setShowDropdown(false)
-      return
-    }
-    // Don't search if searchTerm is already a selected label (contains "(")
-    if (form.head_agent_id && searchTerm.includes('(') && !searchTerm.endsWith(' ')) {
-      // User is typing after a selected label — treat as new search
-    }
+    if (!searchTerm.trim()) { setSearchResults([]); setShowDropdown(false); return }
     const timer = setTimeout(() => doSearch(searchTerm), 300)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm])
 
-  // Click outside to close dropdown
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
-      }
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowDropdown(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Load selected head agent label when editing
   useEffect(() => {
     if (editing?.head_agent_id) {
       const cached = agents[editing.head_agent_id]
       if (cached) {
         setSearchTerm(`${cached.full_name} (${cached.staff_id})`)
       } else {
-        supabase
-          .from('agents')
-          .select('full_name, staff_id')
-          .eq('id', editing.head_agent_id)
-          .single()
-          .then(({ data }) => {
-            if (data) setSearchTerm(`${data.full_name} (${data.staff_id})`)
-          })
+        supabase.from('agents').select('full_name, staff_id').eq('id', editing.head_agent_id).single().then(({ data }) => {
+          if (data) setSearchTerm(`${data.full_name} (${data.staff_id})`)
+        })
       }
     } else {
       setSearchTerm('')
     }
   }, [editing, agents])
-
-  async function loadDivisions() {
-    setLoading(true)
-    const { data, error } = await supabase.from('divisions').select('*').order('name', { ascending: true })
-    if (error) {
-      show('Lỗi tải dữ liệu: ' + error.message, 'error')
-      setLoading(false)
-      return
-    }
-    setDivisions(data ?? [])
-
-    // Load head agents
-    const headIds = [...new Set((data ?? []).map((d) => d.head_agent_id).filter(Boolean))]
-    if (headIds.length > 0) {
-      const { data: agentData } = await supabase.from('agents').select('id, full_name, staff_id').in('id', headIds)
-      const map: Record<string, { full_name: string; staff_id: string }> = {}
-      agentData?.forEach((a: any) => { map[a.id] = a })
-      setAgents(map)
-    }
-
-    setLoading(false)
-  }
 
   async function doSearch(term: string) {
     setSearchLoading(true)
@@ -113,10 +83,7 @@ export default function DivisionsPage() {
       .eq('status', 'active')
       .is('deleted_at', null)
       .limit(10)
-    if (error) {
-      setSearchLoading(false)
-      return
-    }
+    if (error) { setSearchLoading(false); return }
     setSearchResults(data ?? [])
     setShowDropdown(true)
     setSearchLoading(false)
@@ -136,39 +103,28 @@ export default function DivisionsPage() {
   }
 
   const handleSave = async () => {
-    if (!form.name.trim()) {
-      show('Vui lòng nhập tên division', 'error')
-      return
-    }
-    const payload: any = {
+    if (!form.name.trim()) { show('Vui lòng nhập tên division', 'error'); return }
+    const payload = {
       name: form.name.trim(),
       head_agent_id: form.head_agent_id || null,
       is_official: form.is_official,
     }
-    if (editing) {
-      const { error } = await supabase.from('divisions').update(payload).eq('id', editing.id)
-      if (error) { show('Lỗi cập nhật: ' + error.message, 'error'); return }
-      show('Đã cập nhật division', 'success')
-    } else {
-      const { error } = await supabase.from('divisions').insert(payload)
-      if (error) { show('Lỗi thêm mới: ' + error.message, 'error'); return }
-      show('Đã thêm division mới', 'success')
+    try {
+      await saveMut.mutateAsync({ id: editing?.id, payload })
+      show(editing ? 'Đã cập nhật division' : 'Đã thêm division mới', 'success')
+      setEditing(null)
+      setForm({ name: '', head_agent_id: '', is_official: false })
+      setSearchTerm('')
+      setShowDropdown(false)
+      setShowModal(false)
+    } catch (e: any) {
+      show(editing ? 'Lỗi cập nhật: ' + e.message : 'Lỗi thêm mới: ' + e.message, 'error')
     }
-    setEditing(null)
-    setForm({ name: '', head_agent_id: '', is_official: false })
-    setSearchTerm('')
-    setShowDropdown(false)
-    setShowModal(false)
-    loadDivisions()
   }
 
   const startEdit = (div: any) => {
     setEditing(div)
-    setForm({
-      name: div.name ?? '',
-      head_agent_id: div.head_agent_id ?? '',
-      is_official: div.is_official ?? false,
-    })
+    setForm({ name: div.name ?? '', head_agent_id: div.head_agent_id ?? '', is_official: div.is_official ?? false })
     setSearchTerm('')
     setShowDropdown(false)
     setShowModal(true)
@@ -195,7 +151,6 @@ export default function DivisionsPage() {
   const handleDelete = async () => {
     if (!deleting) return
     setDeleteBusy(true)
-    // Check if any agent belongs to this division
     const { count, error: countError } = await supabase
       .from('agents')
       .select('*', { count: 'exact', head: true })
@@ -212,16 +167,14 @@ export default function DivisionsPage() {
       setDeleting(null)
       return
     }
-    const { error } = await supabase.from('divisions').delete().eq('id', deleting.id)
-    if (error) {
-      show('Lỗi xóa: ' + error.message, 'error')
-      setDeleteBusy(false)
-      return
+    try {
+      await deleteMut.mutateAsync(deleting.id)
+      show('Đã xóa division', 'success')
+    } catch (e: any) {
+      show('Lỗi xóa: ' + e.message, 'error')
     }
-    show('Đã xóa division', 'success')
     setDeleteBusy(false)
     setDeleting(null)
-    loadDivisions()
   }
 
   return (
@@ -230,24 +183,14 @@ export default function DivisionsPage() {
         <h1 className="text-2xl font-bold text-neutral-900">Quản lý Divisions</h1>
         <div className="flex items-center gap-2">
           {role === 'admin' && (
-            <button
-              onClick={() => setShowRecomputeConfirm(true)}
-              className="flex items-center gap-1.5 px-3 h-9 border border-neutral-300 text-neutral-700 rounded-md text-sm hover:bg-neutral-50"
-              title="Tính lại division cho toàn bộ agents"
-            >
+            <button onClick={() => setShowRecomputeConfirm(true)} className="flex items-center gap-1.5 px-3 h-9 border border-neutral-300 text-neutral-700 rounded-md text-sm hover:bg-neutral-50" title="Tính lại division cho toàn bộ agents">
               <RefreshCw className="w-4 h-4" /> Tính lại Division
             </button>
           )}
-          <button
-            onClick={openAddModal}
-            className="px-3 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover"
-          >
-            + Thêm mới
-          </button>
+          <button onClick={openAddModal} className="px-3 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">+ Thêm mới</button>
         </div>
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-lg shadow-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[600px]">
@@ -261,7 +204,7 @@ export default function DivisionsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isLoading ? (
                 <SkeletonTable rows={5} cols={5} />
               ) : (
                 divisions.map((d) => (
@@ -285,7 +228,7 @@ export default function DivisionsPage() {
                   </tr>
                 ))
               )}
-              {!loading && divisions.length === 0 && (
+              {!isLoading && divisions.length === 0 && (
                 <tr><td colSpan={5}><EmptyState icon={<Inbox className="w-12 h-12" />} title="Chưa có division nào" /></td></tr>
               )}
             </tbody>
@@ -296,21 +239,11 @@ export default function DivisionsPage() {
       {deleting && (
         <Modal onClose={() => setDeleting(null)} title="Xác nhận xóa" maxWidth="max-w-sm">
           <div className="space-y-4">
-            <p className="text-sm text-neutral-700">
-              Bạn có chắc muốn xóa division <strong>{deleting.name}</strong>?
-            </p>
-            <p className="text-xs text-red-600">
-              Nếu division đang có agent, hệ thống sẽ từ chối xóa để tránh mất dữ liệu.
-            </p>
+            <p className="text-sm text-neutral-700">Bạn có chắc muốn xóa division <strong>{deleting.name}</strong>?</p>
+            <p className="text-xs text-red-600">Nếu division đang có agent, hệ thống sẽ từ chối xóa để tránh mất dữ liệu.</p>
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button onClick={() => setDeleting(null)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">
-                Hủy
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteBusy}
-                className="px-4 h-9 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-60"
-              >
+              <button onClick={() => setDeleting(null)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
+              <button onClick={handleDelete} disabled={deleteBusy} className="px-4 h-9 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-60">
                 {deleteBusy ? 'Đang xóa...' : 'Xóa'}
               </button>
             </div>
@@ -323,45 +256,22 @@ export default function DivisionsPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-xs text-neutral-500 mb-1">Tên division</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
-              />
+              <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full" />
             </div>
-
-            {/* Searchable Head Agent Dropdown */}
             <div className="relative" ref={searchRef}>
               <label className="block text-xs text-neutral-500 mb-1">Trưởng nhóm</label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value)
-                    if (form.head_agent_id) {
-                      setForm((f) => ({ ...f, head_agent_id: '' }))
-                    }
-                  }}
-                  onFocus={() => {
-                    if (searchTerm.trim() && searchResults.length > 0) setShowDropdown(true)
-                  }}
+                <input type="text" value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); if (form.head_agent_id) setForm((f) => ({ ...f, head_agent_id: '' })) }}
+                  onFocus={() => { if (searchTerm.trim() && searchResults.length > 0) setShowDropdown(true) }}
                   placeholder="Tìm theo tên hoặc mã NV..."
-                  className="h-9 pl-9 pr-8 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full"
-                />
+                  className="h-9 pl-9 pr-8 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full" />
                 {searchTerm && (
-                  <button
-                    onClick={clearAgent}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  <button onClick={clearAgent} className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>
                 )}
               </div>
-
-              {/* Dropdown results */}
               {showDropdown && (
                 <div className="absolute z-20 mt-1 w-full bg-white border border-neutral-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
                   {searchLoading ? (
@@ -370,11 +280,8 @@ export default function DivisionsPage() {
                     <div className="px-3 py-2 text-sm text-neutral-500">Không tìm thấy</div>
                   ) : (
                     searchResults.map((agent) => (
-                      <button
-                        key={agent.id}
-                        onClick={() => selectAgent(agent)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center justify-between"
-                      >
+                      <button key={agent.id} onClick={() => selectAgent(agent)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center justify-between">
                         <span className="text-neutral-900 truncate">{agent.full_name}</span>
                         <span className="text-neutral-500 text-xs ml-2 shrink-0">{agent.staff_id}</span>
                       </button>
@@ -383,23 +290,13 @@ export default function DivisionsPage() {
                 </div>
               )}
             </div>
-
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.is_official}
-                onChange={(e) => setForm((f) => ({ ...f, is_official: e.target.checked }))}
-                className="rounded border-neutral-300"
-              />
+              <input type="checkbox" checked={form.is_official} onChange={(e) => setForm((f) => ({ ...f, is_official: e.target.checked }))} className="rounded border-neutral-300" />
               <span className="text-sm text-neutral-700">Chính thức</span>
             </label>
             <div className="flex items-center gap-2 pt-2">
-              <button onClick={handleSave} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">
-                {editing ? 'Cập nhật' : 'Thêm'}
-              </button>
-              <button onClick={closeModal} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">
-                Hủy
-              </button>
+              <button onClick={handleSave} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">{editing ? 'Cập nhật' : 'Thêm'}</button>
+              <button onClick={closeModal} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
             </div>
           </div>
         </Modal>
@@ -420,28 +317,20 @@ export default function DivisionsPage() {
           onCancel={() => setShowRecomputeConfirm(false)}
           onConfirm={async () => {
             setShowRecomputeConfirm(false)
-            setLoading(true)
-            const { data, error } = await supabase.rpc('recompute_all_divisions', {})
-            setLoading(false)
-            if (error) {
-              show('Lỗi: ' + error.message, 'error')
-            } else {
-              const count = data ?? 0
+            try {
+              const count = await recomputeMut.mutateAsync()
               if (count > 0) {
                 show(`Đã cập nhật division cho ${count} agents`, 'success')
               } else {
                 show('Tất cả division đã đồng bộ, không có thay đổi', 'info')
               }
-              loadDivisions()
+            } catch (e: any) {
+              show('Lỗi: ' + e.message, 'error')
             }
           }}
         >
-          <p className="text-sm text-neutral-700">
-            Thao tác này sẽ tính lại <strong>division</strong> cho <strong>toàn bộ agents</strong> theo business rule (T1 tree → head → division).
-          </p>
-          <p className="text-sm text-neutral-500 mt-2">
-            Thường dùng sau khi import data, đổi head division, hoặc khi nghi ngờ data không đồng bộ.
-          </p>
+          <p className="text-sm text-neutral-700">Thao tác này sẽ tính lại <strong>division</strong> cho <strong>toàn bộ agents</strong> theo business rule (T1 tree → head → division).</p>
+          <p className="text-sm text-neutral-500 mt-2">Thường dùng sau khi import data, đổi head division, hoặc khi nghi ngờ data không đồng bộ.</p>
         </CountdownConfirmModal>
       )}
     </div>

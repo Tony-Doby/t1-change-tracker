@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useAuth } from './hooks/useAuth'
 import Layout from './components/Layout'
 import PageTransition from './components/PageTransition'
+import ErrorBoundary from './components/ErrorBoundary'
 import LoginPage from './pages/LoginPage'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 import DashboardPage from './pages/DashboardPage'
@@ -16,6 +17,7 @@ import TrashPage from './pages/TrashPage'
 import HolidaysPage from './pages/HolidaysPage'
 import RanksPage from './pages/RanksPage'
 import DivisionsPage from './pages/DivisionsPage'
+import ExcelGeneratorPage from './pages/ExcelGeneratorPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuth()
@@ -64,7 +66,8 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <ErrorBoundary>
+        <Routes>
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
         <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
@@ -79,8 +82,10 @@ export default function App() {
         <Route path="/holidays" element={<ProtectedRoute><HolidaysPage /></ProtectedRoute>} />
         <Route path="/ranks" element={<ProtectedRoute><RanksPage /></ProtectedRoute>} />
         <Route path="/divisions" element={<ProtectedRoute><DivisionsPage /></ProtectedRoute>} />
+        <Route path="/excel-generator" element={<ProtectedRoute><ExcelGeneratorPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </ErrorBoundary>
     </BrowserRouter>
   )
 }

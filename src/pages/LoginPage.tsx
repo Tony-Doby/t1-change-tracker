@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 
 export default function LoginPage() {
   const { signIn, isAuthenticated, user } = useAuth()
@@ -114,5 +115,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
-import { supabase } from '../lib/supabase'

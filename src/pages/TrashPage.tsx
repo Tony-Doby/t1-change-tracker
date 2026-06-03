@@ -1,49 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Search, RotateCcw, Trash2, AlertTriangle, Inbox } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import { formatDate } from '../lib/date-utils'
+import { useTrashQuery, useRestoreTrashMutation, usePermanentDeleteTrashMutation } from '../hooks/queries/useTrash'
 import EmptyState from '../components/EmptyState'
-
-interface TrashItem {
-  type: 'agent' | 'request'
-  id: string
-  name: string
-  deletedAt: string
-}
 
 export default function TrashPage() {
   const { show } = useToast()
-  const [items, setItems] = useState<TrashItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: items = [], isLoading } = useTrashQuery()
+  const restoreMut = useRestoreTrashMutation()
+  const deleteMut = usePermanentDeleteTrashMutation()
+
   const [filter, setFilter] = useState<'all' | 'agent' | 'request'>('all')
   const [search, setSearch] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-
-  useEffect(() => {
-    loadItems()
-  }, [])
-
-  async function loadItems() {
-    setLoading(true)
-    const [agentsRes, requestsRes] = await Promise.all([
-      supabase.from('agents').select('id, full_name, staff_id, deleted_at').not('deleted_at', 'is', null),
-      supabase.from('t1_requests').select('id, agent:agent_id(full_name, staff_id), deleted_at').not('deleted_at', 'is', null),
-    ])
-
-    const agents: TrashItem[] = (agentsRes.data ?? []).map((a: any) => ({
-      type: 'agent', id: a.id,
-      name: `${a.full_name} (${a.staff_id})`,
-      deletedAt: a.deleted_at,
-    }))
-    const requests: TrashItem[] = (requestsRes.data ?? []).map((r: any) => ({
-      type: 'request', id: r.id,
-      name: `Request #${r.id.slice(0, 8)} — ${r.agent?.full_name ?? '—'}`,
-      deletedAt: r.deleted_at,
-    }))
-    setItems([...agents, ...requests])
-    setLoading(false)
-  }
 
   const allItems = items.filter((item) => {
     if (filter !== 'all' && item.type !== filter) return false
@@ -51,24 +21,26 @@ export default function TrashPage() {
     return true
   }).sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime())
 
-  const restore = async (item: TrashItem) => {
-    const table = item.type === 'agent' ? 'agents' : 't1_requests'
-    const { error } = await supabase.from(table).update({ deleted_at: null }).eq('id', item.id)
-    if (error) { show('Lỗi khôi phục: ' + error.message, 'error'); return }
-    setItems((prev) => prev.filter((i) => !(i.type === item.type && i.id === item.id)))
-    show('Đã khôi phục', 'success')
+  const restore = async (item: typeof items[0]) => {
+    try {
+      await restoreMut.mutateAsync(item)
+      show('Đã khôi phục', 'success')
+    } catch (e: any) {
+      show('Lỗi khôi phục: ' + e.message, 'error')
+    }
   }
 
-  const permanentDelete = async (item: TrashItem) => {
-    const table = item.type === 'agent' ? 'agents' : 't1_requests'
-    const { error } = await supabase.from(table).delete().eq('id', item.id)
-    if (error) { show('Lỗi xóa: ' + error.message, 'error'); return }
-    setItems((prev) => prev.filter((i) => !(i.type === item.type && i.id === item.id)))
-    setConfirmDelete(null)
-    show('Đã xóa vĩnh viễn', 'warning')
+  const permanentDelete = async (item: typeof items[0]) => {
+    try {
+      await deleteMut.mutateAsync(item)
+      setConfirmDelete(null)
+      show('Đã xóa vĩnh viễn', 'warning')
+    } catch (e: any) {
+      show('Lỗi xóa: ' + e.message, 'error')
+    }
   }
 
-  if (loading) {
+  if (isLoading) {
     return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
   }
 

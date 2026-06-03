@@ -19,7 +19,9 @@ export interface Agent {
   rank_name: string | null
   rank_id: string | null
   contract_signing_date: string
+  /** Source of truth for T1. Frontend reads/writes this field only. `referrer_id` is synced via DB trigger. */
   current_t1_id: string | null
+  /** Legacy T1 field — kept for backward compatibility. Do NOT write from frontend. Synced via trigger with `current_t1_id`. */
   referrer_id: string | null
   introducing_agent_id: string | null
   division_id: string | null
@@ -293,4 +295,30 @@ export interface AgentDeactivationSnapshot {
   snapshot_data: Record<string, unknown>
   restored_at: string | null
   restored_by: string | null
+}
+
+// FEAT-019: Mail Merge Generator
+
+export interface ExcelTemplate {
+  id: string
+  name: string
+  description: string | null
+  storage_path: string
+  placeholders: string[]
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ExcelGenerationLog {
+  id: string
+  template_id: string
+  original_file_name: string
+  original_storage_path: string
+  generated_file_name: string
+  generated_storage_path: string
+  row_count: number
+  matched_placeholders: string[]
+  created_by: string | null
+  created_at: string
 }

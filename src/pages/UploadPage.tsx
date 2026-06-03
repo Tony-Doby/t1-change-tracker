@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 
 const REQUIRED_HEADERS = ['staff_id', 'full_name', 'email', 'phone', 'rank_name', 'contract_signing_date', 'current_t1_id', 'introducing_agent_id', 'status']
-const OPTIONAL_HEADERS = ['agent_code', 'referrer_id', 'rank_id', 'register_date', 'agent_start_date', 'end_date', 'deactivation_reason', 'business_email', 'id_card_number', 'date_of_birth', 'id_card_issue_date', 'id_card_issue_place', 'permanent_address', 'place_of_origin', 'gender', 'tax_code', 'bank_name', 'bank_account_number', 'bank_branch_name', 'active_area', 'real_estate_experience', 'broker_licence_number', 'broker_licence_expiry_date', 'success_seminar_date', 'source']
+const OPTIONAL_HEADERS = ['rank_id', 'register_date', 'agent_start_date', 'end_date', 'deactivation_reason', 'business_email', 'id_card_number', 'date_of_birth', 'id_card_issue_date', 'id_card_issue_place', 'permanent_address', 'place_of_origin', 'gender', 'tax_code', 'bank_name', 'bank_account_number', 'bank_branch_name', 'active_area', 'real_estate_experience', 'broker_licence_number', 'broker_licence_expiry_date', 'success_seminar_date', 'source']
 const ALL_HEADERS = [...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]
 
 interface ParsedRow {
@@ -159,12 +159,6 @@ export default function UploadPage() {
           base[h] = String(d[h]).trim()
         }
       })
-      // Sync referrer_id with current_t1_id
-      if (base.referrer_id) {
-        base.current_t1_id = base.referrer_id
-      } else if (base.current_t1_id) {
-        base.referrer_id = base.current_t1_id
-      }
       // If rank_id is provided but rank_name is not, we can't resolve it here easily
       // The DB trigger or app will handle it
       return base

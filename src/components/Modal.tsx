@@ -9,9 +9,17 @@ interface ModalProps {
   title?: string
   maxWidth?: string
   showClose?: boolean
+  size?: 'sm' | 'md' | 'lg' | 'xl'
 }
 
-export default function Modal({ children, onClose, title, maxWidth = 'max-w-lg', showClose = true }: ModalProps) {
+const sizeMap: Record<string, string> = {
+  sm: 'max-w-sm',
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-3xl',
+}
+
+export default function Modal({ children, onClose, title, maxWidth, showClose = true, size = 'md' }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
   useFocusTrap(ref, onClose)
 
@@ -36,7 +44,7 @@ export default function Modal({ children, onClose, title, maxWidth = 'max-w-lg',
       />
       <div
         ref={ref}
-        className={`relative bg-white rounded-xl shadow-modal w-full ${maxWidth} max-h-[92vh] overflow-y-auto animate-fade-in-scale`}
+        className={`relative bg-white rounded-xl shadow-modal w-full ${maxWidth ?? sizeMap[size]} max-h-[92vh] overflow-y-auto animate-fade-in-scale`}
         role="dialog"
         aria-modal="true"
       >
