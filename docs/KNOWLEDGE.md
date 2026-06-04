@@ -153,6 +153,34 @@
 
 ---
 
+## 4. Excel Generator Constraints (FEAT-019)
+
+### 4.1 Expression parser chỉ chạy trên dòng template (`template_header_row`)
+- App chỉ evaluate expression `(R.num)`, `(dd/mm/yyyy)`... trên **đúng 1 dòng** được chỉ định là `template_header_row`.
+- Các dòng trước (tiêu đề) và sau (chữ ký) trong file export template được giữ nguyên, **không evaluate expression**.
+- Nếu user đặt expression ở dòng data hoặc dòng tiêu đề → expression hiển thị nguyên xi.
+
+### 4.2 Expression-only cells tự động skip mapping (BUG-015 fix)
+- Cell chỉ chứa expression thuần túy `(R.num)`, `(dd/mm/yyyy)` → app tự động **skip mapping** cho cell đó, expression luôn evaluate đúng.
+- Nếu cell kết hợp text + expression (ví dụ: `{{Họ tên}} - (ddmmyy)(R.num)`) → vẫn evaluate expression sau khi replace inline field refs.
+- **Lưu ý:** `isExpressionOnly()` dùng regex `/^\([^)]+\)$/`, nếu cell có space xung quanh vẫn match nhờ `.trim()`.
+
+### 4.3 Inline Field Reference `{{Field}}` (FEAT-020)
+- Syntax `{{Tên Field}}` trong cell template để kết hợp data động + expression + text cố định.
+- `replaceFieldReferences()` chạy sau expression evaluation, áp dụng mapping + uppercase nếu có.
+- Ví dụ: `{{Họ và tên}} - (ddmmyy)(R.num)` → `Trần Lê Toàn Hữu - 03062607`
+
+### 4.4 Chọn ngày generate (FEAT-020)
+- `baseDate` mặc định là ngày hiện tại, user có thể chọn ngày khác qua input date picker trong GeneratePanel.
+- Expression `(dd)`, `(mm)`, `(yy)`... sẽ dùng ngày đã chọn.
+
+### 4.5 `FieldMappingValue` định nghĩa ở 2 nơi — phải sync
+- `src/types/index.ts` và `src/lib/excel-generator.ts` đều định nghĩa `FieldMappingValue`.
+- Nếu thêm field (ví dụ `uppercase?: boolean`) → **phải sửa cả 2 file**, không chỉ 1.
+- **Gợi ý refactor sau:** Export từ `types/index.ts`, bỏ định nghĩa cục bộ trong `excel-generator.ts`.
+
+---
+
 ## 6. Known Limitations (đang theo dõi)
 
 | Vấn đề | Trạng thái | Plan xử lý |
@@ -163,3 +191,6 @@
 | TanStack Query chưa được dùng | Chưa làm | `PLAN-feature-dev.md` FEAT-004 |
 | Search presets phức tạp bị ẩn | Chưa làm | `PLAN-feature-dev.md` FEAT-005 |
 | UI-DESIGN.md chưa update hết | Đang theo dõi | Cập nhật dần khi redesign |
+| ~~Excel Generator: Expression parser bị override khi map trùng tên~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-bug-fixes.md` BUG-015 |
+| ~~Excel Generator: Chưa hỗ trợ inline field reference `{{Field}}`~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-feature-dev.md` FEAT-020 |
+| ~~Excel Generator: Chưa hỗ trợ edit template đã lưu~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-feature-dev.md` FEAT-021 |

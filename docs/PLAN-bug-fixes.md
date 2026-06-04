@@ -64,6 +64,8 @@
 | 012 | EmailTemplatesPage: Preview modal bị đẩy lên, thiếu nút X, text không xuống dòng | fixed | 2026-05-29 | 2026-05-29 |
 | 013 | ComposeTemplateModal hiển thị raw HTML tags thay vì render đẹp, copy ra mã | fixed | 2026-05-29 | 2026-05-29 |
 | 014 | Deactivation: `temp_t1_id` bị set = agent bị deactivate thay vì T2 của M1 | fixed | 2026-05-30 | 2026-05-30 |
+| 015 | Expression parser không evaluate khi cell bị map trùng tên / thiếu inline field reference | fixed | 2026-06-03 | 2026-06-04 |
+| 016 | Dashboard tự reload khi chuyển tab trong app và chuyển browser tab | fixed | 2026-06-04 | 2026-06-04 |
 
 ---
 
@@ -538,7 +540,7 @@ Không cần.
 ## BUG-012: EmailTemplatesPage — Preview modal bị đẩy lên, thiếu nút X, text không xuống dòng
 
 - **Phát hiện**: 2026-05-29
-- **Status**: `planned`
+- **Status**: `fixed`
 - **Severity**: `medium`
 
 ### 1. Mô tả bug
@@ -628,6 +630,101 @@ Không cần.
 
 ---
 
+## BUG-015: Expression parser không evaluate khi cell bị map trùng tên / thiếu inline field reference
+
+- **Phát hiện**: 2026-06-03
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+User viết expression `(R.num)`, `(dd/mm/yyyy)` trong cell export template nhưng sau generate vẫn hiển thị nguyên xi `(R.num)`, `(mm)`, `(dd/mm/yyyy)`. Ngoài ra, user không thể kết hợp data động + expression + text cố định trong cùng 1 cell (ví dụ: `Trần Lê Toàn Hữu - 03062607`).
+
+### 2. Root Cause
+**Nguyên nhân A — Cấu trúc template bị hiểu sai:**
+App chỉ evaluate expression trên đúng **1 dòng** `template_header_row`. Nếu user đặt expression ở dòng data của file template (không phải dòng template/header), expression không được xử lý.
+
+**Nguyên nhân B — Map trùng tên với expression:**
+Nếu cell trong dòng template là `(R.num)`, app detect field tên là `(R.num)`. Nếu user vô tình map field `(R.num)` trong mapping panel → `mapping['(R.num)']` tồn tại → giá trị bị override bởi map (thường là rỗng), expression bị "nuốt".
+
+**Nguyên nhân C — Thiếu inline field reference:**
+Thiết kế hiện tại chỉ hỗ trợ 1 cell = field name HOẶC expression HOẶC text cố định. Không có cơ chế `{{Field}}` để nhúng data vào giữa text/expression.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+**Fix BUG-015 (không cần thêm feature mới):**
+- Sửa `generateWorkbook` và `buildPreview` để evaluate expression **trước** khi apply mapping, và đảm bảo mapping chỉ override khi field thực sự là tên field (không phải expression thuần túy).
+- Thêm logic phát hiện: nếu cell chỉ chứa expression `( ... )` và không có tên field có nghĩa → tự động skip mapping, luôn evaluate expression.
+
+**Lưu ý:** Việc hỗ trợ `{{Field}}` inline (kết hợp data + expression) là **feature mới** (FEAT-020), không phải bug fix.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/lib/excel-generator.ts` | Đảm bảo expression evaluate trước mapping; skip mapping nếu cell chỉ chứa expression |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Tạo template với cell `(R.num)` ở dòng template, KHÔNG map field `(R.num)` → verify ra `01`, `02`...
+2. Tạo template với cell `(R.num)`, CÓ map field `(R.num)` → verify vẫn ra `01`, `02`... (expression không bị override)
+3. Tạo template với cell `(dd/mm/yyyy)` → verify ra ngày đúng định dạng
+
+### 8. Notes
+- Fix này chỉ giải quyết expression "bị nuốt". Để kết hợp data + expression trong 1 cell → cần FEAT-020.
+
+---
+
+---
+
+## BUG-016: Dashboard tự reload khi chuyển tab trong app và chuyển browser tab
+
+- **Phát hiện**: 2026-06-04
+- **Status**: `fixed`
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+**A. Chuyển browser tab rồi quay lại:** Dashboard tự động refetch toàn bộ queries, gây nhấp nháy / hiện skeleton lại.
+**B. Chuyển page trong app rồi quay lại Dashboard:** Cũng bị reload / refetch data ngay cả khi chuyển nhanh.
+
+### 2. Root Cause
+- TanStack Query mặc định `refetchOnWindowFocus: true` → mỗi lần window regain focus (browser tab switch) trigger refetch các active queries.
+- Các dashboard query hooks (`useDashboardStats`, `useStatusCounts`, `useB2Requests`, `useM1Transitions`) chỉ có `staleTime: 2 phút` — quá ngắn, dễ bị refetch lại.
+- `gcTime` mặc định 5 phút → query inactive bị garbage collect nhanh khi rồi page khác.
+- `PageTransition` có `animate-fade-in` góp phần tạo cảm giác UI "reload".
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+1. **QueryClient default options**: thêm `refetchOnWindowFocus: false` và tăng `gcTime` lên 10 phút.
+2. **Dashboard query hooks**: đồng bộ `staleTime` lên 5 phút cho tất cả dashboard queries.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/main.tsx` | QueryClient: `refetchOnWindowFocus: false`, `gcTime: 1000 * 60 * 10` |
+| `src/hooks/queries/useDashboardStats.ts` | `staleTime: 1000 * 60 * 5` |
+| `src/hooks/queries/useStatusCounts.ts` | `staleTime: 1000 * 60 * 5` |
+| `src/hooks/queries/useB2Requests.ts` | `staleTime: 1000 * 60 * 5` |
+| `src/hooks/queries/useM1Transitions.ts` | `staleTime: 1000 * 60 * 5` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Chuyển browser tab rồi quay lại app → quan sát DevTools Network, không thấy request mới (nếu trong staleTime).
+2. Chuyển page trong app (Dashboard → Agents → Dashboard ngay lập tức) → Dashboard hiển thị data ngay, không skeleton.
+3. F5 hoặc sau > 5 phút inactive → vẫn refetch bình thường.
+
+### 8. Notes
+- Tắt `refetchOnWindowFocus` là trade-off: data có thể stale hơn so với DB thực tế. Nhưng dashboard stats không cần real-time, user có thể F5 nếu cần.
+- `gcTime` 10 phút đủ để user browse qua lại giữa các page mà không mất cache.
+
+---
+
 ## Hướng dẫn thêm bug mới
 
 Khi phát hiện bug mới:
@@ -706,7 +803,7 @@ Không cần.
 ## BUG-009: AgentsPage không hiển thị Division — Schema gap `agents.division_id` INTEGER vs UUID
 
 - **Phát hiện**: 2026-05-29
-- **Status**: `planned`
+- **Status**: `fixed`
 - **Severity**: `high`
 
 ### 1. Mô tả bug

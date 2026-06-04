@@ -6,8 +6,13 @@ CREATE TABLE IF NOT EXISTS public.excel_templates (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   name text NOT NULL,
   description text,
-  storage_path text NOT NULL,
-  placeholders jsonb DEFAULT '[]',
+  storage_path text NOT NULL,                 -- file export template
+  import_template_path text,                  -- file import mẫu
+  template_header_row integer NOT NULL DEFAULT 0, -- row chứa tên trường trong export template (0-based)
+  import_header_row integer NOT NULL DEFAULT 0,   -- row chứa tên trường trong import mẫu (0-based)
+  fields jsonb DEFAULT '[]',                  -- tên trường từ export template header row
+  import_headers jsonb DEFAULT '[]',          -- headers đã detect từ file import mẫu
+  column_mapping jsonb DEFAULT '{}',          -- mapping: { fieldName -> {type, value} }
   created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
@@ -37,7 +42,7 @@ CREATE POLICY "Allow admin to delete excel_templates"
 -- Bảng lịch sử generate
 CREATE TABLE IF NOT EXISTS public.excel_generation_logs (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  template_id uuid NOT NULL REFERENCES public.excel_templates(id) ON DELETE SET NULL,
+  template_id uuid REFERENCES public.excel_templates(id) ON DELETE SET NULL,
   original_file_name text NOT NULL,
   original_storage_path text NOT NULL,
   generated_file_name text NOT NULL,

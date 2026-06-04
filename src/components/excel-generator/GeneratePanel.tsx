@@ -1,5 +1,14 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
-import { UploadCloud, X, FileSpreadsheet, CheckCircle, AlertTriangle, Loader2, Download, FileCheck } from 'lucide-react'
+import {
+  UploadCloud,
+  X,
+  FileSpreadsheet,
+  CheckCircle,
+  AlertTriangle,
+  Loader2,
+  Download,
+  Settings2,
+} from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../Toast'
 import { useAuth } from '../../hooks/useAuth'
@@ -10,7 +19,7 @@ import {
   generateWorkbook,
   formatGenerateFileName,
 } from '../../lib/excel-generator'
-import type { ExcelTemplate } from '../../types'
+import type { ExcelTemplate, FieldMappingValue } from '../../types'
 import type * as XLSXType from 'xlsx'
 
 interface Props {
@@ -22,20 +31,28 @@ export default function GeneratePanel({ templates }: Props) {
   const { user } = useAuth()
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [dataFile, setDataFile] = useState<File | null>(null)
+  const [dataHeaderRow, setDataHeaderRow] = useState(0)
   const [isDragOver, setIsDragOver] = useState(false)
   const [parsing, setParsing] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [mapping, setMapping] = useState<Record<string, FieldMappingValue>>({})
+  const [showMappingPanel, setShowMappingPanel] = useState(false)
   const [preview, setPreview] = useState<{
     headers: string[]
     rows: Record<string, string | number | null>[]
-    matched: { placeholder: string; key: string; matched: boolean }[]
+    matched: { field: string; type: 'column' | 'fixed'; value: string; matched: boolean }[]
   } | null>(null)
   const [dataRows, setDataRows] = useState<Record<string, string>[]>([])
-  const [, setDataHeaders] = useState<string[]>([])
+  const [dataHeaders, setDataHeaders] = useState<string[]>([])
   const [templateWorkbook, setTemplateWorkbook] = useState<XLSXType.WorkBook | null>(null)
+  const [downloadingSample, setDownloadingSample] = useState(false)
+  const [generateDate, setGenerateDate] = useState<string>(new Date().toISOString().split('T')[0])
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const selectedTemplate = useMemo(() => templates.find((t) => t.id === selectedTemplateId), [templates, selectedTemplateId])
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === selectedTemplateId),
+    [templates, selectedTemplateId]
+  )
 
   const resetData = () => {
     setDataFile(null)
@@ -43,6 +60,8 @@ export default function GeneratePanel({ templates }: Props) {
     setDataRows([])
     setDataHeaders([])
     setTemplateWorkbook(null)
+    setMapping({})
+    setShowMappingPanel(false)
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -72,36 +91,75 @@ export default function GeneratePanel({ templates }: Props) {
     setParsing(false)
   }
 
-  const parseDataFile = useCallback(async (file: File) => {
-    if (!templateWorkbook) {
-      show('Vui lòng chọn template trước', 'warning')
-      return
-    }
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls') && !file.name.endsWith('.csv')) {
-      show('Chỉ hỗ trợ .xlsx, .xls, .csv', 'error')
-      return
-    }
+  const parseDataFile = useCallback(
+    async (file: File) => {
+      if (!templateWorkbook || !selectedTemplate) {
+        show('Vui lòng chọn template trước', 'warning')
+        return
+      }
+      if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls') && !file.name.endsWith('.csv')) {
+        show('Chỉ hỗ trợ .xlsx, .xls, .csv', 'error')
+        return
+      }
 
-    setDataFile(file)
-    setParsing(true)
+      setDataFile(file)
+      setParsing(true)
+      setPreview(null)
+      setShowMappingPanel(false)
 
-    try {
-      const arrayBuffer = await file.arrayBuffer()
-      const XLSX = await loadXlsx()
-      const wb = XLSX.read(arrayBuffer, { type: 'array' })
-      const { headers, rows } = readDataFile(wb, XLSX)
-      setDataHeaders(headers)
-      setDataRows(rows)
+      try {
+        const arrayBuffer = await file.arrayBuffer()
+        const XLSX = await loadXlsx()
+        const wb = XLSX.read(arrayBuffer, { type: 'array' })
+        const { headers, rows } = readDataFile(wb, dataHeaderRow, XLSX)
+        setDataHeaders(headers)
+        setDataRows(rows)
 
-      const previewData = buildPreview(templateWorkbook, rows, headers, XLSX, 10)
-      setPreview(previewData)
-      show(`Đã đọc ${rows.length} dòng data`, 'success')
-    } catch (e: any) {
-      show('Lỗi đọc file data: ' + e.message, 'error')
-    } finally {
-      setParsing(false)
-    }
-  }, [show, templateWorkbook])
+        const savedMapping = selectedTemplate.column_mapping ?? {}
+        const headerSet = new Set(headers.map((h) => h.toLowerCase().trim()))
+        const savedHeaders = selectedTemplate.import_headers ?? []
+        const allSavedInData = savedHeaders.every((h) => headerSet.has(h.toLowerCase().trim()))
+        const hasSavedMapping = Object.keys(savedMapping).length > 0
+
+        if (hasSavedMapping && allSavedInData) {
+          // Auto-adapt saved mapping to actual data column names
+          const adaptedMapping: Record<string, FieldMappingValue> = {}
+          for (const [field, mapVal] of Object.entries(savedMapping)) {
+            if (mapVal.type === 'fixed') {
+              adaptedMapping[field] = mapVal
+            } else {
+              const exactMatch = headers.find((h) => h === mapVal.value)
+              const caseMatch = headers.find((h) => h.toLowerCase().trim() === mapVal.value.toLowerCase().trim())
+              adaptedMapping[field] = { type: 'column', value: exactMatch || caseMatch || mapVal.value }
+            }
+          }
+          setMapping(adaptedMapping)
+          const previewData = buildPreview(templateWorkbook, rows, adaptedMapping, selectedTemplate.template_header_row, XLSX, 10, new Date(generateDate))
+          setPreview(previewData)
+          show(`Đã đọc ${rows.length} dòng data. Mapping đã áp dụng tự động.`, 'success')
+        } else {
+          setShowMappingPanel(true)
+          // Suggest mapping based on exact/case-insensitive match
+          const suggested: Record<string, FieldMappingValue> = {}
+          const lowerHeaders = headers.map((h) => h.toLowerCase().trim())
+          for (const field of selectedTemplate.fields ?? []) {
+            const lowerF = field.toLowerCase().trim()
+            const idx = lowerHeaders.indexOf(lowerF)
+            if (idx >= 0) {
+              suggested[field] = { type: 'column', value: headers[idx] }
+            }
+          }
+          setMapping(suggested)
+          show(`Đã đọc ${rows.length} dòng data. Vui lòng kiểm tra mapping.`, 'success')
+        }
+      } catch (e: any) {
+        show('Lỗi đọc file data: ' + e.message, 'error')
+      } finally {
+        setParsing(false)
+      }
+    },
+    [show, templateWorkbook, selectedTemplate, dataHeaderRow]
+  )
 
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true) }, [])
   const onDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(false) }, [])
@@ -115,13 +173,35 @@ export default function GeneratePanel({ templates }: Props) {
     if (f) parseDataFile(f)
   }
 
+  const handleApplyMapping = async () => {
+    if (!templateWorkbook || dataRows.length === 0 || !selectedTemplate) return
+    setParsing(true)
+    try {
+      const XLSX = await loadXlsx()
+      const previewData = buildPreview(templateWorkbook, dataRows, mapping, selectedTemplate.template_header_row, XLSX, 10, new Date(generateDate))
+      setPreview(previewData)
+      setShowMappingPanel(false)
+    } catch (e: any) {
+      show('Lỗi build preview: ' + e.message, 'error')
+    } finally {
+      setParsing(false)
+    }
+  }
+
   const handleGenerate = async () => {
     if (!templateWorkbook || !selectedTemplate || dataRows.length === 0) return
     setGenerating(true)
 
     try {
       const XLSX = await loadXlsx()
-      const newWb = generateWorkbook(templateWorkbook, dataRows, XLSX)
+      const newWb = generateWorkbook(
+        templateWorkbook,
+        dataRows,
+        mapping,
+        selectedTemplate.template_header_row,
+        XLSX,
+        new Date(generateDate)
+      )
       const generatedBlob = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' })
       const generatedFileName = formatGenerateFileName(selectedTemplate.name)
 
@@ -129,7 +209,9 @@ export default function GeneratePanel({ templates }: Props) {
       const originalPath = `originals/${crypto.randomUUID()}.xlsx`
       const { error: origErr } = await supabase.storage
         .from('excel-generations')
-        .upload(originalPath, dataFile!, { contentType: dataFile!.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+        .upload(originalPath, dataFile!, {
+          contentType: dataFile!.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        })
 
       if (origErr) throw origErr
 
@@ -137,7 +219,11 @@ export default function GeneratePanel({ templates }: Props) {
       const generatedPath = `generated/${crypto.randomUUID()}.xlsx`
       const { error: genErr } = await supabase.storage
         .from('excel-generations')
-        .upload(generatedPath, new Blob([generatedBlob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), { contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+        .upload(
+          generatedPath,
+          new Blob([generatedBlob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+          { contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+        )
 
       if (genErr) throw genErr
 
@@ -149,14 +235,16 @@ export default function GeneratePanel({ templates }: Props) {
         generated_file_name: generatedFileName,
         generated_storage_path: generatedPath,
         row_count: dataRows.length,
-        matched_placeholders: preview?.matched.filter((m) => m.matched).map((m) => m.key) ?? [],
+        matched_placeholders: preview?.matched.filter((m) => m.matched).map((m) => m.field) ?? [],
         created_by: user?.id,
       })
 
       if (logErr) throw logErr
 
       // Auto download
-      const url = URL.createObjectURL(new Blob([generatedBlob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+      const url = URL.createObjectURL(
+        new Blob([generatedBlob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      )
       const a = document.createElement('a')
       a.href = url
       a.download = generatedFileName
@@ -173,6 +261,33 @@ export default function GeneratePanel({ templates }: Props) {
     } finally {
       setGenerating(false)
     }
+  }
+
+  const handleDownloadSample = async () => {
+    if (!selectedTemplate?.import_template_path) {
+      show('Template này không có file import mẫu', 'warning')
+      return
+    }
+    setDownloadingSample(true)
+    const { data, error } = await supabase.storage
+      .from('excel-templates')
+      .download(selectedTemplate.import_template_path)
+
+    if (error || !data) {
+      show('Lỗi tải file mẫu: ' + (error?.message || 'Unknown'), 'error')
+      setDownloadingSample(false)
+      return
+    }
+
+    const url = URL.createObjectURL(data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${selectedTemplate.name}_import_mau.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setDownloadingSample(false)
   }
 
   const allMatched = preview ? preview.matched.every((m) => m.matched) : false
@@ -192,45 +307,94 @@ export default function GeneratePanel({ templates }: Props) {
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
-        {selectedTemplate && selectedTemplate.placeholders && selectedTemplate.placeholders.length > 0 && (
-          <p className="text-xs text-neutral-500 mt-1.5">
-            Placeholder: {selectedTemplate.placeholders.map((p) => `{{${p}}}`).join(', ')}
-          </p>
+        {selectedTemplate && (
+          <div className="mt-2 space-y-1">
+            {selectedTemplate.fields && selectedTemplate.fields.length > 0 && (
+              <p className="text-xs text-neutral-500">
+                Trường: {selectedTemplate.fields.join(', ')}
+              </p>
+            )}
+            {Object.keys(selectedTemplate.column_mapping ?? {}).length > 0 && (
+              <p className="text-xs text-neutral-500">
+                Mapping: {Object.entries(selectedTemplate.column_mapping)
+                  .map(([k, v]) => `${k}→${v.type === 'column' ? v.value : `"${v.value}"`}`)
+                  .join(', ')}
+              </p>
+            )}
+            {selectedTemplate.import_template_path && (
+              <button
+                onClick={handleDownloadSample}
+                disabled={downloadingSample}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                {downloadingSample ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                Tải file import mẫu
+              </button>
+            )}
+          </div>
         )}
       </div>
 
+      {/* Generate date picker */}
+      {selectedTemplateId && (
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-neutral-700">Ngày áp dụng cho expression:</label>
+          <input
+            type="date"
+            value={generateDate}
+            onChange={(e) => setGenerateDate(e.target.value)}
+            className="h-9 px-3 border border-neutral-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+      )}
+
       {/* Data file upload */}
       {selectedTemplateId && (
-        <div
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          onClick={() => inputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer ${
-            isDragOver ? 'border-primary bg-primary-light/20' : 'border-neutral-300 bg-white hover:border-neutral-400'
-          }`}
-        >
-          <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChange} />
-          {dataFile ? (
-            <div className="flex flex-col items-center gap-2">
-              <FileSpreadsheet className="w-10 h-10 text-primary" />
-              <p className="text-neutral-900 font-medium text-sm">{dataFile.name}</p>
-              <p className="text-neutral-500 text-xs">{dataRows.length} dòng data</p>
-              <button
-                onClick={(e) => { e.stopPropagation(); resetData() }}
-                className="text-xs text-danger hover:underline flex items-center gap-1 mt-1"
-              >
-                <X className="w-3 h-3" /> Chọn file khác
-              </button>
+        <>
+          <div
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            onClick={() => inputRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer ${
+              isDragOver ? 'border-primary bg-primary-light/20' : 'border-neutral-300 bg-white hover:border-neutral-400'
+            }`}
+          >
+            <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChange} />
+            {dataFile ? (
+              <div className="flex flex-col items-center gap-2">
+                <FileSpreadsheet className="w-10 h-10 text-primary" />
+                <p className="text-neutral-900 font-medium text-sm">{dataFile.name}</p>
+                <p className="text-neutral-500 text-xs">{dataRows.length} dòng data</p>
+                <button
+                  onClick={(e) => { e.stopPropagation(); resetData() }}
+                  className="text-xs text-danger hover:underline flex items-center gap-1 mt-1"
+                >
+                  <X className="w-3 h-3" /> Chọn file khác
+                </button>
+              </div>
+            ) : (
+              <>
+                <UploadCloud className="w-10 h-10 text-neutral-400 mx-auto mb-3" />
+                <p className="text-neutral-700 font-medium text-sm">Kéo thả file data vào đây</p>
+                <p className="text-neutral-500 text-xs mt-1">hoặc nhấp để chọn file .xlsx / .csv</p>
+              </>
+            )}
+          </div>
+
+          {dataFile && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-neutral-600">Row chứa tên trường trong file data (tính từ 1):</label>
+              <input
+                type="number"
+                min={1}
+                value={dataHeaderRow + 1}
+                onChange={(e) => setDataHeaderRow(Math.max(0, parseInt(e.target.value || '1') - 1))}
+                className="w-16 h-7 px-1 border border-neutral-300 rounded text-sm text-center"
+              />
             </div>
-          ) : (
-            <>
-              <UploadCloud className="w-10 h-10 text-neutral-400 mx-auto mb-3" />
-              <p className="text-neutral-700 font-medium text-sm">Kéo thả file data vào đây</p>
-              <p className="text-neutral-500 text-xs mt-1">hoặc nhấp để chọn file .xlsx / .csv</p>
-            </>
           )}
-        </div>
+        </>
       )}
 
       {parsing && (
@@ -240,29 +404,125 @@ export default function GeneratePanel({ templates }: Props) {
         </div>
       )}
 
+      {/* Mapping Panel (manual adjust) */}
+      {showMappingPanel && !parsing && selectedTemplate && (
+        <div className="bg-white rounded-lg shadow-card p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Settings2 className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold text-neutral-900">Mapping dữ liệu</h3>
+          </div>
+          <p className="text-xs text-neutral-500">
+            File data có cột khác với mẫu. Vui lòng chọn cột tương ứng hoặc nhập giá trị cố định.
+          </p>
+
+          <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+            {(selectedTemplate.fields ?? []).map((field) => {
+              const current = mapping[field] || { type: 'column' as const, value: '' }
+              return (
+                <div key={field} className="flex items-center gap-2 py-2 px-3 rounded-md bg-neutral-50 border border-neutral-100">
+                  <span className="text-sm font-medium text-primary whitespace-nowrap min-w-[100px] truncate" title={field}>
+                    {field}
+                  </span>
+                  <span className="text-neutral-400 text-sm">→</span>
+                  <select
+                    value={current.type}
+                    onChange={(e) =>
+                      setMapping((prev) => ({
+                        ...prev,
+                        [field]: { type: e.target.value as 'column' | 'fixed', value: e.target.value === 'fixed' ? '' : (prev[field]?.value || ''), uppercase: prev[field]?.uppercase },
+                      }))
+                    }
+                    className="h-8 px-2 border border-neutral-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 w-[100px]"
+                  >
+                    <option value="column">Cột data</option>
+                    <option value="fixed">Cố định</option>
+                  </select>
+                  {current.type === 'column' ? (
+                    <select
+                      value={current.value}
+                      onChange={(e) => setMapping((prev) => ({ ...prev, [field]: { ...(prev[field] || { type: 'column' }), type: 'column', value: e.target.value } }))}
+                      className="flex-1 h-8 px-2 border border-neutral-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="">-- Chọn cột --</option>
+                      {dataHeaders.map((h) => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={current.value}
+                      onChange={(e) => setMapping((prev) => ({ ...prev, [field]: { ...(prev[field] || { type: 'fixed' }), type: 'fixed', value: e.target.value } }))}
+                      placeholder="Nhập giá trị..."
+                      className="flex-1 h-8 px-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  )}
+                  <label className="flex items-center gap-1 text-xs text-neutral-600 whitespace-nowrap cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={current.uppercase || false}
+                      onChange={(e) => setMapping((prev) => ({ ...prev, [field]: { ...(prev[field] || { type: current.type, value: current.value }), uppercase: e.target.checked } }))}
+                      className="w-3.5 h-3.5 rounded border-neutral-300 text-primary focus:ring-primary"
+                    />
+                    VIẾT HOA
+                  </label>
+                  {current.value ? (
+                    <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => { setShowMappingPanel(false); setMapping({}); }}
+              className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50"
+            >
+              Làm lại
+            </button>
+            <button
+              onClick={handleApplyMapping}
+              disabled={parsing}
+              className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2"
+            >
+              {parsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              {parsing ? 'Đang xử lý...' : 'Xác nhận mapping'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Match status */}
       {preview && !parsing && (
         <div className="bg-white rounded-lg shadow-card p-4 space-y-3">
           <h3 className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
-            <FileCheck className="w-4 h-4 text-primary" />
-            Kiểm tra placeholder
+            <CheckCircle className="w-4 h-4 text-primary" />
+            Kiểm tra mapping
           </h3>
           <div className="flex flex-wrap gap-2">
             {preview.matched.map((m) => (
               <span
-                key={m.key}
+                key={m.field}
                 className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                   m.matched ? 'bg-success-light text-success' : 'bg-warning-light text-warning'
                 }`}
               >
                 {m.matched ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                {m.placeholder}
+                {m.field}
+                {m.matched && (
+                  <span className="opacity-75">
+                    → {m.type === 'column' ? m.value : `"${m.value}"`}
+                  </span>
+                )}
               </span>
             ))}
           </div>
           {!allMatched && (
             <p className="text-xs text-warning">
-              Một số placeholder không khớp với cột trong file data. Các giá trị không khớp sẽ giữ nguyên placeholder.
+              Một số trường chưa được map. Các trường chưa map sẽ giữ nguyên giá trị trong template.
             </p>
           )}
         </div>
@@ -273,6 +533,12 @@ export default function GeneratePanel({ templates }: Props) {
         <div className="bg-white rounded-lg shadow-card overflow-hidden">
           <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-neutral-900">Preview ({preview.rows.length} dòng đầu)</h3>
+            <button
+              onClick={() => setShowMappingPanel(true)}
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+            >
+              <Settings2 className="w-3 h-3" /> Chỉnh sửa mapping
+            </button>
           </div>
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
             <table className="w-full text-xs">

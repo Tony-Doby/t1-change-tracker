@@ -299,12 +299,23 @@ export interface AgentDeactivationSnapshot {
 
 // FEAT-019: Mail Merge Generator
 
+export interface FieldMappingValue {
+  type: 'column' | 'fixed'
+  value: string
+  uppercase?: boolean
+}
+
 export interface ExcelTemplate {
   id: string
   name: string
   description: string | null
-  storage_path: string
-  placeholders: string[]
+  storage_path: string                 // file export template
+  import_template_path: string | null  // file import mẫu
+  template_header_row: number          // row chứa tên trường trong export template (0-based)
+  import_header_row: number            // row chứa tên trường trong import mẫu (0-based)
+  fields: string[]                     // tên trường từ export template header row
+  import_headers: string[]             // headers từ import mẫu
+  column_mapping: Record<string, FieldMappingValue> // { fieldName -> {type, value} }
   created_by: string | null
   created_at: string
   updated_at: string

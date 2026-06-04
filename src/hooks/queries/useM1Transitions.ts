@@ -59,6 +59,6 @@ export function useM1TransitionsQuery() {
       })
       return mapped
     },
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
   })
 }

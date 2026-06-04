@@ -5,6 +5,79 @@
 
 ---
 
+## 2026-06-04
+
+### 36. BUG-016: Fix Dashboard tự reload khi chuyển tab
+
+**Bug:**
+- Chuyển browser tab rồi quay lại app → Dashboard refetch toàn bộ queries, gây nhấp nháy / skeleton.
+- Chuyển page trong app (Dashboard → Agents → Dashboard) → cũng bị refetch lại.
+
+**Fix:**
+- `main.tsx`: QueryClient thêm `refetchOnWindowFocus: false` và `gcTime: 10 phút`.
+- Dashboard query hooks (`useDashboardStats`, `useStatusCounts`, `useB2Requests`, `useM1Transitions`): tăng `staleTime` từ 2 phút lên 5 phút.
+
+**Files sửa:**
+- `webapp/src/main.tsx`
+- `webapp/src/hooks/queries/useDashboardStats.ts`
+- `webapp/src/hooks/queries/useStatusCounts.ts`
+- `webapp/src/hooks/queries/useB2Requests.ts`
+- `webapp/src/hooks/queries/useM1Transitions.ts`
+- `webapp/docs/PLAN-bug-fixes.md`
+
+---
+
+## 2026-06-04
+
+### 32. BUG-015: Fix expression parser bị override bởi mapping trùng tên
+
+**Bug:** Cell template chỉ chứa expression `(R.num)`, `(dd/mm/yyyy)` bị override nếu user vô tình map field trùng tên → hiển thị nguyên xi thay vì evaluate.
+
+**Fix:**
+- Thêm `isExpressionOnly()` — detect cell chỉ chứa `(...)` không có text khác.
+- Trong `generateWorkbook` và `buildPreview`: skip mapping nếu cell là expression-only.
+- Expression luôn evaluate trước mapping, không bị "nuốt".
+
+**Files sửa:**
+- `webapp/src/lib/excel-generator.ts`
+
+### 33. FEAT-020: Excel Generator Enhancements — Inline Field Reference + Uppercase + Chọn ngày generate
+
+**Tính năng:**
+1. **Inline Field Reference**: Syntax `{{Tên Field}}` trong cell template để kết hợp data động + expression + text cố định.
+   - Ví dụ: `{{Họ và tên}} - (ddmmyy)(R.num)` → `Trần Lê Toàn Hữu - 03062607`
+2. **Uppercase Toggle**: Checkbox "VIẾT HOA" cho từng field mapping. Giá trị được `.toUpperCase()` trước khi chèn.
+3. **Chọn ngày generate**: Input date picker trong GeneratePanel. Expression `(dd)`, `(mm)`, `(yy)` dùng ngày đã chọn thay vì `new Date()`.
+
+**Files sửa:**
+- `webapp/src/types/index.ts` — Thêm `uppercase?: boolean` vào `FieldMappingValue`
+- `webapp/src/lib/excel-generator.ts` — Thêm `replaceFieldReferences()`, `isExpressionOnly()`, cập nhật `generateWorkbook` + `buildPreview`
+- `webapp/src/components/excel-generator/TemplateUploadModal.tsx` — Checkbox VIẾT HOA trong mapping panel
+- `webapp/src/components/excel-generator/GeneratePanel.tsx` — Date picker + checkbox VIẾT HOA
+
+### 34. FEAT-021: Excel Generator — Edit Template đã lưu
+
+**Tính năng:**
+1. Nút "Sửa" (icon Pencil) trong Template Manager table.
+2. Modal upload chuyển sang chế độ edit: pre-fill name, description, row headers, fields, mapping.
+3. Hiển thị file cũ + nút "Thay file mới" cho cả export template và import mẫu.
+4. Update DB row thay vì insert. Nếu upload file mới → xóa file cũ trong Storage + upload file mới.
+
+**Files sửa:**
+- `webapp/src/components/excel-generator/TemplateUploadModal.tsx` — Hỗ trợ `editTemplate` prop, edit mode
+- `webapp/src/components/excel-generator/TemplateManager.tsx` — Nút Edit, mở modal với `editTemplate`
+
+### 35. Fix: Data rows ghi đè lên header row trong Excel Generator
+
+**Bug phát sinh sau FEAT-019:** `generateWorkbook` bỏ `templateHeaderRow` và thay bằng data rows đầu tiên. Ví dụ: header row ở row 5 → data row 1 cũng xuất hiện ở row 5, đè lên header.
+
+**Fix:** Giữ nguyên `templateHeaderRow` trong output, insert data rows **sau** header row.
+
+**Files sửa:**
+- `webapp/src/lib/excel-generator.ts` — Thêm `outputRows.push(json[templateHeaderRow])` trước vòng lặp data rows
+
+---
+
 ## 2026-06-03
 
 ### 31. FEAT-019: Mail Merge Generator (template + data → file Excel)
@@ -35,6 +108,123 @@
 - `webapp/src/App.tsx` — Thêm route `/excel-generator`
 - `webapp/src/components/Layout.tsx` — Thêm menu "Excel Generator"
 - `webapp/docs/PLAN-feature-dev.md` — Cập nhật FEAT-019 status
+- `webapp/docs/CHANGELOG.md` — File này
+
+### 31a. FEAT-019 Enhancement: Manual Column Mapping
+
+**Yêu cầu:** User muốn có UI cho phép mapping thủ công giữa placeholder trong template và cột trong file data, thay vì auto match đơn thuần.
+
+**Thay đổi:**
+1. **`webapp/src/lib/excel-generator.ts`:**
+   - Thêm type `ColumnMapping = Record<string, string>`.
+   - Thêm hàm `suggestMapping(placeholders, dataHeaders)` — auto-suggest mapping dựa trên case-insensitive match.
+   - Cập nhật `replacePlaceholdersInRow()` nhận thêm `mapping?: ColumnMapping` — nếu có mapping thì dùng mapped column, nếu không thì fallback exact match cũ.
+   - Cập nhật `generateWorkbook()` và `buildPreview()` nhận thêm `mapping` parameter.
+   - `PlaceholderMatch` thêm field `mappedColumn?` để hiển thị cột đã map trong UI.
+2. **`webapp/src/components/excel-generator/GeneratePanel.tsx`:**
+   - Thêm state `mapping`, `showMappingPanel`, `templatePlaceholders`, `dataHeaders`.
+   - Sau khi upload data → hiển thị **Mapping Panel** thay vì auto-build preview.
+   - Mapping Panel: mỗi placeholder có dropdown chọn cột từ file data (auto-suggest từ `suggestMapping`). Có thể chọn "-- Không map".
+   - Nút **"Xác nhận mapping"** → build preview theo mapping đã chọn.
+   - Preview table có link **"Chỉnh sửa mapping"** để quay lại mapping panel.
+   - Generate flow dùng mapping đã chọn thay vì auto match.
+
+**Files sửa:**
+- `webapp/src/lib/excel-generator.ts`
+- `webapp/src/components/excel-generator/GeneratePanel.tsx`
+- `webapp/docs/PLAN-feature-dev.md` — Cập nhật FEAT-019 mô tả, flow, matching rules, preview table, UI spec
+- `webapp/docs/CHANGELOG.md` — File này
+
+### 31b. FEAT-019 Enhancement: Template 2 Files + Saved Mapping + Download Import Mẫu
+
+**Yêu cầu:** Template gồm 2 file (export template + import mẫu). Mapping được lưu vào DB khi tạo template. User có thể tải file import mẫu để biết cấu trúc cột. Fix lỗi xóa template khi có `template_id NOT NULL` + `ON DELETE SET NULL`.
+
+**Thay đổi:**
+1. **Schema (`017_excel_templates.sql`):**
+   - Bảng `excel_templates` thêm `import_template_path text`, `import_headers jsonb DEFAULT '[]'`, `column_mapping jsonb DEFAULT '{}'`.
+   - Bảng `excel_generation_logs`: `template_id` bỏ `NOT NULL` để fix lỗi xóa template.
+2. **`webapp/src/types/index.ts`:**
+   - `ExcelTemplate` thêm `import_template_path`, `import_headers`, `column_mapping`.
+3. **`webapp/src/pages/ExcelGeneratorPage.tsx`:**
+   - Parse `import_headers` và `column_mapping` từ JSONB khi fetch templates.
+4. **`webapp/src/components/excel-generator/TemplateUploadModal.tsx`:**
+   - Upload **2 file**: export template + import mẫu.
+   - Detect placeholder từ export template, detect headers từ import mẫu.
+   - Hiển thị **Mapping Panel** trong modal: mỗi placeholder → dropdown chọn cột từ import mẫu (auto-suggest).
+   - Upload cả 2 file lên Storage (`excel-templates/export/`, `excel-templates/import/`) + lưu mapping vào DB.
+5. **`webapp/src/components/excel-generator/TemplateManager.tsx`:**
+   - Hiển thị **Mapping status** (x/x đã map).
+   - Nút **"Tải file import mẫu"** → download từng template.
+   - Xóa template → xóa cả 2 file trong Storage (export + import).
+6. **`webapp/src/components/excel-generator/GeneratePanel.tsx`:**
+   - Hiển thị mapping đã lưu + link **"Tải file import mẫu"**.
+   - Sau upload data: so sánh headers với `import_headers` đã lưu.
+     - Nếu khớp → **auto-apply saved mapping** → build preview luôn.
+     - Nếu không khớp → hiện **Mapping Panel** để user adjust.
+   - Preview table có link **"Chỉnh sửa mapping"**.
+7. **`webapp/src/lib/excel-generator.ts`:**
+   - Không thay đổi thêm (đã có `ColumnMapping`, `suggestMapping` từ 31a).
+
+**Files sửa:**
+- `webapp/supabase/migrations/017_excel_templates.sql`
+- `webapp/src/types/index.ts`
+- `webapp/src/pages/ExcelGeneratorPage.tsx`
+- `webapp/src/components/excel-generator/TemplateUploadModal.tsx`
+- `webapp/src/components/excel-generator/TemplateManager.tsx`
+- `webapp/src/components/excel-generator/GeneratePanel.tsx`
+- `webapp/docs/PLAN-feature-dev.md`
+- `webapp/docs/CHANGELOG.md` — File này
+
+### 31c. FEAT-019 Rewrite: Expression Parser + Field-Based Mapping + Row Header
+
+**Yêu cầu:** Làm mới hoàn toàn FEAT-019. Không còn placeholder `{{...}}`. Thay bằng:
+1. **Expression parser** trong export template: `(ddmmyy)`, `(R.num)`, `([dd-1]mmyy)`, `([R.num+1])`...
+2. **Field-based mapping**: Export template có row header chứa tên trường. Map trường → cột data hoặc text cố định.
+3. **Row header cho cả 2 file**: User chỉ định row nào làm header trong cả export template, import mẫu, và file data.
+
+**Thay đổi:**
+1. **Schema (`017_excel_templates.sql`):**
+   - Thêm `template_header_row integer`, `import_header_row integer`.
+   - Thêm `fields jsonb` (tên trường từ export template), bỏ `placeholders jsonb`.
+   - `column_mapping` đổi format: `{ fieldName -> {type: 'column'|'fixed', value: string} }`.
+2. **`webapp/src/types/index.ts`:**
+   - Thêm `FieldMappingValue` interface.
+   - `ExcelTemplate` thêm `template_header_row`, `import_header_row`, `fields`; bỏ `placeholders`.
+3. **`webapp/src/lib/excel-generator.ts` — Viết lại hoàn toàn:**
+   - `detectFields(workbook, headerRowIndex)` — lấy tên trường từ row header.
+   - `readDataFile(workbook, headerRowIndex)` — lấy headers + rows từ row header.
+   - **Expression parser:** `parseExpression()`, `evaluateExpression()`, `replaceExpressionsInCell()`.
+     - Hỗ trợ tokens: `dd`, `mm`, `yy`, `yyyy`, `R.num`.
+     - Hỗ trợ phép tính `+n`/`-n` trong `[]`.
+     - Date arithmetic tự động xử lý chuyển tháng/năm.
+     - `R.num` zero-padded 2 chữ số, 1-based.
+   - `generateWorkbook()` — replicate header row, evaluate expression, apply mapping.
+   - `buildPreview()` — preview với expression + mapping.
+4. **`webapp/src/components/excel-generator/TemplateUploadModal.tsx` — Viết lại:**
+   - Upload 2 file + input row header cho mỗi file.
+   - Nút "Detect trường" / "Detect cột" để đọc row header.
+   - Mapping panel: mỗi field → dropdown chọn cột HOẶC input text cố định.
+   - Auto-suggest mapping dựa trên case-insensitive match.
+5. **`webapp/src/components/excel-generator/TemplateManager.tsx`:**
+   - Hiển thị fields thay vì placeholders.
+   - Download import mẫu, xóa cả 2 files.
+6. **`webapp/src/components/excel-generator/GeneratePanel.tsx` — Viết lại:**
+   - Hiển thị fields, mapping, link tải import mẫu.
+   - Upload data + input row header.
+   - Auto-apply saved mapping (adapt column names) hoặc hiện mapping panel.
+   - Preview với expression evaluated.
+7. **`webapp/src/pages/ExcelGeneratorPage.tsx`:**
+   - Parse `fields`, `column_mapping` (với `type`/`value`) từ JSONB.
+
+**Files sửa:**
+- `webapp/supabase/migrations/017_excel_templates.sql`
+- `webapp/src/types/index.ts`
+- `webapp/src/lib/excel-generator.ts`
+- `webapp/src/pages/ExcelGeneratorPage.tsx`
+- `webapp/src/components/excel-generator/TemplateUploadModal.tsx`
+- `webapp/src/components/excel-generator/TemplateManager.tsx`
+- `webapp/src/components/excel-generator/GeneratePanel.tsx`
+- `webapp/docs/PLAN-feature-dev.md`
 - `webapp/docs/CHANGELOG.md` — File này
 
 ---

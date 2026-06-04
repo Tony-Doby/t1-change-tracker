@@ -31,10 +31,25 @@ export default function ExcelGeneratorPage() {
     if (error) {
       show('Lỗi tải templates: ' + error.message, 'error')
     } else {
-      setTemplates((data ?? []).map((t) => ({
-        ...t,
-        placeholders: Array.isArray(t.placeholders) ? t.placeholders : [],
-      })) as ExcelTemplate[])
+      setTemplates(
+        (data ?? []).map((t) => {
+          const rawMapping = t.column_mapping && typeof t.column_mapping === 'object' ? t.column_mapping : {}
+          const parsedMapping: Record<string, { type: 'column' | 'fixed'; value: string }> = {}
+          for (const [k, v] of Object.entries(rawMapping)) {
+            if (v && typeof v === 'object' && 'type' in v && 'value' in v) {
+              parsedMapping[k] = v as { type: 'column' | 'fixed'; value: string }
+            }
+          }
+          return {
+            ...t,
+            template_header_row: typeof t.template_header_row === 'number' ? t.template_header_row : 0,
+            import_header_row: typeof t.import_header_row === 'number' ? t.import_header_row : 0,
+            fields: Array.isArray(t.fields) ? t.fields : [],
+            import_headers: Array.isArray(t.import_headers) ? t.import_headers : [],
+            column_mapping: parsedMapping,
+          } as ExcelTemplate
+        })
+      )
     }
     setLoadingTemplates(false)
   }, [show])
@@ -50,10 +65,12 @@ export default function ExcelGeneratorPage() {
     if (error) {
       show('Lỗi tải lịch sử: ' + error.message, 'error')
     } else {
-      setLogs((data ?? []).map((l) => ({
-        ...l,
-        matched_placeholders: Array.isArray(l.matched_placeholders) ? l.matched_placeholders : [],
-      })) as ExcelGenerationLog[])
+      setLogs(
+        (data ?? []).map((l) => ({
+          ...l,
+          matched_placeholders: Array.isArray(l.matched_placeholders) ? l.matched_placeholders : [],
+        })) as ExcelGenerationLog[]
+      )
     }
     setLoadingLogs(false)
   }, [show])

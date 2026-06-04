@@ -1,52 +1,157 @@
 import type * as XLSXType from 'xlsx'
 
-const PLACEHOLDER_REGEX = /\{\{([^}]+)\}\}/g
+// ─────────────────────────────────────────────────────────────
+// Expression parser for template cells
+// Supports: (ddmmyy), ([dd-1]mmyy), (R.num), ([R.num-1]), (dd/mm/yyyy), etc.
+// ─────────────────────────────────────────────────────────────
 
-export interface PlaceholderMatch {
-  placeholder: string
-  key: string
-  matched: boolean
+const EXPR_GROUP_REGEX = /\(([^)]+)\)/g
+const TOKEN_SPLIT_REGEX = /(\[?(?:yyyy|yy|mm|dd|R\.num)(?:[+-]\d+)?\]?)/g
+
+interface ExprToken {
+  kind: 'date' | 'row' | 'literal'
+  value?: string          // for literal
+  token?: string          // 'dd' | 'mm' | 'yy' | 'yyyy' | 'R.num'
+  offset?: number         // for date/row offset
 }
 
-export interface PreviewRow {
-  [key: string]: string | number | null
+function parseExpression(expr: string): ExprToken[] {
+  const parts = expr.split(TOKEN_SPLIT_REGEX).filter((s) => s !== '')
+  return parts.map((part) => {
+    const m = part.match(/^\[?(R\.num|dd|mm|yy|yyyy)([+-]\d+)?\]?$/)
+    if (!m) return { kind: 'literal' as const, value: part }
+
+    const token = m[1]
+    const offset = m[2] ? parseInt(m[2], 10) : 0
+    if (token === 'R.num') {
+      return { kind: 'row' as const, token, offset }
+    }
+    return { kind: 'date' as const, token, offset }
+  })
 }
+
+function applyDateOffset(date: Date, token: string, offset: number): void {
+  if (offset === 0) return
+  const d = new Date(date)
+  if (token === 'dd') {
+    d.setDate(d.getDate() + offset)
+    date.setTime(d.getTime())
+  } else if (token === 'mm') {
+    d.setMonth(d.getMonth() + offset)
+    date.setTime(d.getTime())
+  } else if (token === 'yy' || token === 'yyyy') {
+    d.setFullYear(d.getFullYear() + offset)
+    date.setTime(d.getTime())
+  }
+}
+
+function formatDateToken(token: string, date: Date): string {
+  if (token === 'dd') return String(date.getDate()).padStart(2, '0')
+  if (token === 'mm') return String(date.getMonth() + 1).padStart(2, '0')
+  if (token === 'yy') return String(date.getFullYear() % 100).padStart(2, '0')
+  if (token === 'yyyy') return String(date.getFullYear())
+  return ''
+}
+
+export function evaluateExpression(expr: string, rowIndex: number, baseDate: Date): string {
+  const tokens = parseExpression(expr)
+
+  // Compute working date by applying all date offsets once
+  const workingDate = new Date(baseDate)
+  for (const t of tokens) {
+    if (t.kind === 'date' && t.offset) {
+      applyDateOffset(workingDate, t.token!, t.offset)
+    }
+  }
+
+  return tokens
+    .map((t) => {
+      if (t.kind === 'literal') return t.value!
+      if (t.kind === 'row') {
+        const val = rowIndex + (t.offset || 0)
+        return String(val).padStart(2, '0')
+      }
+      // date
+      return formatDateToken(t.token!, workingDate)
+    })
+    .join('')
+}
+
+export function replaceExpressionsInCell(
+  cellValue: string,
+  rowIndex: number,
+  baseDate: Date
+): string {
+  return cellValue.replace(EXPR_GROUP_REGEX, (_match, expr) => {
+    return evaluateExpression(expr, rowIndex, baseDate)
+  })
+}
+
+function isExpressionOnly(cellValue: string): boolean {
+  return /^\([^)]+\)$/.test(cellValue.trim())
+}
+
+const FIELD_REF_REGEX = /\{\{([^}]+)\}\}/g
+
+export function replaceFieldReferences(
+  cellValue: string,
+  dataRow: Record<string, string>,
+  mapping: ColumnMapping
+): string {
+  return cellValue.replace(FIELD_REF_REGEX, (_match, fieldName) => {
+    const mapped = mapping[fieldName.trim()]
+    if (!mapped) return _match
+    let val: string
+    if (mapped.type === 'column') {
+      val = dataRow[mapped.value] !== undefined ? dataRow[mapped.value] : _match
+    } else {
+      val = mapped.value
+    }
+    if (mapped.uppercase && val) {
+      val = val.toUpperCase()
+    }
+    return val
+  })
+}
+
+// ─────────────────────────────────────────────────────────────
+// Workbook helpers
+// ─────────────────────────────────────────────────────────────
 
 export async function loadXlsx(): Promise<typeof XLSXType> {
   return await import('xlsx')
 }
 
-export function detectPlaceholders(workbook: XLSXType.WorkBook, XLSX: typeof XLSXType): string[] {
+export function detectFields(
+  workbook: XLSXType.WorkBook,
+  headerRowIndex: number,
+  XLSX: typeof XLSXType
+): string[] {
   const sheetName = workbook.SheetNames[0]
   const worksheet = workbook.Sheets[sheetName]
   const json = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
-
-  const found = new Set<string>()
-  for (const row of json) {
-    const rowArr = row as unknown[]
-    for (const cell of rowArr) {
-      const str = String(cell ?? '')
-      let match: RegExpExecArray | null
-      while ((match = PLACEHOLDER_REGEX.exec(str)) !== null) {
-        found.add(match[1].trim())
-      }
-      PLACEHOLDER_REGEX.lastIndex = 0
-    }
-  }
-  return Array.from(found)
+  if (headerRowIndex < 0 || headerRowIndex >= json.length) return []
+  const row = json[headerRowIndex] as unknown[]
+  return row.map((cell) => String(cell ?? '').trim())
 }
 
-export function readDataFile(workbook: XLSXType.WorkBook, XLSX: typeof XLSXType): { headers: string[]; rows: Record<string, string>[] } {
+export function readDataFile(
+  workbook: XLSXType.WorkBook,
+  headerRowIndex: number,
+  XLSX: typeof XLSXType
+): { headers: string[]; rows: Record<string, string>[] } {
   const sheetName = workbook.SheetNames[0]
   const worksheet = workbook.Sheets[sheetName]
   const json = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
 
-  if (json.length === 0) return { headers: [], rows: [] }
+  if (json.length === 0 || headerRowIndex < 0 || headerRowIndex >= json.length) {
+    return { headers: [], rows: [] }
+  }
 
-  const headers = (json[0] as unknown[]).map((h) => String(h).trim())
+  const headers = (json[headerRowIndex] as unknown[]).map((h) => String(h).trim())
   const rows: Record<string, string>[] = []
 
-  for (let i = 1; i < json.length; i++) {
+  for (let i = headerRowIndex + 1; i < json.length; i++) {
     const raw = json[i] as unknown[]
     const row: Record<string, string> = {}
     headers.forEach((h, idx) => {
@@ -58,73 +163,95 @@ export function readDataFile(workbook: XLSXType.WorkBook, XLSX: typeof XLSXType)
   return { headers, rows }
 }
 
-export function getTemplateRowIndex(workbook: XLSXType.WorkBook, XLSX: typeof XLSXType): number | null {
-  const sheetName = workbook.SheetNames[0]
-  const worksheet = workbook.Sheets[sheetName]
-  const json = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
+// ─────────────────────────────────────────────────────────────
+// Mapping types
+// ─────────────────────────────────────────────────────────────
 
-  for (let i = 0; i < json.length; i++) {
-    const row = json[i] as unknown[]
-    for (const cell of row) {
-      if (PLACEHOLDER_REGEX.test(String(cell ?? ''))) {
-        PLACEHOLDER_REGEX.lastIndex = 0
-        return i
-      }
-      PLACEHOLDER_REGEX.lastIndex = 0
-    }
-  }
-  return null
+export interface FieldMappingValue {
+  type: 'column' | 'fixed'
+  value: string
+  uppercase?: boolean
 }
 
-export function replacePlaceholdersInRow(
-  row: unknown[],
-  dataRow: Record<string, string>
-): unknown[] {
-  return row.map((cell) => {
-    const str = String(cell ?? '')
-    if (!str.includes('{{')) return cell
-    return str.replace(PLACEHOLDER_REGEX, (_match, key) => {
-      const trimmed = key.trim()
-      return dataRow[trimmed] !== undefined ? dataRow[trimmed] : _match
-    })
-  })
-}
+export type ColumnMapping = Record<string, FieldMappingValue>
+
+// ─────────────────────────────────────────────────────────────
+// Generate
+// ─────────────────────────────────────────────────────────────
 
 export function generateWorkbook(
   templateWorkbook: XLSXType.WorkBook,
   dataRows: Record<string, string>[],
-  XLSX: typeof XLSXType
+  mapping: ColumnMapping,
+  templateHeaderRow: number,
+  XLSX: typeof XLSXType,
+  baseDate = new Date()
 ): XLSXType.WorkBook {
   const sheetName = templateWorkbook.SheetNames[0]
   const worksheet = templateWorkbook.Sheets[sheetName]
   const json = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
 
-  const templateRowIndex = getTemplateRowIndex(templateWorkbook, XLSX)
-  if (templateRowIndex === null) {
-    // No placeholder found, return original
-    return templateWorkbook
+  if (templateHeaderRow < 0 || templateHeaderRow >= json.length || dataRows.length === 0) {
+    // Return original if invalid
+    const newWb = XLSX.utils.book_new()
+    const newWs = XLSX.utils.aoa_to_sheet(json)
+    if (worksheet['!cols']) newWs['!cols'] = worksheet['!cols']
+    XLSX.utils.book_append_sheet(newWb, newWs, sheetName)
+    return newWb
   }
 
-  const templateRow = json[templateRowIndex] as unknown[]
+  const templateRow = json[templateHeaderRow] as unknown[]
   const outputRows: unknown[][] = []
 
-  // Add all rows before template row
-  for (let i = 0; i < templateRowIndex; i++) {
+  // Add all rows before header row
+  for (let i = 0; i < templateHeaderRow; i++) {
     outputRows.push(json[i] as unknown[])
   }
 
-  // Add replicated template rows
-  for (const dataRow of dataRows) {
-    outputRows.push(replacePlaceholdersInRow(templateRow, dataRow))
+  // Keep the header row itself in output
+  outputRows.push(json[templateHeaderRow] as unknown[])
+
+  // Add data rows after header
+  for (let dataIdx = 0; dataIdx < dataRows.length; dataIdx++) {
+    const dataRow = dataRows[dataIdx]
+    const rowIndex = dataIdx + 1 // 1-based for R.num
+    const replacedRow = templateRow.map((cell, colIdx) => {
+      const str = String(cell ?? '')
+
+      // 1. Evaluate expressions first
+      let value = replaceExpressionsInCell(str, rowIndex, baseDate)
+
+      // 2. Replace inline field references {{Field}}
+      value = replaceFieldReferences(value, dataRow, mapping)
+
+      // 3. Apply direct mapping if this column is mapped (skip for expression-only cells)
+      const fieldName = String(templateRow[colIdx] ?? '').trim()
+      const mapped = mapping[fieldName]
+      if (mapped && !isExpressionOnly(str)) {
+        if (mapped.type === 'column') {
+          value = dataRow[mapped.value] !== undefined ? dataRow[mapped.value] : value
+        } else if (mapped.type === 'fixed') {
+          value = mapped.value
+        }
+        if (mapped.uppercase && value) {
+          value = value.toUpperCase()
+        }
+      }
+
+      // Re-evaluate expressions on final value (for expressions in mapped fixed values)
+      value = replaceExpressionsInCell(value, rowIndex, baseDate)
+
+      return value
+    })
+    outputRows.push(replacedRow)
   }
 
-  // Add all rows after template row
-  for (let i = templateRowIndex + 1; i < json.length; i++) {
+  // Add all rows after header row
+  for (let i = templateHeaderRow + 1; i < json.length; i++) {
     outputRows.push(json[i] as unknown[])
   }
 
   const newWs = XLSX.utils.aoa_to_sheet(outputRows)
-  // Copy column widths if available
   if (worksheet['!cols']) {
     newWs['!cols'] = worksheet['!cols']
   }
@@ -134,46 +261,88 @@ export function generateWorkbook(
   return newWb
 }
 
+// ─────────────────────────────────────────────────────────────
+// Preview
+// ─────────────────────────────────────────────────────────────
+
+export interface PreviewRow {
+  [key: string]: string | number | null
+}
+
+export interface MatchStatus {
+  field: string
+  type: 'column' | 'fixed'
+  value: string
+  matched: boolean
+}
+
 export function buildPreview(
   templateWorkbook: XLSXType.WorkBook,
   dataRows: Record<string, string>[],
-  dataHeaders: string[],
+  mapping: ColumnMapping,
+  templateHeaderRow: number,
   XLSX: typeof XLSXType,
-  limit = 10
-): { headers: string[]; rows: PreviewRow[]; matched: PlaceholderMatch[] } {
-  const templatePlaceholders = detectPlaceholders(templateWorkbook, XLSX)
-  const dataHeaderSet = new Set(dataHeaders.map((h) => h.trim()))
+  limit = 10,
+  baseDate = new Date()
+): { headers: string[]; rows: PreviewRow[]; matched: MatchStatus[] } {
+  const fields = detectFields(templateWorkbook, templateHeaderRow, XLSX)
 
-  const matched: PlaceholderMatch[] = templatePlaceholders.map((p) => ({
-    placeholder: `{{${p}}}`,
-    key: p,
-    matched: dataHeaderSet.has(p),
-  }))
+  const matched: MatchStatus[] = fields.map((f) => {
+    const m = mapping[f]
+    if (!m) return { field: f, type: 'fixed', value: '', matched: false }
+    return { field: f, type: m.type, value: m.value, matched: true }
+  })
 
   const previewRows = dataRows.slice(0, limit)
-  const templateRowIndex = getTemplateRowIndex(templateWorkbook, XLSX)
 
-  if (templateRowIndex === null) {
-    return { headers: dataHeaders, rows: previewRows, matched }
+  if (templateHeaderRow < 0 || templateHeaderRow >= templateWorkbook.SheetNames.length) {
+    return { headers: fields, rows: previewRows, matched }
   }
 
   const sheetName = templateWorkbook.SheetNames[0]
   const worksheet = templateWorkbook.Sheets[sheetName]
   const json = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
-  const templateRow = json[templateRowIndex] as unknown[]
+  const templateRow = json[templateHeaderRow] as unknown[]
 
-  const headers = templateRow.map((h) => String(h ?? ''))
-  const rows: PreviewRow[] = previewRows.map((dataRow) => {
-    const replaced = replacePlaceholdersInRow(templateRow, dataRow)
+  const rows: PreviewRow[] = previewRows.map((dataRow, dataIdx) => {
+    const rowIndex = dataIdx + 1
     const obj: PreviewRow = {}
-    headers.forEach((h, idx) => {
-      obj[h] = replaced[idx] as string | number | null
+    templateRow.forEach((cell, colIdx) => {
+      const fieldName = String(templateRow[colIdx] ?? '').trim()
+      const cellStr = String(cell ?? '')
+      let value = replaceExpressionsInCell(cellStr, rowIndex, baseDate)
+
+      // Replace inline field references {{Field}}
+      value = replaceFieldReferences(value, dataRow, mapping)
+
+      if (!isExpressionOnly(cellStr)) {
+        const mapped = mapping[fieldName]
+        if (mapped) {
+          if (mapped.type === 'column') {
+            value = dataRow[mapped.value] !== undefined ? dataRow[mapped.value] : value
+          } else if (mapped.type === 'fixed') {
+            value = mapped.value
+          }
+          if (mapped.uppercase && value) {
+            value = value.toUpperCase()
+          }
+        }
+      }
+
+      // Re-evaluate expressions on final value (for expressions in mapped fixed values)
+      value = replaceExpressionsInCell(value, rowIndex, baseDate)
+
+      obj[fieldName || `Cột ${colIdx + 1}`] = value
     })
     return obj
   })
 
-  return { headers, rows, matched }
+  return { headers: fields, rows, matched }
 }
+
+// ─────────────────────────────────────────────────────────────
+// File name formatting
+// ─────────────────────────────────────────────────────────────
 
 export function sanitizeFileName(name: string): string {
   return name
