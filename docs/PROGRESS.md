@@ -3,7 +3,7 @@
 > File này là **bản tóm tắt nhanh** để nối lại công việc sau khi ngưng.  
 > **Đọc kèm** `AGENTS.md` + `KNOWLEDGE.md` để nắm gotchas & constraints.  
 > **Xem trạng thái feature chi tiết** tại `PLAN-feature-dev.md` → Feature Registry.  
-> Cập nhật: 2026-05-29
+> Cập nhật: 2026-06-04
 
 ---
 
@@ -32,9 +32,10 @@ npm run preview    # preview production
 ```
 webapp/
 ├── src/
-│   ├── components/           # Layout, Toast, Modal, CommandPalette, NotificationDropdown, Skeleton, EmptyState, Pagination...
+│   ├── components/           # Layout, Toast, Modal, CommandPalette, NotificationDropdown, Skeleton, EmptyState, Pagination, FormField, FormSection...
 │   ├── pages/                # DashboardPage, AgentsPage, AgentDetailPage, RequestsPage, RequestDetailPage, RanksPage, DivisionsPage, UploadPage, TrashPage, HolidaysPage, ActivityLogPage, EmailTemplatesPage...
 │   ├── hooks/                # useAuth, useDebounce, useFocusTrap
+│   ├── ui/                   # Twenty primitives: theme, layout, display, input, navigation, feedback
 │   ├── lib/                  # supabase.ts, eligibility.ts, request-actions.ts, agent-actions.ts, date-utils.ts, constants.ts
 │   ├── types/                # index.ts — tất cả TypeScript interfaces
 │   ├── App.tsx               # Routing 13 routes + PageTransition

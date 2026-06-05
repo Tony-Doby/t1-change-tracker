@@ -87,12 +87,12 @@ export default function NotificationDropdown() {
   return (
     <div className="relative" ref={ref}>
       <button
-        className="relative p-1.5 rounded-md hover:bg-neutral-100"
+        className="relative min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md hover:bg-neutral-100"
         onClick={() => setOpen((v) => !v)}
         aria-label="Thông báo"
         aria-expanded={open}
       >
-        <Bell className="w-5 h-5 text-neutral-500" />
+        <Bell className="w-5 h-5 text-neutral-500" aria-hidden="true" />
         {unreadCount > 0 && (
           <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center">
             {unreadCount > 99 ? '99+' : unreadCount}
@@ -107,8 +107,8 @@ export default function NotificationDropdown() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
               <h3 className="text-sm font-semibold text-neutral-900">Thông báo</h3>
               {unreadCount > 0 && (
-                <button onClick={handleMarkAllRead} className="text-xs text-primary hover:underline flex items-center gap-1">
-                  <Check className="w-3 h-3" /> Đánh dấu đã đọc
+                <button onClick={handleMarkAllRead} className="text-xs text-primary hover:underline flex items-center gap-1 min-h-[32px] px-2 rounded-sm hover:bg-primary-light/20 transition-colors">
+                  <Check className="w-3 h-3" aria-hidden="true" /> Đánh dấu đã đọc
                 </button>
               )}
             </div>
@@ -136,7 +136,7 @@ export default function NotificationDropdown() {
                           {item.message && <p className="text-xs text-neutral-500 line-clamp-2 mt-0.5">{item.message}</p>}
                           <div className="flex items-center justify-between mt-1">
                             <span className="text-[10px] text-neutral-400 flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
+                              <Clock className="w-3 h-3" aria-hidden="true" />
                               {formatDateTime(item.created_at)}
                             </span>
                             {item.link && (

@@ -5,6 +5,189 @@
 
 ---
 
+## 2026-06-05
+
+### 42. Tăng base font-size từ 13px lên 16px
+
+**Theo yêu cầu user — tăng size chữ toàn app.**
+
+- `src/index.css` — Sửa `html { font-size: 13px; }` → `html { font-size: 16px; }`.
+- Tất cả typography scale tăng tương ứng theo tỷ lệ rem.
+
+---
+
+## 2026-06-05
+
+### 41. REFACTOR-005: Twenty UI/UX Full Adoption — Phase 7 (Page-by-Page Polish — Remaining Pages)
+
+**Refactor 4 pages còn lại + component con theo Twenty UI/UX patterns.**
+
+**Pages đã refactor:**
+- `src/pages/UploadPage.tsx` — Dùng PageHeader, Card, Section, Table primitives. Dropzone restyle với tokens. Progress bar dùng `bg-gray-3` + `bg-accent`. Report panel dùng Card + Badge.
+- `src/pages/EmailTemplatesPage.tsx` — Dùng PageHeader + TableSkeletonLoader. Loading state chuẩn.
+- `src/pages/ActivityLogPage.tsx` — Dùng PageHeader, Card, TextInput, Badge, EmptyState context-aware. Timeline restyle với tokens mới.
+- `src/pages/ExcelGeneratorPage.tsx` — Dùng PageHeader, tab nav restyle với tokens.
+
+**Components con đã refactor:**
+- `src/components/email-templates/TemplateList.tsx` — Dùng Table, TableHeader, TableRow, TableCell primitives. EmptyState chuẩn.
+- `src/components/email-templates/TemplateEditModal.tsx` — Dùng FormField + TextInput primitives. Giữ react-hook-form + zod.
+- `src/components/email-templates/TemplatePreviewModal.tsx` — Dùng Modal updated với tokens.
+- `src/components/excel-generator/TemplateManager.tsx` — Dùng Table primitives + Badge mapping status + EmptyState.
+- `src/components/excel-generator/GenerationHistory.tsx` — Dùng Table primitives + EmptyState.
+- `src/components/excel-generator/GeneratePanel.tsx` — Dùng Card, Section, Table primitives. Dropzone, mapping panel, preview table restyle.
+
+**Shared component updated:**
+- `src/components/Modal.tsx` — Cập nhật style sang tokens mới (bg-bg-primary, rounded-sm, shadow-modal, border-border-hairline, text-text-primary). Giữ API backward-compatible.
+
+**Files sửa:** 10 files
+
+---
+
+## 2026-06-05
+
+### 40. REFACTOR-005: Twenty UI/UX Full Adoption — Phase 6 (Accessibility & Motion)
+
+**Audit và cải thiện accessibility toàn app theo WCAG AA.**
+
+**Focus Management:**
+- `src/hooks/useFocusTrap.ts` — Thêm **focus stack** để hỗ trợ nested modals. Modal trên cùng mới trap focus.
+- `src/ui/layout/Modal.tsx` — Thêm `aria-labelledby` trỏ đến title; close button tăng touch target lên 40×40px.
+
+**Touch Targets (min 40×40px):**
+- `src/components/Layout.tsx` — Mobile menu, sidebar toggle, user menu.
+- `src/ui/layout/PageHeader.tsx` — Close / collapse buttons.
+- `src/ui/feedback/BulkActionsBar.tsx` — Clear selection button.
+- `src/components/CountdownConfirmModal.tsx` — Close button.
+- `src/components/NotificationDropdown.tsx` — Bell button.
+- `src/pages/AgentDetailPage.tsx` — Star button.
+
+**Semantic HTML:**
+- `src/components/Layout.tsx` — `<aside aria-label="Sidebar navigation">`.
+- Các page `ActivityLogPage`, `RequestDetailPage`, `UploadPage` — Sửa `<h3>` → `<h2>` để tuân thủ heading hierarchy (không skip level).
+
+**ARIA:**
+- `src/ui/feedback/ToastProvider.tsx` — Container thêm `role="status"`, `aria-live="polite"`, `aria-atomic="true"`. Close button thêm `aria-label`.
+- `src/components/Layout.tsx` — User menu thêm `aria-expanded`.
+- `src/pages/DivisionsPage.tsx` — Clear agent button thêm `aria-label`.
+- Toàn app — Thêm `aria-hidden="true"` cho decorative icons trong buttons, empty states, info rows.
+
+**Files sửa:** 15+ files
+
+---
+
+## 2026-06-05
+
+### 39. REFACTOR-005: Twenty UI/UX Full Adoption — Phase 5 (Form Patterns)
+
+**Refactor toàn bộ forms chính sang `react-hook-form` + `zod`, tạo `FormField`/`FormSection` primitives.**
+
+**Form Primitives:**
+- `src/ui/input/TextInput.tsx` — Forward ref để hỗ trợ `register` từ react-hook-form.
+- `src/lib/form-schemas.ts` — Tập trung tất cả zod schemas: `loginSchema`, `changePasswordSchema`, `createRequestSchema`, `rankSchema`, `divisionSchema`, `emailTemplateSchema`, `holidaySchema`, `agentInfoSchema`.
+
+**Forms đã refactor:**
+| Form | Schema | Ghi chú |
+|------|--------|---------|
+| `LoginPage` | `loginSchema` | Email + password validation, bỏ `useState` |
+| `ChangePasswordPage` | `changePasswordSchema` | Password + confirm match, bỏ `useState` |
+| `CreateRequestModal` | `createRequestSchema` | Validate `selectedT1Id` được chọn, giữ nguyên search dropdown + eligibility RPC |
+| `AgentInfoTab` | `agentInfoSchema` | **Thêm edit mode** với ~25 fields schema v2, chia 4 sections (Thông tin cơ bản, Thông tin cá nhân, Ngân hàng & Thuế, Nghề nghiệp), nút Sửa/Lưu/Hủy inline |
+| `RanksPage` modal | `rankSchema` | name, rank_type, sort_order |
+| `DivisionsPage` modal | `divisionSchema` | name, head_agent_id (search dropdown), is_official |
+| `EmailTemplatesPage` / `TemplateEditModal` | `emailTemplateSchema` | name, template_key, subject, body (HtmlEditor qua Controller) |
+| `HolidaysPage` modal | `holidaySchema` | holiday_date, name |
+
+**Files sửa:**
+- `src/ui/input/TextInput.tsx`
+- `src/lib/form-schemas.ts` — Mới
+- `src/pages/LoginPage.tsx`
+- `src/pages/ChangePasswordPage.tsx`
+- `src/components/CreateRequestModal.tsx`
+- `src/components/agent-detail/AgentInfoTab.tsx`
+- `src/pages/RanksPage.tsx`
+- `src/pages/DivisionsPage.tsx`
+- `src/components/email-templates/TemplateEditModal.tsx`
+- `src/pages/HolidaysPage.tsx`
+- `src/pages/EmailTemplatesPage.tsx` (bỏ validation thủ công trong `handleSave`)
+
+---
+
+## 2026-06-04
+
+### 38. REFACTOR-005: Twenty UI/UX Full Adoption — Phase 4 (Table & List Refactor)
+
+**Nâng cấp toàn bộ tables trong app theo Twenty CRM table patterns.**
+
+**Filter Chips:**
+- `src/ui/input/FilterChips.tsx` — Component hiển thị active filters dạng removable chip + nút "Xóa tất cả".
+- Tích hợp vào `AgentsPage` (search + quick filter) và `RequestsPage` (search + status filter).
+
+**Table Selection (nâng cao):**
+- `src/hooks/useTableSelection.ts` — Hook quản lý selection với: toggle, select all, indeterminate state, shift-click range select, click-outside deselect.
+- `src/ui/feedback/BulkActionsBar.tsx` — Bottom fixed bar hiển thị khi có selection, hỗ trợ custom actions + nút bỏ chọn.
+- `AgentsPage` — Refactor sang dùng `useTableSelection` + `BulkActionsBar` thay vì text "Đã chọn X agent".
+
+**Column Resizing:**
+- `src/hooks/useColumnResize.ts` — Hook quản lý widths array, drag-to-resize với global mouse listeners.
+- `src/ui/layout/TableHeader.tsx` — Thêm `resizable` prop + drag handle ở border header.
+- Áp dụng column resize cho toàn bộ pages có table: `AgentsPage`, `RequestsPage`, `TrashPage`, `HolidaysPage`, `RanksPage`, `DivisionsPage`.
+
+**Context-aware Empty States:**
+- Cập nhật `EmptyState` trong tất cả tables: hiển thị `filter_empty` khi có active filter/search không match, `no_data` khi database trống.
+- Thêm nút "Xóa bộ lọc" trong empty state khi có active filters.
+
+**Files mới:** `src/ui/input/FilterChips.tsx`, `src/hooks/useTableSelection.ts`, `src/hooks/useColumnResize.ts`, `src/ui/feedback/BulkActionsBar.tsx`.
+**Files sửa:** `src/ui/layout/TableHeader.tsx`, `src/pages/AgentsPage.tsx`, `src/pages/RequestsPage.tsx`, `src/pages/TrashPage.tsx`, `src/pages/HolidaysPage.tsx`, `src/pages/RanksPage.tsx`, `src/pages/DivisionsPage.tsx`.
+
+---
+
+## 2026-06-04
+
+### 37. REFACTOR-005: Twenty UI/UX Full Adoption — Phase 1-3 + Partial Phase 7
+
+**Refactor UI/UX theo Twenty CRM patterns, giữ nguyên Tailwind CSS v4.**
+
+**Phase 1 — Design Tokens & Global Styles:**
+- `src/ui/theme/tokens.css` — CSS custom properties dựa trên Radix gray scale + Twenty accent (`#4a38f5`).
+- `src/index.css` — Rewrite với `@theme` block mới, base 13px, font Inter, focus ring, prefers-reduced-motion, legacy neutral aliases cho backward compat.
+- `index.html` — Thêm Google Fonts Inter.
+
+**Phase 2 — Layout Architecture:**
+- `src/ui/layout/` — PageContainer, PageHeader, PageBody, ShowPageContainer, Card, Section, Modal (base primitive), Table, TableHeader, TableRow, TableCell.
+- `src/components/Layout.tsx` — Refactor sidebar resizable/collapsible (240px → 64px), mobile bottom nav, header styling theo tokens mới.
+
+**Phase 3 — Component Primitives:**
+- `src/ui/display/` — Badge, EmptyState (context-aware), Skeleton, Avatar, AvatarGroup, Chip, Pill, Tag.
+- `src/ui/input/` — TextInput, TextArea, Select (searchable/clearable), InputLabel, InputErrorHelper, InputHint.
+- `src/ui/navigation/` — NavigationDrawerItem, Breadcrumb, MobileNavigationBar.
+- `src/ui/feedback/` — ToastProvider (queue + dedupe + pause on hover), useToast, ConfirmationModal, DialogManager, PageContentSkeletonLoader, TableSkeletonLoader, LeftPanelSkeletonLoader.
+- `src/components/FormField.tsx`, `FormSection.tsx` — Form wrappers.
+- `src/main.tsx` — Thêm DialogProvider.
+- Cài dependencies: `react-hook-form`, `@hookform/resolvers`, `zod`.
+
+**Phase 7 — Page-by-Page Polish (partial):**
+- `LoginPage` — Bỏ gradient, dùng Card + TextInput primitives.
+- `ChangePasswordPage` — Tương tự LoginPage.
+- `DashboardPage` — Dùng PageHeader, Card primitives.
+- `AgentsPage` — Dùng PageHeader, Table primitives, TextInput, Badge, EmptyState.
+- `RequestsPage` — Dùng PageHeader, Table primitives, Badge, EmptyState.
+- `AgentDetailPage` — Dùng PageHeader, Badge, Card.
+- `RequestDetailPage` — Dùng PageHeader, Badge, Card.
+- `TrashPage` — Dùng PageHeader, Table primitives, Badge, EmptyState, ConfirmationModal.
+- `HolidaysPage` — Dùng PageHeader, Table primitives, Modal, TextInput.
+- `RanksPage` — Dùng PageHeader, Table primitives, Modal, TextInput.
+- `DivisionsPage` — Dùng PageHeader, Table primitives, Modal, TextInput, Badge.
+
+**Backward compat:**
+- Giữ nguyên business logic, API calls, data flow.
+- Không xóa components cũ trong `src/components/` (Badge, EmptyState, Skeleton, Modal, Toast).
+- Legacy color aliases (`neutral-*`, `primary`) được thêm vào `@theme` block để pages chưa refactor không bị break.
+
+**Files mới:** 35+ files trong `src/ui/`
+**Files sửa:** `index.html`, `src/index.css`, `src/main.tsx`, `src/components/Layout.tsx`, `src/App.tsx`, 11 pages
+
+---
+
 ## 2026-06-04
 
 ### 36. BUG-016: Fix Dashboard tự reload khi chuyển tab

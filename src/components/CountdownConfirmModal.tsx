@@ -54,8 +54,8 @@ export default function CountdownConfirmModal({
       <div className="bg-white rounded-xl shadow-modal w-full max-w-md p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-neutral-900">{title}</h3>
-          <button onClick={onCancel} className="text-neutral-400 hover:text-neutral-600">
-            <X className="w-5 h-5" />
+          <button onClick={onCancel} className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-sm text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors" aria-label="Đóng">
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
         <div className="text-sm text-neutral-600">{children}</div>

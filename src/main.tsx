@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './hooks/useAuth'
 import { ToastProvider } from './components/Toast'
+import { DialogProvider } from './ui/feedback/DialogManager'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +23,9 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ToastProvider>
-          <App />
+          <DialogProvider>
+            <App />
+          </DialogProvider>
         </ToastProvider>
       </AuthProvider>
     </QueryClientProvider>

@@ -1,7 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+import { useForm, Controller } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import Modal from '../Modal'
 import HtmlEditor from '../HtmlEditor'
 import type { Template } from '../../hooks/queries/useEmailTemplates'
+import { emailTemplateSchema, type EmailTemplateFormData } from '../../lib/form-schemas'
+import FormField from '../FormField'
+import TextInput from '../../ui/input/TextInput'
 
 const defaultPlaceholders = [
   '{{agentName}}', '{{staffId}}', '{{oldT1Name}}', '{{oldT1Email}}', '{{oldT1StaffId}}',
@@ -29,69 +34,99 @@ interface Props {
 }
 
 export default function TemplateEditModal({ mode, template, onSave, onClose, saving }: Props) {
-  const [name, setName] = useState('')
-  const [key, setKey] = useState('')
-  const [subject, setSubject] = useState('')
-  const [body, setBody] = useState('')
-  const [keyTouched, setKeyTouched] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<EmailTemplateFormData>({
+    resolver: zodResolver(emailTemplateSchema),
+    defaultValues: { name: '', template_key: '', subject: '', body: '' },
+  })
+
+  const nameValue = watch('name')
+  const keyValue = watch('template_key')
 
   useEffect(() => {
     if (mode === 'edit' && template) {
-      setName(template.name)
-      setKey(template.template_key)
-      setSubject(template.subject)
-      setBody(template.body)
-      setKeyTouched(true)
+      reset({
+        name: template.name,
+        template_key: template.template_key,
+        subject: template.subject,
+        body: template.body,
+      })
     } else {
-      setName('')
-      setKey('')
-      setSubject('')
-      setBody('')
-      setKeyTouched(false)
+      reset({ name: '', template_key: '', subject: '', body: '' })
     }
-  }, [mode, template])
+  }, [mode, template, reset])
 
-  const handleNameChange = (val: string) => {
-    setName(val)
-    if (!keyTouched) setKey(slugify(val))
-  }
+  useEffect(() => {
+    if (mode === 'create' && nameValue && !keyValue) {
+      setValue('template_key', slugify(nameValue))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nameValue])
 
-  const handleSave = () => {
-    onSave({ id: template?.id, name, template_key: key, subject, body })
+  const onSubmit = (data: EmailTemplateFormData) => {
+    onSave({ id: template?.id, ...data })
   }
 
   return (
-    <Modal onClose={onClose} title={mode === 'edit' ? 'Chỉnh sửa mẫu email' : 'Thêm mẫu email'} maxWidth="max-w-3xl">
-      <div className="space-y-4">
+    <Modal onClose={onClose} title={mode === 'edit' ? 'Chỉnh sửa mẫu email' : 'Thêm mẫu email'} size="lg">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Tên mẫu</label>
-            <input type="text" value={name} onChange={(e) => handleNameChange(e.target.value)}
-              className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" placeholder="Ví dụ: Thông báo T1 tạm thờii" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Template key</label>
-            <input type="text" value={key} disabled={mode === 'edit'}
-              onChange={(e) => { setKey(e.target.value); setKeyTouched(true) }}
-              className={`w-full h-10 px-3 border border-neutral-300 rounded-md text-sm font-mono focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light ${mode === 'edit' ? 'bg-neutral-100 text-neutral-500' : ''}`}
-              placeholder="Ví dụ: temp-t1-assigned" />
-          </div>
+          <FormField label="Tên mẫu" error={errors.name?.message} required>
+            <TextInput
+              {...register('name')}
+              placeholder="Ví dụ: Thông báo T1 tạm thờii"
+              error={errors.name?.message}
+            />
+          </FormField>
+          <FormField label="Template key" error={errors.template_key?.message} required>
+            <TextInput
+              {...register('template_key')}
+              disabled={mode === 'edit'}
+              placeholder="Ví dụ: temp-t1-assigned"
+              error={errors.template_key?.message}
+              className={mode === 'edit' ? 'bg-bg-secondary text-text-tertiary' : ''}
+            />
+          </FormField>
         </div>
-        <div>
-          <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Tiêu đề</label>
-          <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)}
-            className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" placeholder="[Thông báo] ..." />
-        </div>
-        <div>
-          <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Nội dung</label>
-          <HtmlEditor value={body} onChange={(val) => setBody(val)} placeholders={defaultPlaceholders} previewData={previewData} height="280px" />
-        </div>
+        <FormField label="Tiêu đề" error={errors.subject?.message} required>
+          <TextInput
+            {...register('subject')}
+            placeholder="[Thông báo] ..."
+            error={errors.subject?.message}
+          />
+        </FormField>
+        <FormField label="Nội dung" error={errors.body?.message} required>
+          <Controller
+            name="body"
+            control={control}
+            render={({ field }) => (
+              <HtmlEditor
+                value={field.value}
+                onChange={field.onChange}
+                placeholders={defaultPlaceholders}
+                previewData={previewData}
+                height="280px"
+              />
+            )}
+          />
+        </FormField>
         <div className="flex items-center justify-end gap-3 pt-2">
-          <button onClick={handleSave} disabled={saving} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover transition-colors disabled:opacity-60">
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-4 h-9 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors disabled:opacity-60"
+          >
             {saving ? 'Đang lưu...' : mode === 'edit' ? 'Lưu mẫu' : 'Tạo mẫu'}
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   )
 }

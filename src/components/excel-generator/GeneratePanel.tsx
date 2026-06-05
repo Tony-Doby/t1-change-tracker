@@ -21,6 +21,14 @@ import {
 } from '../../lib/excel-generator'
 import type { ExcelTemplate, FieldMappingValue } from '../../types'
 import type * as XLSXType from 'xlsx'
+import Card from '../../ui/layout/Card'
+import Section from '../../ui/layout/Section'
+import Table from '../../ui/layout/Table'
+import TableHeader from '../../ui/layout/TableHeader'
+import { TableHeaderCell } from '../../ui/layout/TableHeader'
+import TableRow from '../../ui/layout/TableRow'
+import TableCell from '../../ui/layout/TableCell'
+import Badge from '../../ui/display/Badge'
 
 interface Props {
   templates: ExcelTemplate[]
@@ -122,7 +130,6 @@ export default function GeneratePanel({ templates }: Props) {
         const hasSavedMapping = Object.keys(savedMapping).length > 0
 
         if (hasSavedMapping && allSavedInData) {
-          // Auto-adapt saved mapping to actual data column names
           const adaptedMapping: Record<string, FieldMappingValue> = {}
           for (const [field, mapVal] of Object.entries(savedMapping)) {
             if (mapVal.type === 'fixed') {
@@ -139,7 +146,6 @@ export default function GeneratePanel({ templates }: Props) {
           show(`Đã đọc ${rows.length} dòng data. Mapping đã áp dụng tự động.`, 'success')
         } else {
           setShowMappingPanel(true)
-          // Suggest mapping based on exact/case-insensitive match
           const suggested: Record<string, FieldMappingValue> = {}
           const lowerHeaders = headers.map((h) => h.toLowerCase().trim())
           for (const field of selectedTemplate.fields ?? []) {
@@ -205,7 +211,6 @@ export default function GeneratePanel({ templates }: Props) {
       const generatedBlob = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' })
       const generatedFileName = formatGenerateFileName(selectedTemplate.name)
 
-      // Upload original data file
       const originalPath = `originals/${crypto.randomUUID()}.xlsx`
       const { error: origErr } = await supabase.storage
         .from('excel-generations')
@@ -215,7 +220,6 @@ export default function GeneratePanel({ templates }: Props) {
 
       if (origErr) throw origErr
 
-      // Upload generated file
       const generatedPath = `generated/${crypto.randomUUID()}.xlsx`
       const { error: genErr } = await supabase.storage
         .from('excel-generations')
@@ -227,7 +231,6 @@ export default function GeneratePanel({ templates }: Props) {
 
       if (genErr) throw genErr
 
-      // Insert log
       const { error: logErr } = await supabase.from('excel_generation_logs').insert({
         template_id: selectedTemplate.id,
         original_file_name: dataFile!.name,
@@ -241,7 +244,6 @@ export default function GeneratePanel({ templates }: Props) {
 
       if (logErr) throw logErr
 
-      // Auto download
       const url = URL.createObjectURL(
         new Blob([generatedBlob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       )
@@ -295,12 +297,12 @@ export default function GeneratePanel({ templates }: Props) {
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Template selector */}
-      <div>
-        <label className="block text-sm font-medium text-neutral-700 mb-1.5">Chọn template</label>
+      <Section gap="sm">
+        <label className="block text-sm font-medium text-text-secondary">Chọn template</label>
         <select
           value={selectedTemplateId}
           onChange={(e) => handleTemplateChange(e.target.value)}
-          className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full h-10 px-3 border border-border-light rounded-sm text-sm bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
         >
           <option value="">-- Chọn template --</option>
           {templates.map((t) => (
@@ -310,12 +312,12 @@ export default function GeneratePanel({ templates }: Props) {
         {selectedTemplate && (
           <div className="mt-2 space-y-1">
             {selectedTemplate.fields && selectedTemplate.fields.length > 0 && (
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-text-tertiary">
                 Trường: {selectedTemplate.fields.join(', ')}
               </p>
             )}
             {Object.keys(selectedTemplate.column_mapping ?? {}).length > 0 && (
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-text-tertiary">
                 Mapping: {Object.entries(selectedTemplate.column_mapping)
                   .map(([k, v]) => `${k}→${v.type === 'column' ? v.value : `"${v.value}"`}`)
                   .join(', ')}
@@ -325,7 +327,7 @@ export default function GeneratePanel({ templates }: Props) {
               <button
                 onClick={handleDownloadSample}
                 disabled={downloadingSample}
-                className="text-xs text-primary hover:underline flex items-center gap-1"
+                className="text-xs text-accent hover:underline flex items-center gap-1"
               >
                 {downloadingSample ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                 Tải file import mẫu
@@ -333,17 +335,17 @@ export default function GeneratePanel({ templates }: Props) {
             )}
           </div>
         )}
-      </div>
+      </Section>
 
       {/* Generate date picker */}
       {selectedTemplateId && (
         <div className="flex items-center gap-2">
-          <label className="text-sm text-neutral-700">Ngày áp dụng cho expression:</label>
+          <label className="text-sm text-text-secondary">Ngày áp dụng cho expression:</label>
           <input
             type="date"
             value={generateDate}
             onChange={(e) => setGenerateDate(e.target.value)}
-            className="h-9 px-3 border border-neutral-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="h-9 px-3 border border-border-light rounded-sm text-sm bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
           />
         </div>
       )}
@@ -356,16 +358,16 @@ export default function GeneratePanel({ templates }: Props) {
             onDragLeave={onDragLeave}
             onDrop={onDrop}
             onClick={() => inputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer ${
-              isDragOver ? 'border-primary bg-primary-light/20' : 'border-neutral-300 bg-white hover:border-neutral-400'
+            className={`border-2 border-dashed rounded-md p-10 text-center transition-colors cursor-pointer bg-bg-primary ${
+              isDragOver ? 'border-accent bg-accent-subtle' : 'border-border-light hover:border-accent'
             }`}
           >
             <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChange} />
             {dataFile ? (
               <div className="flex flex-col items-center gap-2">
-                <FileSpreadsheet className="w-10 h-10 text-primary" />
-                <p className="text-neutral-900 font-medium text-sm">{dataFile.name}</p>
-                <p className="text-neutral-500 text-xs">{dataRows.length} dòng data</p>
+                <FileSpreadsheet className="w-10 h-10 text-accent" aria-hidden="true" />
+                <p className="text-text-primary font-medium text-sm">{dataFile.name}</p>
+                <p className="text-text-tertiary text-xs">{dataRows.length} dòng data</p>
                 <button
                   onClick={(e) => { e.stopPropagation(); resetData() }}
                   className="text-xs text-danger hover:underline flex items-center gap-1 mt-1"
@@ -375,22 +377,22 @@ export default function GeneratePanel({ templates }: Props) {
               </div>
             ) : (
               <>
-                <UploadCloud className="w-10 h-10 text-neutral-400 mx-auto mb-3" />
-                <p className="text-neutral-700 font-medium text-sm">Kéo thả file data vào đây</p>
-                <p className="text-neutral-500 text-xs mt-1">hoặc nhấp để chọn file .xlsx / .csv</p>
+                <UploadCloud className="w-10 h-10 text-text-tertiary mx-auto mb-3" aria-hidden="true" />
+                <p className="text-text-secondary font-medium text-sm">Kéo thả file data vào đây</p>
+                <p className="text-text-tertiary text-xs mt-1">hoặc nhấp để chọn file .xlsx / .csv</p>
               </>
             )}
           </div>
 
           {dataFile && (
             <div className="flex items-center gap-2">
-              <label className="text-xs text-neutral-600">Row chứa tên trường trong file data (tính từ 1):</label>
+              <label className="text-xs text-text-secondary">Row chứa tên trường trong file data (tính từ 1):</label>
               <input
                 type="number"
                 min={1}
                 value={dataHeaderRow + 1}
                 onChange={(e) => setDataHeaderRow(Math.max(0, parseInt(e.target.value || '1') - 1))}
-                className="w-16 h-7 px-1 border border-neutral-300 rounded text-sm text-center"
+                className="w-16 h-7 px-1 border border-border-light rounded-sm text-sm text-center text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
               />
             </div>
           )}
@@ -399,170 +401,171 @@ export default function GeneratePanel({ templates }: Props) {
 
       {parsing && (
         <div className="flex items-center justify-center py-4">
-          <Loader2 className="w-5 h-5 text-primary animate-spin mr-2" />
-          <span className="text-sm text-neutral-500">Đang xử lý...</span>
+          <Loader2 className="w-5 h-5 text-accent animate-spin mr-2" aria-hidden="true" />
+          <span className="text-sm text-text-tertiary">Đang xử lý...</span>
         </div>
       )}
 
       {/* Mapping Panel (manual adjust) */}
       {showMappingPanel && !parsing && selectedTemplate && (
-        <div className="bg-white rounded-lg shadow-card p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <Settings2 className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-semibold text-neutral-900">Mapping dữ liệu</h3>
-          </div>
-          <p className="text-xs text-neutral-500">
-            File data có cột khác với mẫu. Vui lòng chọn cột tương ứng hoặc nhập giá trị cố định.
-          </p>
+        <Card>
+          <Section gap="sm">
+            <div className="flex items-center gap-2">
+              <Settings2 className="w-4 h-4 text-accent" aria-hidden="true" />
+              <h3 className="text-sm font-medium text-text-primary">Mapping dữ liệu</h3>
+            </div>
+            <p className="text-xs text-text-tertiary">
+              File data có cột khác với mẫu. Vui lòng chọn cột tương ứng hoặc nhập giá trị cố định.
+            </p>
 
-          <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-            {(selectedTemplate.fields ?? []).map((field) => {
-              const current = mapping[field] || { type: 'column' as const, value: '' }
-              return (
-                <div key={field} className="flex items-center gap-2 py-2 px-3 rounded-md bg-neutral-50 border border-neutral-100">
-                  <span className="text-sm font-medium text-primary whitespace-nowrap min-w-[100px] truncate" title={field}>
-                    {field}
-                  </span>
-                  <span className="text-neutral-400 text-sm">→</span>
-                  <select
-                    value={current.type}
-                    onChange={(e) =>
-                      setMapping((prev) => ({
-                        ...prev,
-                        [field]: { type: e.target.value as 'column' | 'fixed', value: e.target.value === 'fixed' ? '' : (prev[field]?.value || ''), uppercase: prev[field]?.uppercase },
-                      }))
-                    }
-                    className="h-8 px-2 border border-neutral-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 w-[100px]"
-                  >
-                    <option value="column">Cột data</option>
-                    <option value="fixed">Cố định</option>
-                  </select>
-                  {current.type === 'column' ? (
+            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+              {(selectedTemplate.fields ?? []).map((field) => {
+                const current = mapping[field] || { type: 'column' as const, value: '' }
+                return (
+                  <div key={field} className="flex items-center gap-2 py-2 px-3 rounded-sm bg-bg-secondary border border-border-hairline">
+                    <span className="text-sm font-medium text-accent whitespace-nowrap min-w-[100px] truncate" title={field}>
+                      {field}
+                    </span>
+                    <span className="text-text-tertiary text-sm">→</span>
                     <select
-                      value={current.value}
-                      onChange={(e) => setMapping((prev) => ({ ...prev, [field]: { ...(prev[field] || { type: 'column' }), type: 'column', value: e.target.value } }))}
-                      className="flex-1 h-8 px-2 border border-neutral-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      value={current.type}
+                      onChange={(e) =>
+                        setMapping((prev) => ({
+                          ...prev,
+                          [field]: { type: e.target.value as 'column' | 'fixed', value: e.target.value === 'fixed' ? '' : (prev[field]?.value || ''), uppercase: prev[field]?.uppercase },
+                        }))
+                      }
+                      className="h-8 px-2 border border-border-light rounded-sm text-sm bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent w-[100px]"
                     >
-                      <option value="">-- Chọn cột --</option>
-                      {dataHeaders.map((h) => (
-                        <option key={h} value={h}>{h}</option>
-                      ))}
+                      <option value="column">Cột data</option>
+                      <option value="fixed">Cố định</option>
                     </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={current.value}
-                      onChange={(e) => setMapping((prev) => ({ ...prev, [field]: { ...(prev[field] || { type: 'fixed' }), type: 'fixed', value: e.target.value } }))}
-                      placeholder="Nhập giá trị..."
-                      className="flex-1 h-8 px-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                  )}
-                  <label className="flex items-center gap-1 text-xs text-neutral-600 whitespace-nowrap cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={current.uppercase || false}
-                      onChange={(e) => setMapping((prev) => ({ ...prev, [field]: { ...(prev[field] || { type: current.type, value: current.value }), uppercase: e.target.checked } }))}
-                      className="w-3.5 h-3.5 rounded border-neutral-300 text-primary focus:ring-primary"
-                    />
-                    VIẾT HOA
-                  </label>
-                  {current.value ? (
-                    <CheckCircle className="w-4 h-4 text-success shrink-0" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-                  )}
-                </div>
-              )
-            })}
-          </div>
+                    {current.type === 'column' ? (
+                      <select
+                        value={current.value}
+                        onChange={(e) => setMapping((prev) => ({ ...prev, [field]: { ...(prev[field] || { type: 'column' }), type: 'column', value: e.target.value } }))}
+                        className="flex-1 h-8 px-2 border border-border-light rounded-sm text-sm bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                      >
+                        <option value="">-- Chọn cột --</option>
+                        {dataHeaders.map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={current.value}
+                        onChange={(e) => setMapping((prev) => ({ ...prev, [field]: { ...(prev[field] || { type: 'fixed' }), type: 'fixed', value: e.target.value } }))}
+                        placeholder="Nhập giá trị..."
+                        className="flex-1 h-8 px-2 border border-border-light rounded-sm text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                      />
+                    )}
+                    <label className="flex items-center gap-1 text-xs text-text-secondary whitespace-nowrap cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={current.uppercase || false}
+                        onChange={(e) => setMapping((prev) => ({ ...prev, [field]: { ...(prev[field] || { type: current.type, value: current.value }), uppercase: e.target.checked } }))}
+                        className="w-3.5 h-3.5 rounded border-border-light text-accent focus:ring-accent"
+                      />
+                      VIẾT HOA
+                    </label>
+                    {current.value ? (
+                      <CheckCircle className="w-4 h-4 text-success shrink-0" aria-hidden="true" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-warning shrink-0" aria-hidden="true" />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              onClick={() => { setShowMappingPanel(false); setMapping({}); }}
-              className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50"
-            >
-              Làm lại
-            </button>
-            <button
-              onClick={handleApplyMapping}
-              disabled={parsing}
-              className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2"
-            >
-              {parsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-              {parsing ? 'Đang xử lý...' : 'Xác nhận mapping'}
-            </button>
-          </div>
-        </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => { setShowMappingPanel(false); setMapping({}); }}
+                className="px-4 h-9 border border-border-light rounded-sm text-sm text-text-secondary hover:bg-bg-secondary transition-colors"
+              >
+                Làm lại
+              </button>
+              <button
+                onClick={handleApplyMapping}
+                disabled={parsing}
+                className="px-4 h-9 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover disabled:opacity-50 flex items-center gap-2 transition-colors"
+              >
+                {parsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                {parsing ? 'Đang xử lý...' : 'Xác nhận mapping'}
+              </button>
+            </div>
+          </Section>
+        </Card>
       )}
 
       {/* Match status */}
       {preview && !parsing && (
-        <div className="bg-white rounded-lg shadow-card p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-primary" />
-            Kiểm tra mapping
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {preview.matched.map((m) => (
-              <span
-                key={m.field}
-                className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-                  m.matched ? 'bg-success-light text-success' : 'bg-warning-light text-warning'
-                }`}
-              >
-                {m.matched ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                {m.field}
-                {m.matched && (
-                  <span className="opacity-75">
-                    → {m.type === 'column' ? m.value : `"${m.value}"`}
-                  </span>
-                )}
-              </span>
-            ))}
-          </div>
-          {!allMatched && (
-            <p className="text-xs text-warning">
-              Một số trường chưa được map. Các trường chưa map sẽ giữ nguyên giá trị trong template.
-            </p>
-          )}
-        </div>
+        <Card>
+          <Section gap="sm">
+            <h3 className="text-sm font-medium text-text-primary flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-accent" aria-hidden="true" />
+              Kiểm tra mapping
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {preview.matched.map((m) => (
+                <Badge
+                  key={m.field}
+                  variant={m.matched ? 'success' : 'warning'}
+                  className="gap-1"
+                >
+                  {m.matched ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                  {m.field}
+                  {m.matched && (
+                    <span className="opacity-75">
+                      → {m.type === 'column' ? m.value : `"${m.value}"`}
+                    </span>
+                  )}
+                </Badge>
+              ))}
+            </div>
+            {!allMatched && (
+              <p className="text-xs text-warning">
+                Một số trường chưa được map. Các trường chưa map sẽ giữ nguyên giá trị trong template.
+              </p>
+            )}
+          </Section>
+        </Card>
       )}
 
       {/* Preview table */}
       {preview && preview.rows.length > 0 && !parsing && (
-        <div className="bg-white rounded-lg shadow-card overflow-hidden">
-          <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-neutral-900">Preview ({preview.rows.length} dòng đầu)</h3>
+        <Card padding="none">
+          <div className="px-4 py-3 border-b border-border-hairline flex items-center justify-between">
+            <h3 className="text-sm font-medium text-text-primary">Preview ({preview.rows.length} dòng đầu)</h3>
             <button
               onClick={() => setShowMappingPanel(true)}
-              className="text-xs text-primary hover:underline flex items-center gap-1"
+              className="text-xs text-accent hover:underline flex items-center gap-1"
             >
               <Settings2 className="w-3 h-3" /> Chỉnh sửa mapping
             </button>
           </div>
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-neutral-50">
-                <tr className="border-b border-neutral-200">
-                  {preview.headers.map((h) => (
-                    <th key={h} className="px-3 py-2 text-left text-neutral-500 font-medium whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
+            <Table>
+              <TableHeader>
+                {preview.headers.map((h) => (
+                  <TableHeaderCell key={h}>{h}</TableHeaderCell>
+                ))}
+              </TableHeader>
               <tbody>
                 {preview.rows.map((row, idx) => (
-                  <tr key={idx} className="border-b border-neutral-100 hover:bg-neutral-50">
+                  <TableRow key={idx}>
                     {preview.headers.map((h) => (
-                      <td key={h} className="px-3 py-2 text-neutral-700 whitespace-nowrap max-w-[200px] truncate">
+                      <TableCell key={h} className="whitespace-nowrap max-w-[200px] truncate">
                         {String(row[h] ?? '')}
-                      </td>
+                      </TableCell>
                     ))}
-                  </tr>
+                  </TableRow>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Generate button */}
@@ -571,7 +574,7 @@ export default function GeneratePanel({ templates }: Props) {
           <button
             onClick={handleGenerate}
             disabled={generating || dataRows.length === 0}
-            className="px-5 h-10 bg-primary text-white rounded-md text-sm hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2"
+            className="px-5 h-10 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover disabled:opacity-50 flex items-center gap-2 transition-colors"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {generating ? 'Đang generate...' : 'Generate & Download'}

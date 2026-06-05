@@ -18,6 +18,9 @@ import DeadlineInfo from '../components/request-detail/DeadlineInfo'
 import RequestComments from '../components/request-detail/RequestComments'
 import StepHistory from '../components/request-detail/StepHistory'
 import NotificationChecklist from '../components/request-detail/NotificationChecklist'
+import PageHeader from '../ui/layout/PageHeader'
+import Badge from '../ui/display/Badge'
+import Card from '../ui/layout/Card'
 
 export default function RequestDetailPage() {
   const { id } = useParams()
@@ -51,14 +54,19 @@ export default function RequestDetailPage() {
     return (
       <div className="space-y-6 animate-fade-in max-w-4xl">
         <SkeletonText lines={2} />
-        <div className="page-card-lg space-y-4"><SkeletonText lines={4} /></div>
-        <div className="page-card-lg space-y-4"><SkeletonText lines={6} /></div>
+        <Card className="space-y-4"><SkeletonText lines={4} /></Card>
+        <Card className="space-y-4"><SkeletonText lines={6} /></Card>
       </div>
     )
   }
 
   if (!request) {
-    return <div className="text-center py-12"><p className="text-neutral-500">Không tìm thấy đề xuất</p><Link to="/requests" className="text-primary hover:underline text-sm">Quay lại</Link></div>
+    return (
+      <div className="text-center py-12">
+        <p className="text-text-tertiary">Không tìm thấy đề xuất</p>
+        <Link to="/requests" className="text-accent hover:underline text-sm">Quay lại</Link>
+      </div>
+    )
   }
 
   const isCompleted = request.status === 'completed'
@@ -122,33 +130,47 @@ export default function RequestDetailPage() {
 
   const isAtB3 = (request.status === 'step2' && request.step2_confirmed_at) || ['step3', 'step4', 'step5'].includes(request.status)
 
+  const requestStatusBadge = () => {
+    if (isCompleted) return <Badge variant="success">Hoàn tất</Badge>
+    if (isCancelled) return <Badge variant="danger">Đã hủy</Badge>
+    if (request.status === 'step2' && !request.step2_confirmed_at) return <Badge variant="primary">B2 - Chờ ngày xác nhận</Badge>
+    return <Badge variant="success">B3 - Quyết định</Badge>
+  }
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <Link to="/requests" className="p-1.5 rounded-md hover:bg-neutral-200 text-neutral-700"><ArrowLeft className="w-5 h-5" /></Link>
+        <div className="flex items-center gap-3 min-w-0">
+          <Link to="/requests" className="p-1.5 rounded-sm hover:bg-bg-secondary text-text-secondary shrink-0">
+            <ArrowLeft className="w-5 h-5" aria-hidden="true" />
+          </Link>
           <div>
-            <h1 className="text-2xl font-bold text-neutral-900">Đề xuất #{request.id?.slice(0, 8)}</h1>
-            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${request.status === 'completed' ? 'bg-success-light text-success' : request.status === 'cancelled' ? 'bg-danger-light text-danger' : request.status === 'step2' && !request.step2_confirmed_at ? 'bg-primary-light text-primary' : 'bg-success-light text-success'}`}>
-              {isCompleted ? 'Hoàn tất' : isCancelled ? 'Đã hủy' : request.status === 'step2' && !request.step2_confirmed_at ? 'B2 - Chờ ngày xác nhận' : 'B3 - Quyết định'}
-            </span>
+            <PageHeader title={`Đề xuất #${request.id?.slice(0, 8)}`} className="mb-0" />
+            <div className="mt-1">{requestStatusBadge()}</div>
           </div>
         </div>
         {role !== 'viewer' && !isCompleted && !isCancelled && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {(request.status === 'step1' || (request.status === 'step2' && !request.step2_confirmed_at)) && (
-              <button onClick={advanceStep} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">
+              <button onClick={advanceStep} className="px-4 h-9 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors">
                 {request.status === 'step1' ? 'Chuyển sang B2' : 'Nhập ngày xác nhận B2'}
               </button>
             )}
             {((request.status === 'step2' && request.step2_confirmed_at) || ['step3', 'step4', 'step5'].includes(request.status)) && (
               <>
-                <button onClick={() => setConfirmModal({ open: true })} disabled={!calculatedB3.isB3Ready && request.status === 'step2'}
+                <button
+                  onClick={() => setConfirmModal({ open: true })}
+                  disabled={!calculatedB3.isB3Ready && request.status === 'step2'}
                   title={!calculatedB3.isB3Ready ? `Còn ${Math.max(0, calculatedB3.daysLeft)} ngày làm việc` : 'Xác nhận thay đổi T1'}
-                  className={`px-4 h-9 rounded-md text-sm ${calculatedB3.isB3Ready ? 'bg-success text-white hover:opacity-90' : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'}`}>
+                  className={`px-4 h-9 rounded-sm text-sm transition-colors ${
+                    calculatedB3.isB3Ready ? 'bg-success text-white hover:opacity-90' : 'bg-bg-quaternary text-text-disabled cursor-not-allowed'
+                  }`}
+                >
                   {calculatedB3.isB3Ready ? 'Đồng ý' : `Đồng ý (${Math.max(0, calculatedB3.daysLeft)} ngày)`}
                 </button>
-                <button onClick={() => setCancelModal({ open: true, reason: '' })} className="px-4 h-9 border border-danger text-danger rounded-md text-sm hover:bg-danger-light">Hủy đề xuất</button>
+                <button onClick={() => setCancelModal({ open: true, reason: '' })} className="px-4 h-9 border border-danger text-danger rounded-sm text-sm hover:bg-danger-subtle transition-colors">
+                  Hủy đề xuất
+                </button>
               </>
             )}
           </div>
@@ -178,19 +200,23 @@ export default function RequestDetailPage() {
 
       {showStep2Date && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-modal w-full max-w-md p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-neutral-900">Xác nhận chuyển sang B2</h3>
-            <p className="text-sm text-neutral-600">Vui lòng nhập ngày T1 mới xác nhận đồng ý tiếp nhận.</p>
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Ngày xác nhận</label>
-              <input type="date" value={step2Date} onChange={(e) => setStep2Date(e.target.value)}
-                className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" />
+          <Card padding="lg" className="w-full max-w-md">
+            <h2 className="text-lg font-semibold text-text-primary mb-1">Xác nhận chuyển sang B2</h2>
+            <p className="text-sm text-text-secondary mb-4">Vui lòng nhập ngày T1 mới xác nhận đồng ý tiếp nhận.</p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-text-secondary mb-1">Ngày xác nhận</label>
+              <input
+                type="date"
+                value={step2Date}
+                onChange={(e) => setStep2Date(e.target.value)}
+                className="w-full h-10 px-3 border border-border-light rounded-sm text-sm bg-bg-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+              />
             </div>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowStep2Date(false)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
-              <button onClick={confirmStep2Date} disabled={!step2Date} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover disabled:opacity-50">Xác nhận</button>
+              <button onClick={() => setShowStep2Date(false)} className="px-4 h-9 border border-border-light rounded-sm text-sm text-text-secondary hover:bg-bg-secondary transition-colors">Hủy</button>
+              <button onClick={confirmStep2Date} disabled={!step2Date} className="px-4 h-9 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover disabled:opacity-50 transition-colors">Xác nhận</button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
@@ -198,16 +224,19 @@ export default function RequestDetailPage() {
         onConfirm={handleConfirmChange} onCancel={() => setConfirmModal({ open: false })}>
         <p>Bạn đồng ý hoàn tất đổi T1 cho <strong>{request.agent?.full_name ?? '—'}</strong>?</p>
         <p className="mt-1">{request.old_t1 ? `${request.old_t1.full_name} - ${request.old_t1.staff_id}` : '—'} → {request.new_t1 ? `${request.new_t1.full_name} - ${request.new_t1.staff_id}` : '—'}</p>
-        <p className="mt-2 text-neutral-500">Hành động này sẽ cập nhật T1 mới, ghi lịch sử và tạo M1 transition tasks (nếu có).</p>
       </CountdownConfirmModal>
 
       <CountdownConfirmModal open={cancelModal.open} title="Hủy đề xuất" confirmText="Xác nhận hủy" confirmVariant="danger"
         onConfirm={handleCancelRequest} onCancel={() => setCancelModal({ open: false, reason: '' })}>
         <p>Bạn muốn hủy đề xuất đổi T1 của <strong>{request.agent?.full_name ?? '—'}</strong>?</p>
         <div className="mt-3">
-          <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">Lý do hủy</label>
-          <textarea value={cancelModal.reason} onChange={(e) => setCancelModal((prev) => ({ ...prev, reason: e.target.value }))} rows={3}
-            className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" />
+          <label className="block text-sm font-medium text-text-secondary mb-1">Lý do hủy</label>
+          <textarea
+            value={cancelModal.reason}
+            onChange={(e) => setCancelModal((prev) => ({ ...prev, reason: e.target.value }))}
+            rows={3}
+            className="w-full px-3 py-2 border border-border-light rounded-sm text-sm bg-bg-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+          />
         </div>
       </CountdownConfirmModal>
     </div>

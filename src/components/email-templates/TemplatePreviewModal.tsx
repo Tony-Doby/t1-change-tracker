@@ -21,10 +21,10 @@ function getPreviewHtml(template: Template) {
 export default function TemplatePreviewModal({ template, onClose }: { template: Template; onClose: () => void }) {
   const subject = template.subject.replace(/{{(\w+)}}/g, (m) => previewData[m] ?? m)
   return (
-    <Modal onClose={onClose} title="Xem trước mẫu" maxWidth="max-w-2xl">
-      <div className="border border-neutral-200 rounded-lg overflow-hidden">
-        <div className="bg-neutral-50 px-4 py-2 border-b border-neutral-200 text-xs text-neutral-500">Subject: {subject}</div>
-        <div className="p-4 text-sm text-neutral-800 prose prose-sm max-w-none bg-white" dangerouslySetInnerHTML={{ __html: getPreviewHtml(template) }} />
+    <Modal onClose={onClose} title="Xem trước mẫu" size="lg">
+      <div className="border border-border-light rounded-sm overflow-hidden">
+        <div className="bg-bg-secondary px-4 py-2 border-b border-border-hairline text-xs text-text-tertiary">Subject: {subject}</div>
+        <div className="p-4 text-sm text-text-primary prose prose-sm max-w-none bg-bg-primary" dangerouslySetInnerHTML={{ __html: getPreviewHtml(template) }} />
       </div>
     </Modal>
   )

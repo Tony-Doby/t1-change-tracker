@@ -1,13 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import { SkeletonTable } from '../components/Skeleton'
-import EmptyState from '../components/EmptyState'
-import Modal from '../components/Modal'
+import EmptyState from '../ui/display/EmptyState'
 import CountdownConfirmModal from '../components/CountdownConfirmModal'
 import { useDivisionsListQuery, useSaveDivisionMutation, useDeleteDivisionMutation, useRecomputeDivisionsMutation } from '../hooks/queries/useDivisions'
-import { Inbox, Shield, Search, X, RefreshCw } from 'lucide-react'
+import { Shield, Search, X, RefreshCw } from 'lucide-react'
+import PageHeader from '../ui/layout/PageHeader'
+import Table from '../ui/layout/Table'
+import TableHeader from '../ui/layout/TableHeader'
+import { TableHeaderCell } from '../ui/layout/TableHeader'
+import TableRow from '../ui/layout/TableRow'
+import TableCell from '../ui/layout/TableCell'
+import Modal from '../ui/layout/Modal'
+import TextInput from '../ui/input/TextInput'
+import Badge from '../ui/display/Badge'
+import { useColumnResize } from '../hooks/useColumnResize'
+import { divisionSchema, type DivisionFormData } from '../lib/form-schemas'
 
 export default function DivisionsPage() {
   const { show } = useToast()
@@ -19,7 +31,6 @@ export default function DivisionsPage() {
 
   const [agents, setAgents] = useState<Record<string, { full_name: string; staff_id: string }>>({})
   const [editing, setEditing] = useState<any | null>(null)
-  const [form, setForm] = useState({ name: '', head_agent_id: '', is_official: false })
   const [showRecomputeConfirm, setShowRecomputeConfirm] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [deleting, setDeleting] = useState<any | null>(null)
@@ -33,7 +44,22 @@ export default function DivisionsPage() {
   const [searchLoading, setSearchLoading] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  // Load head agents when divisions change
+  const { widths, startResize } = useColumnResize([200, 220, 100, 100, 100])
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<DivisionFormData>({
+    resolver: zodResolver(divisionSchema),
+    defaultValues: { name: '', head_agent_id: '', is_official: false },
+  })
+
+  const headAgentId = watch('head_agent_id')
+
   useEffect(() => {
     const headIds = [...new Set(divisions.map((d) => d.head_agent_id).filter(Boolean))]
     if (headIds.length === 0) { setAgents({}); return }
@@ -60,19 +86,31 @@ export default function DivisionsPage() {
   }, [])
 
   useEffect(() => {
-    if (editing?.head_agent_id) {
-      const cached = agents[editing.head_agent_id]
-      if (cached) {
-        setSearchTerm(`${cached.full_name} (${cached.staff_id})`)
-      } else {
-        supabase.from('agents').select('full_name, staff_id').eq('id', editing.head_agent_id).single().then(({ data }) => {
-          if (data) setSearchTerm(`${data.full_name} (${data.staff_id})`)
+    if (showModal) {
+      if (editing) {
+        reset({
+          name: editing.name ?? '',
+          head_agent_id: editing.head_agent_id ?? '',
+          is_official: editing.is_official ?? false,
         })
+        const cached = agents[editing.head_agent_id]
+        if (cached) {
+          setSearchTerm(`${cached.full_name} (${cached.staff_id})`)
+        } else if (editing.head_agent_id) {
+          supabase.from('agents').select('full_name, staff_id').eq('id', editing.head_agent_id).single().then(({ data }) => {
+            if (data) setSearchTerm(`${data.full_name} (${data.staff_id})`)
+          })
+        } else {
+          setSearchTerm('')
+        }
+      } else {
+        reset({ name: '', head_agent_id: '', is_official: false })
+        setSearchTerm('')
       }
-    } else {
-      setSearchTerm('')
+      setSearchResults([])
+      setShowDropdown(false)
     }
-  }, [editing, agents])
+  }, [showModal, editing, reset, agents])
 
   async function doSearch(term: string) {
     setSearchLoading(true)
@@ -90,33 +128,28 @@ export default function DivisionsPage() {
   }
 
   function selectAgent(agent: any) {
-    setForm((f) => ({ ...f, head_agent_id: agent.id }))
+    setValue('head_agent_id', agent.id, { shouldValidate: true })
     setSearchTerm(`${agent.full_name} (${agent.staff_id})`)
     setShowDropdown(false)
   }
 
   function clearAgent() {
-    setForm((f) => ({ ...f, head_agent_id: '' }))
+    setValue('head_agent_id', '', { shouldValidate: true })
     setSearchTerm('')
     setSearchResults([])
     setShowDropdown(false)
   }
 
-  const handleSave = async () => {
-    if (!form.name.trim()) { show('Vui lòng nhập tên division', 'error'); return }
+  const onSubmit = async (data: DivisionFormData) => {
     const payload = {
-      name: form.name.trim(),
-      head_agent_id: form.head_agent_id || null,
-      is_official: form.is_official,
+      name: data.name.trim(),
+      head_agent_id: data.head_agent_id || null,
+      is_official: !!data.is_official,
     }
     try {
       await saveMut.mutateAsync({ id: editing?.id, payload })
       show(editing ? 'Đã cập nhật division' : 'Đã thêm division mới', 'success')
-      setEditing(null)
-      setForm({ name: '', head_agent_id: '', is_official: false })
-      setSearchTerm('')
-      setShowDropdown(false)
-      setShowModal(false)
+      closeModal()
     } catch (e: any) {
       show(editing ? 'Lỗi cập nhật: ' + e.message : 'Lỗi thêm mới: ' + e.message, 'error')
     }
@@ -124,25 +157,18 @@ export default function DivisionsPage() {
 
   const startEdit = (div: any) => {
     setEditing(div)
-    setForm({ name: div.name ?? '', head_agent_id: div.head_agent_id ?? '', is_official: div.is_official ?? false })
-    setSearchTerm('')
-    setShowDropdown(false)
     setShowModal(true)
   }
 
   const openAddModal = () => {
     setEditing(null)
-    setForm({ name: '', head_agent_id: '', is_official: false })
-    setSearchTerm('')
-    setSearchResults([])
-    setShowDropdown(false)
     setShowModal(true)
   }
 
   const closeModal = () => {
     setShowModal(false)
     setEditing(null)
-    setForm({ name: '', head_agent_id: '', is_official: false })
+    reset()
     setSearchTerm('')
     setSearchResults([])
     setShowDropdown(false)
@@ -179,71 +205,77 @@ export default function DivisionsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-neutral-900">Quản lý Divisions</h1>
+      <PageHeader title="Quản lý Divisions">
         <div className="flex items-center gap-2">
           {role === 'admin' && (
-            <button onClick={() => setShowRecomputeConfirm(true)} className="flex items-center gap-1.5 px-3 h-9 border border-neutral-300 text-neutral-700 rounded-md text-sm hover:bg-neutral-50" title="Tính lại division cho toàn bộ agents">
+            <button
+              onClick={() => setShowRecomputeConfirm(true)}
+              className="flex items-center gap-1.5 px-3 h-9 border border-border-light text-text-secondary rounded-sm text-sm hover:bg-bg-secondary transition-colors"
+              title="Tính lại division cho toàn bộ agents"
+            >
               <RefreshCw className="w-4 h-4" /> Tính lại Division
             </button>
           )}
-          <button onClick={openAddModal} className="px-3 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">+ Thêm mới</button>
+          <button
+            onClick={openAddModal}
+            className="px-3 h-9 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
+          >
+            + Thêm mới
+          </button>
         </div>
-      </div>
+      </PageHeader>
 
-      <div className="bg-white rounded-lg shadow-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-neutral-50 border-b border-neutral-300">
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Tên</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Trưởng nhóm</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Chính thức</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">Mặc định</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-neutral-500 w-20"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <SkeletonTable rows={5} cols={5} />
-              ) : (
-                divisions.map((d) => (
-                  <tr key={d.id} className="border-b border-neutral-100 hover:bg-neutral-50">
-                    <td className="px-4 py-3 text-neutral-900 font-medium">{d.name}</td>
-                    <td className="px-4 py-3 text-neutral-700">
-                      {d.head_agent_id && agents[d.head_agent_id]
-                        ? `${agents[d.head_agent_id].full_name} - ${agents[d.head_agent_id].staff_id}`
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-700">{d.is_official ? '✅' : '—'}</td>
-                    <td className="px-4 py-3 text-neutral-700">{d.is_default ? '✅' : '—'}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <button onClick={() => startEdit(d)} className="text-primary text-xs hover:underline">Sửa</button>
-                        {!d.is_default && (
-                          <button onClick={() => setDeleting(d)} className="text-red-600 text-xs hover:underline">Xóa</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-              {!isLoading && divisions.length === 0 && (
-                <tr><td colSpan={5}><EmptyState icon={<Inbox className="w-12 h-12" />} title="Chưa có division nào" /></td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Table>
+        <TableHeader>
+          <TableHeaderCell width={widths[0]} resizable onResizeStart={(e) => startResize(0, e)}>Tên</TableHeaderCell>
+          <TableHeaderCell width={widths[1]} resizable onResizeStart={(e) => startResize(1, e)}>Trưởng nhóm</TableHeaderCell>
+          <TableHeaderCell width={widths[2]} resizable onResizeStart={(e) => startResize(2, e)}>Chính thức</TableHeaderCell>
+          <TableHeaderCell width={widths[3]} resizable onResizeStart={(e) => startResize(3, e)}>Mặc định</TableHeaderCell>
+          <TableHeaderCell width={widths[4]} resizable onResizeStart={(e) => startResize(4, e)} />
+        </TableHeader>
+        <tbody>
+          {isLoading ? (
+            <SkeletonTable rows={5} cols={5} />
+          ) : (
+            divisions.map((d) => (
+              <TableRow key={d.id}>
+                <TableCell className="font-medium">{d.name}</TableCell>
+                <TableCell className="text-text-secondary">
+                  {d.head_agent_id && agents[d.head_agent_id]
+                    ? `${agents[d.head_agent_id].full_name} - ${agents[d.head_agent_id].staff_id}`
+                    : '—'}
+                </TableCell>
+                <TableCell>{d.is_official ? <Badge variant="success">✓</Badge> : '—'}</TableCell>
+                <TableCell>{d.is_default ? <Badge variant="primary">✓</Badge> : '—'}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => startEdit(d)} className="text-accent text-xs hover:underline">Sửa</button>
+                    {!d.is_default && (
+                      <button onClick={() => setDeleting(d)} className="text-danger text-xs hover:underline">Xóa</button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+          {!isLoading && divisions.length === 0 && (
+            <tr>
+              <td colSpan={5}>
+                <EmptyState context="no_data" />
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </Table>
 
       {deleting && (
-        <Modal onClose={() => setDeleting(null)} title="Xác nhận xóa" maxWidth="max-w-sm">
+        <Modal onClose={() => setDeleting(null)} title="Xác nhận xóa" size="sm">
           <div className="space-y-4">
-            <p className="text-sm text-neutral-700">Bạn có chắc muốn xóa division <strong>{deleting.name}</strong>?</p>
-            <p className="text-xs text-red-600">Nếu division đang có agent, hệ thống sẽ từ chối xóa để tránh mất dữ liệu.</p>
+            <p className="text-sm text-text-secondary">Bạn có chắc muốn xóa division <strong className="text-text-primary">{deleting.name}</strong>?</p>
+            <p className="text-xs text-danger">Nếu division đang có agent, hệ thống sẽ từ chối xóa để tránh mất dữ liệu.</p>
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button onClick={() => setDeleting(null)} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
-              <button onClick={handleDelete} disabled={deleteBusy} className="px-4 h-9 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-60">
+              <button onClick={() => setDeleting(null)} className="px-4 h-9 border border-border-light rounded-sm text-sm text-text-secondary hover:bg-bg-secondary transition-colors">Hủy</button>
+              <button onClick={handleDelete} disabled={deleteBusy} className="px-4 h-9 bg-danger text-white rounded-sm text-sm hover:bg-danger-hover disabled:opacity-60 transition-colors">
                 {deleteBusy ? 'Đang xóa...' : 'Xóa'}
               </button>
             </div>
@@ -252,38 +284,43 @@ export default function DivisionsPage() {
       )}
 
       {showModal && (
-        <Modal onClose={closeModal} title={editing ? 'Sửa division' : 'Thêm division mới'} maxWidth="max-w-md">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs text-neutral-500 mb-1">Tên division</label>
-              <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="h-9 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full" />
-            </div>
+        <Modal onClose={closeModal} title={editing ? 'Sửa division' : 'Thêm division mới'} size="sm">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <TextInput
+              label="Tên division"
+              error={errors.name?.message}
+              {...register('name')}
+            />
             <div className="relative" ref={searchRef}>
-              <label className="block text-xs text-neutral-500 mb-1">Trưởng nhóm</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Trưởng nhóm</label>
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input type="text" value={searchTerm}
-                  onChange={(e) => { setSearchTerm(e.target.value); if (form.head_agent_id) setForm((f) => ({ ...f, head_agent_id: '' })) }}
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); if (headAgentId) setValue('head_agent_id', '', { shouldValidate: true }) }}
                   onFocus={() => { if (searchTerm.trim() && searchResults.length > 0) setShowDropdown(true) }}
                   placeholder="Tìm theo tên hoặc mã NV..."
-                  className="h-9 pl-9 pr-8 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary w-full" />
+                  className="w-full h-10 pl-9 pr-8 border border-border-light rounded-sm text-sm bg-bg-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                />
                 {searchTerm && (
-                  <button onClick={clearAgent} className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>
+                  <button type="button" onClick={clearAgent} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary" aria-label="Xóa trưởng nhóm đã chọn">
+                    <X className="w-4 h-4" aria-hidden="true" />
+                  </button>
                 )}
               </div>
               {showDropdown && (
-                <div className="absolute z-20 mt-1 w-full bg-white border border-neutral-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                <div className="absolute z-20 mt-1 w-full bg-bg-primary border border-border-light rounded-sm shadow-dropdown max-h-60 overflow-y-auto">
                   {searchLoading ? (
-                    <div className="px-3 py-2 text-sm text-neutral-500">Đang tìm...</div>
+                    <div className="px-3 py-2 text-sm text-text-tertiary">Đang tìm...</div>
                   ) : searchResults.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-neutral-500">Không tìm thấy</div>
+                    <div className="px-3 py-2 text-sm text-text-tertiary">Không tìm thấy</div>
                   ) : (
                     searchResults.map((agent) => (
-                      <button key={agent.id} onClick={() => selectAgent(agent)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center justify-between">
-                        <span className="text-neutral-900 truncate">{agent.full_name}</span>
-                        <span className="text-neutral-500 text-xs ml-2 shrink-0">{agent.staff_id}</span>
+                      <button type="button" key={agent.id} onClick={() => selectAgent(agent)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-bg-secondary flex items-center justify-between transition-colors">
+                        <span className="text-text-primary truncate">{agent.full_name}</span>
+                        <span className="text-text-tertiary text-xs ml-2 shrink-0">{agent.staff_id}</span>
                       </button>
                     ))
                   )}
@@ -291,19 +328,25 @@ export default function DivisionsPage() {
               )}
             </div>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={form.is_official} onChange={(e) => setForm((f) => ({ ...f, is_official: e.target.checked }))} className="rounded border-neutral-300" />
-              <span className="text-sm text-neutral-700">Chính thức</span>
+              <input
+                type="checkbox"
+                {...register('is_official')}
+                className="rounded border-border-light"
+              />
+              <span className="text-sm text-text-secondary">Chính thức</span>
             </label>
             <div className="flex items-center gap-2 pt-2">
-              <button onClick={handleSave} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">{editing ? 'Cập nhật' : 'Thêm'}</button>
-              <button onClick={closeModal} className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50">Hủy</button>
+              <button type="submit" disabled={isSubmitting} className="px-4 h-9 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors disabled:opacity-60">
+                {isSubmitting ? 'Đang lưu...' : editing ? 'Cập nhật' : 'Thêm'}
+              </button>
+              <button type="button" onClick={closeModal} className="px-4 h-9 border border-border-light rounded-sm text-sm text-text-secondary hover:bg-bg-secondary transition-colors">Hủy</button>
             </div>
-          </div>
+          </form>
         </Modal>
       )}
 
-      <div className="flex items-center gap-2 text-xs text-neutral-500 bg-neutral-50 rounded-lg p-3">
-        <Shield className="w-4 h-4" />
+      <div className="flex items-center gap-2 text-xs text-text-tertiary bg-bg-secondary rounded-sm p-3">
+        <Shield className="w-4 h-4" aria-hidden="true" />
         <span>Chỉ admin có quyền quản lý divisions. Division "Khác" (is_default) là fallback cho agent không thuộc division nào.</span>
       </div>
 
@@ -329,8 +372,8 @@ export default function DivisionsPage() {
             }
           }}
         >
-          <p className="text-sm text-neutral-700">Thao tác này sẽ tính lại <strong>division</strong> cho <strong>toàn bộ agents</strong> theo business rule (T1 tree → head → division).</p>
-          <p className="text-sm text-neutral-500 mt-2">Thường dùng sau khi import data, đổi head division, hoặc khi nghi ngờ data không đồng bộ.</p>
+          <p className="text-sm text-text-secondary">Thao tác này sẽ tính lại <strong>division</strong> cho <strong>toàn bộ agents</strong> theo business rule (T1 tree → head → division).</p>
+          <p className="text-sm text-text-tertiary mt-2">Thường dùng sau khi import data, đổi head division, hoặc khi nghi ngờ data không đồng bộ.</p>
         </CountdownConfirmModal>
       )}
     </div>

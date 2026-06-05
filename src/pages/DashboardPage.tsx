@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { SkeletonCard, SkeletonText } from '../components/Skeleton'
+import PageHeader from '../ui/layout/PageHeader'
+import Card from '../ui/layout/Card'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { completeRequestAction } from '../lib/request-actions'
@@ -120,11 +122,11 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="space-y-6 animate-fade-in">
-        <div className="page-title">Dashboard</div>
+        <PageHeader title="Dashboard" />
         <div className="page-grid-cards"><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 page-card-lg space-y-3"><SkeletonText lines={4} /></div>
-          <div className="page-card-lg space-y-3"><SkeletonText lines={3} /></div>
+          <Card className="lg:col-span-2 space-y-3"><SkeletonText lines={4} /></Card>
+          <Card className="space-y-3"><SkeletonText lines={3} /></Card>
         </div>
       </div>
     )
@@ -134,9 +136,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-neutral-900">Dashboard</h1>
-      </div>
+      <PageHeader title="Dashboard" />
 
       <DashboardStats stats={stats} onNavigate={navigate} />
       <B2PendingAlert b2Pending={b2Pending} b2Alert={b2Alert} />

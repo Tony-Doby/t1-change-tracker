@@ -13,14 +13,15 @@ interface ModalProps {
 }
 
 const sizeMap: Record<string, string> = {
-  sm: 'max-w-sm',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-3xl',
+  sm: 'max-w-[400px]',
+  md: 'max-w-[560px]',
+  lg: 'max-w-[640px]',
+  xl: 'max-w-[800px]',
 }
 
 export default function Modal({ children, onClose, title, maxWidth, showClose = true, size = 'md' }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
+  const titleId = title ? `modal-title-${Math.random().toString(36).slice(2, 9)}` : undefined
   useFocusTrap(ref, onClose)
 
   useEffect(() => {
@@ -38,31 +39,32 @@ export default function Modal({ children, onClose, title, maxWidth, showClose = 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
       <div
         ref={ref}
-        className={`relative bg-white rounded-xl shadow-modal w-full ${maxWidth ?? sizeMap[size]} max-h-[92vh] overflow-y-auto animate-fade-in-scale`}
+        className={`relative bg-bg-primary rounded-sm shadow-modal w-full ${maxWidth ?? sizeMap[size]} max-h-[92vh] overflow-y-auto animate-fade-in-scale`}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
       >
         {(title || showClose) && (
-          <div className="flex items-center justify-between p-5 border-b border-neutral-100">
-            {title && <h2 className="text-xl font-semibold text-neutral-900">{title}</h2>}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border-hairline">
+            {title && <h2 id={titleId} className="text-[1.23rem] font-medium text-text-primary">{title}</h2>}
             {showClose && (
               <button
                 onClick={onClose}
-                className="p-1 rounded-md hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700 transition-colors ml-auto"
+                className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-sm hover:bg-bg-secondary text-text-tertiary hover:text-text-secondary transition-colors ml-auto"
                 aria-label="Đóng"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             )}
           </div>
         )}
-        <div className="p-5">{children}</div>
+        <div className="px-6 py-5">{children}</div>
       </div>
     </div>,
     document.body

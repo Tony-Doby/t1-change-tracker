@@ -1,0 +1,66 @@
+/* Twenty UI/UX Design Tokens — T1 Change Tracker */
+/* Radix gray scale + Twenty accent */
+
+:root {
+  /* Gray scale (Radix) */
+  --gray-1: #fcfcfc;
+  --gray-2: #f8f8f8;
+  --gray-3: #f3f3f3;
+  --gray-4: #eeeeee;
+  --gray-5: #e9e9e9;
+  --gray-6: #e4e4e4;
+  --gray-7: #dbdbdb;
+  --gray-8: #c7c7c7;
+  --gray-9: #8f8f8f;
+  --gray-10: #858585;
+  --gray-11: #6f6f6f;
+  --gray-12: #171717;
+
+  /* Accent */
+  --accent-primary: #4a38f5;
+  --accent-primary-hover: #3c2dd4;
+  --accent-primary-subtle: rgba(74, 56, 245, 0.1);
+
+  /* Semantic colors */
+  --accent-danger: #dc2626;
+  --accent-danger-hover: #b91c1c;
+  --accent-danger-subtle: rgba(220, 38, 38, 0.1);
+  --accent-success: #16a34a;
+  --accent-success-hover: #15803d;
+  --accent-success-subtle: rgba(22, 163, 74, 0.1);
+  --accent-warning: #ca8a04;
+  --accent-warning-hover: #a16207;
+  --accent-warning-subtle: rgba(202, 138, 4, 0.1);
+
+  /* Backgrounds */
+  --background-primary: #ffffff;
+  --background-secondary: var(--gray-1);
+  --background-tertiary: var(--gray-2);
+  --background-quaternary: var(--gray-3);
+
+  /* Font colors */
+  --font-color-primary: var(--gray-12);
+  --font-color-secondary: var(--gray-11);
+  --font-color-tertiary: var(--gray-9);
+  --font-color-disabled: rgba(143, 143, 143, 0.4);
+  --font-color-inverse: #ffffff;
+
+  /* Borders */
+  --border-hairline: rgba(133, 133, 133, 0.1);
+  --border-light: var(--gray-6);
+  --border-medium: var(--gray-7);
+
+  /* Shadows */
+  --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-strong: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-super-heavy: 0 20px 40px rgba(0, 0, 0, 0.12);
+
+  /* Sidebar */
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+
+  /* Transitions */
+  --transition-fast: 100ms ease-out;
+  --transition-base: 150ms ease-out;
+  --transition-slow: 250ms ease-out;
+}

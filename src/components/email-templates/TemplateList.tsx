@@ -1,5 +1,11 @@
 import { Eye, Pencil } from 'lucide-react'
 import type { Template } from '../../hooks/queries/useEmailTemplates'
+import Table from '../../ui/layout/Table'
+import TableHeader from '../../ui/layout/TableHeader'
+import { TableHeaderCell } from '../../ui/layout/TableHeader'
+import TableRow from '../../ui/layout/TableRow'
+import TableCell from '../../ui/layout/TableCell'
+import EmptyState from '../../ui/display/EmptyState'
 
 interface Props {
   templates: Template[]
@@ -9,41 +15,50 @@ interface Props {
 
 export default function TemplateList({ templates, onPreview, onEdit }: Props) {
   if (templates.length === 0) {
-    return <p className="text-sm text-neutral-500">Chưa có mẫu email nào</p>
+    return (
+      <EmptyState
+        context="no_data"
+        title="Chưa có mẫu email"
+        subtitle="Bấm 'Thêm mẫu' để tạo mẫu email mới."
+      />
+    )
   }
+
   return (
-    <div className="bg-white rounded-lg shadow-card overflow-hidden">
-      <table className="w-full text-sm">
-        <thead className="bg-neutral-50 border-b border-neutral-200">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium text-neutral-500 w-12">#</th>
-            <th className="px-4 py-3 text-left font-medium text-neutral-500">Tên mẫu</th>
-            <th className="px-4 py-3 text-left font-medium text-neutral-500">Template key</th>
-            <th className="px-4 py-3 text-left font-medium text-neutral-500">Tiêu đề</th>
-            <th className="px-4 py-3 text-right font-medium text-neutral-500">Hành động</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-neutral-100">
-          {templates.map((template, idx) => (
-            <tr key={template.id} className="hover:bg-neutral-50 transition-colors">
-              <td className="px-4 py-3 text-neutral-500">{idx + 1}</td>
-              <td className="px-4 py-3 font-medium text-neutral-900">{template.name}</td>
-              <td className="px-4 py-3 text-neutral-600 font-mono text-xs">{template.template_key}</td>
-              <td className="px-4 py-3 text-neutral-700 max-w-xs truncate">{template.subject}</td>
-              <td className="px-4 py-3 text-right">
-                <div className="flex items-center justify-end gap-2">
-                  <button onClick={() => onPreview(template.id)} className="inline-flex items-center gap-1 px-2.5 h-8 border border-neutral-300 text-neutral-600 rounded-md text-xs hover:bg-neutral-50 transition-colors">
-                    <Eye className="w-3.5 h-3.5" /> Xem trước
-                  </button>
-                  <button onClick={() => onEdit(template)} className="inline-flex items-center gap-1 px-2.5 h-8 bg-primary text-white rounded-md text-xs hover:bg-primary-hover transition-colors">
-                    <Pencil className="w-3.5 h-3.5" /> Chỉnh sửa
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table>
+      <TableHeader>
+        <TableHeaderCell className="w-12">#</TableHeaderCell>
+        <TableHeaderCell>Tên mẫu</TableHeaderCell>
+        <TableHeaderCell>Template key</TableHeaderCell>
+        <TableHeaderCell>Tiêu đề</TableHeaderCell>
+        <TableHeaderCell className="text-right">Hành động</TableHeaderCell>
+      </TableHeader>
+      <tbody>
+        {templates.map((template, idx) => (
+          <TableRow key={template.id}>
+            <TableCell className="text-text-tertiary">{idx + 1}</TableCell>
+            <TableCell className="font-medium">{template.name}</TableCell>
+            <TableCell className="font-mono text-xs text-text-secondary">{template.template_key}</TableCell>
+            <TableCell className="max-w-xs truncate">{template.subject}</TableCell>
+            <TableCell align="right">
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => onPreview(template.id)}
+                  className="inline-flex items-center gap-1 px-2.5 h-8 border border-border-light text-text-secondary rounded-sm text-xs hover:bg-bg-secondary transition-colors"
+                >
+                  <Eye className="w-3.5 h-3.5" aria-hidden="true" /> Xem trước
+                </button>
+                <button
+                  onClick={() => onEdit(template)}
+                  className="inline-flex items-center gap-1 px-2.5 h-8 bg-accent text-white rounded-sm text-xs hover:bg-accent-hover transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" aria-hidden="true" /> Chỉnh sửa
+                </button>
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </tbody>
+    </Table>
   )
 }

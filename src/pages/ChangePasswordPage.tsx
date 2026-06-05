@@ -1,14 +1,24 @@
-import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
+import { KeyRound } from 'lucide-react'
+import { changePasswordSchema, type ChangePasswordFormData } from '../lib/form-schemas'
+import Card from '../ui/layout/Card'
+import TextInput from '../ui/input/TextInput'
 
 export default function ChangePasswordPage() {
   const { user, updatePassword, signOut } = useAuth()
   const navigate = useNavigate()
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setError,
+  } = useForm<ChangePasswordFormData>({
+    resolver: zodResolver(changePasswordSchema),
+  })
 
   if (!user) {
     navigate('/login', { replace: true })
@@ -20,92 +30,69 @@ export default function ChangePasswordPage() {
     return null
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-
-    if (newPassword.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự')
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp')
-      return
-    }
-
-    setLoading(true)
-    const result = await updatePassword(newPassword)
-    setLoading(false)
-
+  const onSubmit = async (data: ChangePasswordFormData) => {
+    const result = await updatePassword(data.password)
     if (result.error) {
-      setError(result.error)
+      setError('root', { message: result.error })
     } else {
       navigate('/', { replace: true })
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-primary-hover">
-      <div className="w-full max-w-[400px] bg-white rounded-xl p-8 shadow-modal">
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center mb-4">
-            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
-            </svg>
+    <div className="min-h-screen flex items-center justify-center bg-bg-tertiary">
+      <Card padding="lg" className="w-full max-w-[400px] shadow-super-heavy">
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-12 h-12 rounded-md bg-accent flex items-center justify-center mb-4">
+            <KeyRound className="w-7 h-7 text-white" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900">Đổi mật khẩu lần đầu</h1>
-          <p className="text-sm text-neutral-500 mt-1">Vui lòng đổi mật khẩu để bảo mật tài khoản</p>
+          <h1 className="text-[1.85rem] font-semibold text-text-primary tracking-tight">Đổi mật khẩu lần đầu</h1>
+          <p className="text-sm text-text-tertiary mt-1">Vui lòng đổi mật khẩu để bảo mật tài khoản</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-700 mb-1">Mật khẩu mới</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-700 mb-1">Xác nhận mật khẩu</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full h-10 px-3 border border-neutral-300 rounded-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light text-sm"
-              required
-            />
-          </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <TextInput
+            label="Mật khẩu mới"
+            type="password"
+            isPassword
+            error={errors.password?.message}
+            {...register('password')}
+          />
+          <TextInput
+            label="Xác nhận mật khẩu"
+            type="password"
+            isPassword
+            error={errors.confirm?.message}
+            {...register('confirm')}
+          />
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full h-10 bg-primary hover:bg-primary-hover text-white rounded-md font-medium transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+            disabled={isSubmitting}
+            className="w-full h-10 bg-accent hover:bg-accent-hover text-white rounded-sm font-medium transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            {loading ? (
+            {isSubmitting && (
               <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-            ) : null}
-            {loading ? 'Đang xử lý...' : 'Xác nhận'}
+            )}
+            {isSubmitting ? 'Đang xử lý...' : 'Xác nhận'}
           </button>
         </form>
 
         <div className="mt-4 text-center">
-          <button onClick={() => signOut()} className="text-xs text-neutral-500 hover:text-neutral-700">
+          <button onClick={() => signOut()} className="text-xs text-text-tertiary hover:text-text-secondary transition-colors">
             Đăng xuất
           </button>
         </div>
 
-        {error && (
-          <div className="mt-4 p-3 bg-danger-light text-danger text-sm rounded-md">
-            {error}
+        {errors.root && (
+          <div className="mt-4 p-3 bg-danger-subtle text-danger text-sm rounded-sm">
+            {errors.root.message}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

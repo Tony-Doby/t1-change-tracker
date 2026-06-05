@@ -10,6 +10,9 @@ import RestoreAgentModal from '../components/RestoreAgentModal'
 import { SkeletonText } from '../components/Skeleton'
 import AgentInfoTab from '../components/agent-detail/AgentInfoTab'
 import AgentHistoryTab from '../components/agent-detail/AgentHistoryTab'
+import PageHeader from '../ui/layout/PageHeader'
+import Badge from '../ui/display/Badge'
+import Card from '../ui/layout/Card'
 
 export default function AgentDetailPage() {
   const { id } = useParams()
@@ -47,8 +50,8 @@ export default function AgentDetailPage() {
       <div className="space-y-6 animate-fade-in">
         <SkeletonText lines={2} />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="page-card-lg space-y-3"><SkeletonText lines={10} /></div>
-          <div className="page-card-lg space-y-3"><SkeletonText lines={6} /></div>
+          <Card className="space-y-3"><SkeletonText lines={10} /></Card>
+          <Card className="space-y-3"><SkeletonText lines={6} /></Card>
         </div>
       </div>
     )
@@ -57,8 +60,8 @@ export default function AgentDetailPage() {
   if (!agent) {
     return (
       <div className="text-center py-12">
-        <p className="text-neutral-500">Không tìm thấy agent</p>
-        <Link to="/agents" className="text-primary hover:underline text-sm">Quay lại danh sách</Link>
+        <p className="text-text-tertiary">Không tìm thấy agent</p>
+        <Link to="/agents" className="text-accent hover:underline text-sm">Quay lại danh sách</Link>
       </div>
     )
   }
@@ -76,33 +79,58 @@ export default function AgentDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <Link to="/agents" className="p-1.5 rounded-md hover:bg-neutral-200 text-neutral-700"><ArrowLeft className="w-5 h-5" /></Link>
-          <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-3">
-            {agent.full_name} - {agent.staff_id}
-            <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${agent.status === 'active' ? 'bg-success-light text-success' : 'bg-danger-light text-danger'}`}>
-              {agent.status === 'active' ? 'Active' : 'Inactive'}
-            </span>
-          </h1>
+        <div className="flex items-center gap-3 min-w-0">
+          <Link to="/agents" className="p-1.5 rounded-sm hover:bg-bg-secondary text-text-secondary shrink-0">
+            <ArrowLeft className="w-5 h-5" aria-hidden="true" />
+          </Link>
+          <PageHeader
+            title={`${agent.full_name} - ${agent.staff_id}`}
+            className="mb-0"
+          />
+          <Badge variant={agent.status === 'active' ? 'success' : 'danger'}>
+            {agent.status === 'active' ? 'Active' : 'Inactive'}
+          </Badge>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="p-2 rounded-md hover:bg-neutral-100 text-neutral-300"><Star className="w-5 h-5" /></button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-sm hover:bg-bg-secondary text-gray-6 transition-colors" aria-label="Đánh dấu yêu thích">
+            <Star className="w-5 h-5" aria-hidden="true" />
+          </button>
           {agent.status === 'active' && role !== 'viewer' && (
-            <button onClick={() => setShowModal(true)} className="px-4 h-9 bg-primary text-white rounded-md text-sm hover:bg-primary-hover">Tạo đề xuất đổi T1</button>
+            <button onClick={() => setShowModal(true)} className="px-4 h-9 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors">
+              Tạo đề xuất đổi T1
+            </button>
           )}
           {role === 'admin' && agent.status === 'active' && (
-            <button onClick={() => setDeactivateOpen(true)} className="px-4 h-9 bg-danger text-white rounded-md text-sm hover:bg-danger/90 flex items-center gap-1.5"><PowerOff className="w-4 h-4" /> Chấm dứt</button>
+            <button onClick={() => setDeactivateOpen(true)} className="px-4 h-9 bg-danger text-white rounded-sm text-sm hover:bg-danger-hover flex items-center gap-1.5 transition-colors">
+              <PowerOff className="w-4 h-4" /> Chấm dứt
+            </button>
           )}
           {role === 'admin' && agent.status === 'inactive' && (
-            <button onClick={() => setRestoreOpen(true)} className="px-4 h-9 bg-success text-white rounded-md text-sm hover:bg-success/90 flex items-center gap-1.5"><Power className="w-4 h-4" /> Kích hoạt lại</button>
+            <button onClick={() => setRestoreOpen(true)} className="px-4 h-9 bg-success text-white rounded-sm text-sm hover:bg-success-hover flex items-center gap-1.5 transition-colors">
+              <Power className="w-4 h-4" /> Kích hoạt lại
+            </button>
           )}
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-card">
-        <div className="flex border-b border-neutral-200">
-          <button onClick={() => setMainTab('info')} className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${mainTab === 'info' ? 'border-primary text-primary' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}>Thông tin Agent</button>
-          <button onClick={() => setMainTab('history')} className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${mainTab === 'history' ? 'border-primary text-primary' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}>Lịch sử</button>
+      <Card padding="none">
+        <div className="flex border-b border-border-hairline">
+          <button
+            onClick={() => setMainTab('info')}
+            className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              mainTab === 'info' ? 'border-accent text-accent' : 'border-transparent text-text-tertiary hover:text-text-secondary'
+            }`}
+          >
+            Thông tin Agent
+          </button>
+          <button
+            onClick={() => setMainTab('history')}
+            className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              mainTab === 'history' ? 'border-accent text-accent' : 'border-transparent text-text-tertiary hover:text-text-secondary'
+            }`}
+          >
+            Lịch sử
+          </button>
         </div>
         <div className="p-5">
           {mainTab === 'info' && (
@@ -122,7 +150,7 @@ export default function AgentDetailPage() {
             />
           )}
         </div>
-      </div>
+      </Card>
 
       {showModal && id && <CreateRequestModal agentId={id} onClose={() => setShowModal(false)} />}
       {deactivateOpen && id && <DeactivateAgentModal agentId={id} onClose={handleDeactivateClose} />}

@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast'
 import GeneratePanel from '../components/excel-generator/GeneratePanel'
 import GenerationHistory from '../components/excel-generator/GenerationHistory'
 import TemplateManager from '../components/excel-generator/TemplateManager'
+import PageHeader from '../ui/layout/PageHeader'
 import type { ExcelTemplate, ExcelGenerationLog } from '../types'
 
 type TabKey = 'generate' | 'history' | 'templates'
@@ -89,18 +90,15 @@ export default function ExcelGeneratorPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-primary-light flex items-center justify-center">
-          <FileSpreadsheet className="w-5 h-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Excel Generator</h1>
-          <p className="text-sm text-neutral-500">Tạo file Excel từ template và dữ liệu</p>
-        </div>
-      </div>
+    <div className="max-w-6xl space-y-6">
+      <PageHeader
+        title="Excel Generator"
+        icon={<FileSpreadsheet className="w-6 h-6 text-accent" aria-hidden="true" />}
+      >
+        <p className="text-sm text-text-tertiary hidden sm:block">Tạo file Excel từ template và dữ liệu</p>
+      </PageHeader>
 
-      <div className="border-b border-neutral-200">
+      <div className="border-b border-border-hairline">
         <nav className="flex gap-1 -mb-px">
           {tabs.map((t) => (
             <button
@@ -108,8 +106,8 @@ export default function ExcelGeneratorPage() {
               onClick={() => setActiveTab(t.key)}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === t.key
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-text-tertiary hover:text-text-secondary hover:border-border-light'
               }`}
             >
               {t.label}
@@ -118,7 +116,9 @@ export default function ExcelGeneratorPage() {
         </nav>
       </div>
 
-      {activeTab === 'generate' && <GeneratePanel templates={templates} />}
+      {activeTab === 'generate' && (
+        <GeneratePanel templates={templates} />
+      )}
 
       {activeTab === 'history' && (
         <GenerationHistory

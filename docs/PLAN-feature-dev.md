@@ -82,6 +82,7 @@
 | 019 | Mail Merge Generator (template + data → file Excel) | done | 2026-06-02 | 2026-06-03 |
 | 020 | Excel Generator Enhancements — Inline Field Reference + Uppercase + Chọn ngày generate | done | 2026-06-03 | 2026-06-04 |
 | 021 | Excel Generator — Edit Template đã lưu | done | 2026-06-03 | 2026-06-04 |
+| REFACTOR-005 | Twenty UI/UX Full Adoption (Tailwind v4 Preserve) | done | 2026-06-04 | 2026-06-05 |
 
 ---
 
@@ -2375,3 +2376,669 @@ CREATE POLICY "Allow admin to delete excel_generation_logs"
 - **Performance:** File data < 5000 dòng nên xử lý ngay trong browser.
 - **Encoding:** Hỗ trợ UTF-8 để tiếng Việt không bị lỗi font.
 - **Expression và mapping:** Mapping có ưu tiên cao hơn expression. Nếu cell vừa có expression vừa nằm ở trường đã map → giá trị mapping sẽ ghi đè.
+
+
+---
+
+---
+
+## REFACTOR-005: Twenty UI/UX Full Adoption (Tailwind v4 Preserve)
+
+- **Đề xuất**: 2026-06-04
+- **Status**: `in_progress`
+- **Priority**: `high`
+- **Hoàn thành**: —
+
+### Current Status (as of 2026-06-04)
+
+**Đã làm:**
+- Phase 1: Tokens & Global Styles (`tokens.css`, `index.css` rewrite, `index.html` + Inter font).
+- Phase 2: Layout Architecture (PageContainer, PageHeader, Card, Section, Modal, Table primitives; Layout refactor sidebar resizable/collapsible + mobile nav).
+- Phase 3: Component Primitives (display, input, navigation, feedback domains + FormField/FormSection).
+- Phase 4: Table & List Refactor (column resize, filter chips, selection patterns + bulk actions bar, context-aware empty states).
+- Phase 5: Form Patterns (`react-hook-form` + `zod` integration cho tất cả forms chính; `TextInput` forwardRef; `form-schemas.ts` tập trung schemas).
+- Phase 6: Accessibility & Motion (focus stack cho nested modals, ARIA audit, touch targets min 40×40px, semantic HTML, heading hierarchy, decorative icons `aria-hidden`).
+- Phase 7: Refactor toàn bộ 15 pages — Login, ChangePassword, Dashboard, Agents, Requests, AgentDetail, RequestDetail, Trash, Holidays, Ranks, Divisions, UploadPage, EmailTemplatesPage, ActivityLogPage, ExcelGeneratorPage + component con restyle.
+- Dependencies: `react-hook-form`, `@hookform/resolvers`, `zod` đã cài.
+- Build pass, backward compat preserved.
+
+**Chưa làm:**
+— Tất cả phases đã hoàn thành.
+
+### 1. Mô tả feature
+
+Áp dụng toàn bộ UI/UX patterns từ **Twenty CRM** (design tokens, philosophy, layout, navigation, component conventions, table patterns, form patterns, feedback patterns, accessibility) vào **T1 Change Tracker**, với điều kiện **giữ nguyên Tailwind CSS v4** làm styling engine. Không dùng Linaria, không bắt buộc chuyển toàn bộ state sang Jotai.
+
+### 2. Motivation / Why
+
+- Design system hiện tại dựa trên hardcoded Tailwind classes và generic enterprise UI, thiếu consistency.
+- Twenty CRM có design system **editorial, whitespace-first, typography-driven**, đã được validate trên production với hàng ngàn users.
+- Cải thiện **consistency, maintainability, accessibility** toàn app.
+- Giảm technical debt từ UI components tự viết không chuẩn.
+- Nâng cao trải nghiệm ngườii dùng: restrained palette (90% neutral), whitespace có chủ đích, motion tinh tế.
+
+### 3. Scope
+
+**In scope:**
+- **Design tokens**: Color palette (Radix gray1-12 + Twenty accent), typography (base 13px, weights 400-600), spacing, radius, shadows.
+- **Global styles**: `index.css` rewrite với CSS custom properties.
+- **Layout architecture**: Resizable/collapsible sidebar, PageHeader, PageContainer, Breadcrumbs.
+- **Component primitives** theo Twenty domain structure (`src/ui/display/`, `src/ui/input/`, `src/ui/layout/`, `src/ui/navigation/`, `src/ui/feedback/`).
+- **Table patterns**: Column resize, filter chips, selection, context-aware empty states.
+- **Form patterns**: Input states, error handling, validation UI (áp dụng dần, không bắt buộc toàn bộ ngay).
+- **Feedback patterns**: Toast queue system, modal improvements, skeleton/loading states.
+- **Accessibility**: Focus rings, semantic HTML, touch targets, `prefers-reduced-motion`.
+- **Page-by-page polish** áp dụng Twenty patterns cho toàn bộ 13 routes.
+- **Icon system**: Giữ Lucide React nhưng áp dụng naming conventions và sizing patterns của Twenty.
+
+**Out of scope:**
+- Không đổi Tailwind CSS v4 sang Linaria.
+- Không refactor toàn bộ state từ `useState/useEffect` sang Jotai (giữ TanStack Query hiện tại).
+- Không thay đổi business logic, API calls, Supabase schema.
+- Không bắt buộc `react-hook-form` + `zod` cho tất cả forms ngay lập tức (áp dụng dần theo phase).
+- Không thay đổi routing structure hay page-level data fetching logic.
+
+### 4. Technical Design
+
+#### Phase 1: Design Tokens & Global Styles
+
+**File mới:**
+- `src/ui/theme/tokens.css` — Toàn bộ CSS custom properties dựa trên Radix gray scale + Twenty accent colors.
+
+**Cập nhật:**
+- `src/index.css`:
+  - Import `tokens.css`.
+  - `html { font-size: 13px; }` (Twenty base).
+  - `body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }`.
+  - Global focus ring style.
+  - `prefers-reduced-motion` media query.
+  - `form { display: contents; }` (Twenty pattern).
+- Tailwind v4 `@theme` block để register custom colors, spacing, radius từ CSS variables:
+  ```css
+  @theme {
+    --color-gray-1: var(--gray-1);
+    --color-gray-2: var(--gray-2);
+    /* ... gray-12 */
+    --color-accent: var(--accent-primary);
+    --font-family-sans: 'Inter', sans-serif;
+    --spacing-base: 4px;
+    --radius-sm: 2px;
+    --radius-md: 4px;
+    --radius-lg: 8px;
+    --radius-xl: 20px;
+    --radius-pill: 999px;
+  }
+  ```
+
+**Tokens chính:**
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--background-primary` | `#ffffff` | Main background |
+| `--background-secondary` | `gray-1` | Card/surface |
+| `--background-tertiary` | `gray-2` | Subtle fills |
+| `--font-color-primary` | `gray-12` | Headlines |
+| `--font-color-secondary` | `gray-11` | Body |
+| `--font-color-tertiary` | `gray-9` | Meta/eyebrow |
+| `--font-color-disabled` | `gray-9` @ 40% opacity | Disabled |
+| `--accent-primary` | `#4a38f5` | Primary accent (thay `#1e40af`) |
+| `--accent-danger` | red scale | Error |
+| `--accent-success` | green scale | Success |
+| `--accent-warning` | yellow scale | Warning |
+| `--border-hairline` | `gray-10` @ 10% opacity | Hairline borders |
+| `--shadow-light` | subtle drop | Cards |
+| `--shadow-strong` | heavier | Dropdowns |
+| `--shadow-super-heavy` | deep | Modals |
+
+**Typography scale (base 13px = 1rem):**
+| Token | Size | Weight | Usage |
+|-------|------|--------|-------|
+| `xxs` | 0.625rem (~8px) | 400 | — |
+| `xs` | 0.85rem (~11px) | 400 | Captions |
+| `sm` | 0.92rem (~12px) | 400 | Small text |
+| `md` | 1rem (13px) | 400 | Body |
+| `lg` | 1.23rem (~16px) | 500 | Section heads |
+| `xl` | 1.54rem (~20px) | 500 | Card heads |
+| `xxl` | 1.85rem (~24px) | 600 | Page titles |
+| `display` | 2.77rem (~36px) | 300 | Display (rare) |
+
+> **Không dùng font-weight 700.** Max = 600.
+
+**Spacing scale (base 4px):**
+| Token | Value |
+|-------|-------|
+| `0` | 0px |
+| `0.5` | 2px |
+| `1` | 4px |
+| `2` | 8px |
+| `3` | 12px |
+| `4` | 16px |
+| `5` | 20px |
+| `6` | 24px |
+| `8` | 32px |
+| `10` | 40px |
+| `12` | 48px |
+| `16` | 64px |
+| `20` | 80px |
+| `24` | 96px |
+| `32` | 128px |
+
+**Border radius:**
+| Token | Value |
+|-------|-------|
+| `xs` | 2px |
+| `sm` | 4px |
+| `md` | 8px |
+| `xl` | 20px |
+| `pill` | 999px |
+
+---
+
+#### Phase 2: Layout Architecture
+
+**Tạo mới:**
+- `src/ui/layout/PageContainer.tsx` — Simple flex column wrapper, max-width, horizontal padding responsive (`px-4 sm:px-10`).
+- `src/ui/layout/PageHeader.tsx` — Title + optional Icon + action slot (children bên phải), close button, collapse button.
+- `src/ui/layout/PageBody.tsx` — Main content flex row với gap.
+- `src/ui/layout/ShowPageContainer.tsx` — Detail/show page container.
+
+**Refactor `src/components/Layout.tsx`:**
+- **Sidebar**:
+  - Resizable width qua CSS variable `--sidebar-width` (default 240px, min 64px, max 320px).
+  - Collapsible xuống icon-only mode (64px).
+  - Tooltips khi collapsed.
+  - Mobile: auto-collapse, bottom nav bar thay thế sidebar.
+- **Header**: Tích hợp `PageHeader` pattern.
+- **Main Content**: Background `background-tertiary`, padding `spacing-10` desktop / `spacing-4` mobile.
+
+**Tạo mới:**
+- `src/ui/navigation/NavigationDrawerItem.tsx`:
+  - Props: `label`, `Icon`, `active`, `soon`, `badge`, `onClick`.
+  - Style: padding 8px 12px, radius `sm`, hover `background-secondary`.
+  - Active: `background` tinted accent + accent color text.
+  - Collapsed: chỉ hiện icon + tooltip.
+- `src/ui/navigation/Breadcrumb.tsx`:
+  - Desktop: `Link` từ `react-router-dom`.
+  - Mobile: optimized variant.
+
+---
+
+#### Phase 3: Component Primitives
+
+**`src/ui/display/` — Display-only UI:**
+
+| Component | Mô tả | Notes |
+|-----------|-------|-------|
+| `Badge.tsx` | Compact status tags | 5 variants, height 20px, radius pill, font sm/500. Nâng cấp từ component cũ. |
+| `EmptyState.tsx` | Context-aware empty state | Icon 48px + title (lg/500) + subtitle (md/tertiary) + optional CTA. Hỗ trợ contexts: `no_data`, `filter_empty`, `no_permission`, `soft_delete`. |
+| `Skeleton.tsx` | Theme-aware shimmer | Base color `gray-3`, highlight `gray-4`. Block, Text, Card, Table variants. |
+| `Avatar.tsx` | User/agent avatar | Sizes `xs`→`xl` (24px→48px), fallback to initials. Radius rounded (50%). |
+| `AvatarGroup.tsx` | Stack overflow | Max 3 avatars + overflow count. |
+| `Chip.tsx` | Compact data tags | Dùng cho inline data display. |
+| `Pill.tsx` | Status indicators | Dùng cho boolean/toggle states. |
+| `Tag.tsx` | Labels | Dùng cho categorization. |
+
+**`src/ui/input/` — Interactive elements:**
+
+| Component | Mô tả | Notes |
+|-----------|-------|-------|
+| `TextInput.tsx` | Core text input | Sizes `xs/sm/md/lg`, adornments (icon left/right), password toggle, error state (red border), auto-grow, focus ring. Height 32px (sm) / 40px (md). |
+| `TextArea.tsx` | Multi-line input | Auto-grow, min-height 60px, same error pattern. |
+| `Select.tsx` | Dropdown select | Searchable, clearable, radius sm. |
+| `InputLabel.tsx` | Form label | Font sm/500, color secondary. Required indicator. |
+| `InputErrorHelper.tsx` | Error message | Font sm, color danger, `aria-live="polite"`, absolute positioned. |
+| `InputHint.tsx` | Helper text | Font sm, color tertiary. |
+
+**`src/ui/layout/` — Layout primitives:**
+
+| Component | Mô tả | Notes |
+|-----------|-------|-------|
+| `Card.tsx` | Base card | Background primary, radius sm (4px), shadow light, padding 6 (24px). |
+| `Section.tsx` | Section wrapper | Gap 10 (40px) giữa sections, gap 3 (12px) giữa elements. |
+| `Modal.tsx` | Base modal | Width variants: `sm` (400px), `md` (560px), `lg` (640px). Backdrop black/50 + blur-sm. Scale 95%→100% + fade 150ms. Focus trap. Escape đóng. `createPortal` ra `document.body`. |
+| `Table.tsx` | Base table | White bg, radius sm, shadow light. Header row: bg secondary, text eyebrow (uppercase, tracking-wide). |
+| `TableHeader.tsx` | Sortable header | Click để sort, icon arrow up/down. |
+| `TableRow.tsx` | Table row | Height 52px, hover bg secondary/50, transition 100ms. |
+| `TableCell.tsx` | Table cell | Padding 8px horizontal. |
+
+**`src/ui/navigation/` — Navigation:**
+
+| Component | Mô tả |
+|-----------|-------|
+| `NavigationDrawerItem.tsx` | (đã mô tả ở Phase 2) |
+| `Breadcrumb.tsx` | (đã mô tả ở Phase 2) |
+| `MobileNavigationBar.tsx` | Bottom nav bar cho mobile. Height 56px, 4-5 tabs. |
+
+**`src/ui/feedback/` — Loaders, toasts, dialogs:**
+
+| Component | Mô tả | Notes |
+|-----------|-------|-------|
+| `ToastProvider.tsx` | Queue-based toast | Max queue 5, deduplication via `dedupeKey`, auto-dismiss 3s với progress bar, pause on hover. Variants: default/error/success/info/warning. Position top-right. |
+| `useToast.ts` | Hook `enqueueSuccess`, `enqueueError`, `enqueueInfo`, `enqueueWarning`, `closeToast` | |
+| `ConfirmationModal.tsx` | Danger confirmation | Yêu cầu type confirmation text cho actions nguy hiểm (delete, permanent delete). Danger accent, loading state. |
+| `DialogManager.tsx` | Queued dialog system | FIFO, max queue limit. Dùng cho non-blocking stacked dialogs. |
+| `PageContentSkeletonLoader.tsx` | Page-level skeleton | Skeleton cho toàn bộ page content. |
+| `LeftPanelSkeletonLoader.tsx` | Sidebar skeleton | |
+| `TableSkeletonLoader.tsx` | Table skeleton | 5 rows với pulsing bg. |
+
+---
+
+#### Phase 4: Table & List Refactor
+
+**Nâng cấp toàn bộ tables trong app:**
+
+1. **Filter chips**: Hiển thị active filters trên toolbar dưới dạng removable chips.
+2. **Column resizing**: Drag handle ở border header để resize (CSS grid/flex resize pattern, không cần thư viện nặng).
+3. **Selection patterns**:
+   - Checkbox column đầu table.
+   - Shift-click để select range.
+   - Click outside table để deselect all.
+   - Bulk actions bar xuất hiện khi có selection (slide up từ bottom).
+4. **Context-aware empty states**:
+   - Database trống → `EmptyState` với CTA "Tạo mới".
+   - Filter/search không match → `EmptyState` với text "Không tìm thấy kết quả" + nút "Xóa bộ lọc".
+   - No permission → `EmptyState` read-only.
+5. **Virtualized scrolling**: Cân nhắt cho `AgentsPage` (2549 rows) và `ActivityLogPage` nếu performance cần. Dùng `react-window` hoặc CSS container + lazy render.
+
+**Tables cần refactor:**
+- `AgentsPage` (main table)
+- `RequestsPage` (main table)
+- `AgentDetailPage` (M1 list, T1 history)
+- `RequestDetailPage` (comments, step history)
+- `ActivityLogPage` (timeline)
+- `TrashPage` (recycle bin)
+- `HolidaysPage` (holidays list)
+- `RanksPage` / `DivisionsPage` (CRUD tables)
+- `EmailTemplatesPage` (template list)
+- `ExcelGeneratorPage` (template manager, history)
+
+---
+
+#### Phase 5: Form Patterns
+
+**Tạo form primitives:**
+- `FormField.tsx` — Wrapper: `InputLabel` + input + `InputErrorHelper` + `InputHint`.
+- `FormSection.tsx` — Group các fields với title.
+
+**Refactor forms chính sang `react-hook-form` + `zod`:**
+
+| Form | Schema chính | Ghi chú |
+|------|-------------|---------|
+| `LoginPage` | `z.object({ email: z.string().email(), password: z.string().min(6) })` | Thay native form validation. |
+| `ChangePasswordPage` | `z.object({ password: z.string().min(6), confirm: z.string() }).refine((data) => data.password === data.confirm, ...)` | |
+| `CreateRequestModal` | Validate T1 mới được chọn, eligibility check | Giữ logic eligibility RPC, chỉ refactor form handling. |
+| `AgentInfoTab` (edit) | Schema cho ~25 fields của schema v2 | Chia thành sections. |
+| `Rank/Division CRUD` | `z.object({ name: z.string().min(1) })` | Đơn giản. |
+| `EmailTemplateEdit` | `z.object({ name: z.string().min(1), subject: z.string().min(1), body: z.string().min(1) })` | |
+| `HolidayForm` | `z.object({ holiday_date: z.string().date(), name: z.string().min(1), year: z.number() })` | |
+
+**Validation UI pattern:**
+- Error → red border (`border-red-500`) + `InputErrorHelper` hiển thị message.
+- Focus → ring 2px accent + offset 2px.
+- Disabled → opacity 50%, cursor not-allowed.
+- Loading → skeleton hoặc spinner trong input.
+
+---
+
+#### Phase 6: Accessibility & Motion
+
+**Focus Management:**
+```css
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 4px;
+}
+```
+- Focus trap trong tất cả modals (dùng hook `useFocusTrap` hiện có, nâng cấp nếu cần).
+- Focus stack cho nested modals/dialogs.
+
+**Touch Targets:**
+- Min 40×40px cho tất cả interactive elements (buttons, inputs, checkboxes, nav items).
+- Nếu visual element nhỏ hơn 40px → padding hoặc hit area mở rộng.
+
+**Semantic HTML:**
+- `<header>` cho app header.
+- `<nav>` cho sidebar navigation.
+- `<main>` cho main content area.
+- `<section aria-labelledby="...">` cho các page sections.
+- Headings tuân thủ thứ tự `h1` → `h2` → `h3`, không skip level.
+
+**ARIA:**
+- `aria-label` trên tất cả icon-only buttons.
+- `aria-hidden="true"` trên decorative icons.
+- `aria-live="polite"` trên error messages.
+- `aria-describedby` / `aria-errormessage` liên kết input với error.
+- `role="dialog"` + `aria-modal="true"` cho modals.
+
+**Motion:**
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+```
+- **Hover transitions**: 250ms ease-out.
+- **Card entrance**: 700ms cubic-bezier `0.22, 1, 0.36, 1`, 90ms stagger (chỉ cho page load, không cho re-render).
+- **Modal open**: Scale 95%→100% + fade, 150ms ease-out.
+- **Modal close**: Scale 100%→95% + fade, 100ms ease-in.
+- **Toast**: Slide in from right, 300ms.
+- **Skeleton**: Pulse opacity 0.5→1, 2s infinite.
+- **Không bounce, không elastic, không parallax.**
+
+**Color Contrast:**
+- Tất cả text trên background phải đạt WCAG AA (4.5:1 cho normal text, 3:1 cho large text).
+- Disabled states dùng opacity 40% thay vì đổi màu.
+
+---
+
+#### Phase 7: Page-by-Page Polish
+
+**Global changes áp dụng cho mọi page:**
+- Background page: `bg-background-tertiary` (thay `bg-neutral-100`).
+- Cards: `bg-background-primary`, radius 4px, shadow light.
+- Typography: Base 13px, headings dùng scale mới, **không dùng font-bold** (max font-semibold).
+- Spacing: Tăng whitespace giữa sections (gap 40px+), giảm information density.
+- Buttons:
+  - Primary: `bg-accent-primary text-white hover:bg-accent-primary/90`.
+  - Outline: `border border-border-hairline hover:bg-background-secondary`.
+  - Danger: `bg-red-500 text-white`.
+  - Ghost: `hover:bg-background-secondary`.
+  - Radius: 4px (sm). Height 32px (sm) / 40px (md).
+- Inputs:
+  - Border: `1px solid gray-6` (thay neutral-300).
+  - Focus: `ring-2 ring-accent-primary/20 border-accent-primary`.
+  - Error: `border-red-500`.
+  - Height: 40px.
+
+**7.1 Login Page**
+- Gradient background → **bỏ gradient**, dùng `bg-background-tertiary` + card centered.
+- Card: radius 8px (md), shadow super-heavy, padding 48px (spacing-12).
+- Inputs: dùng `TextInput` primitive.
+- Button: full width, height 40px.
+
+**7.2 Dashboard**
+- Stat cards: Radius 4px, shadow light, padding 24px. Icon 24px accent color. Label: font sm/tertiary. Value: font xxl/600 (thay H1 32px).
+- Alert card: Radius 4px, border-left 4px warning.
+- Bookmark widget: Card style, avatar + name + badge.
+- Status chart: Donut/Pie → đơn giản hóa, legend dưới.
+- B2 Eligible list & M1 Transition list: Dùng table primitive với hover states.
+
+**7.3 Agents List**
+- Toolbar: `PageHeader` pattern + search `TextInput` + filter chips.
+- Table:
+  - Header: eyebrow style (uppercase, tracking-wide, font xs).
+  - Rows: height 52px, hover bg secondary.
+  - Bookmark star: 16px, warning khi active.
+  - Status badge: Pill component.
+- Pagination: Smart ellipsis, max 7 visible buttons.
+- Export modal: Dùng `Modal` primitive.
+
+**7.4 Agent Detail**
+- Header: Back arrow + `PageHeader`.
+- Info cards: `Card` component, 2-column grid.
+  - Label: font sm/tertiary. Value: font md/primary.
+- Tabs: Improved styling (active border-bottom accent, font md/500).
+- M1 Table: Dùng table primitive.
+- T1 History Timeline: Dots 10px accent, line 2px gray-4.
+
+**7.5 Requests List**
+- Status Kanban summary: 5 cards horizontal, radius 4px, padding 16px.
+- Table: Same patterns as Agents List.
+- Filter: Multi-choice status filter dạng toggle chips.
+
+**7.6 Request Detail**
+- Header: `PageHeader` + status badge (large).
+- Step progress bar:
+  - Completed: filled circle + solid line.
+  - Current: outlined circle + pulse animation.
+  - Future: gray circle + dashed line.
+  - B3 locked: icon đồng hồ, gray.
+  - B3 ready: icon sáng, accent.
+- Comments thread:
+  - Avatar 28px circle.
+  - Self: căn phải, bg accent/10.
+  - Other: căn trái, bg secondary.
+  - Input: `TextArea` primitive + send button.
+- Notification checklist: Checkbox primitive + label.
+
+**7.7 Upload Page**
+- Dropzone: Dashed border `gray-6`, radius 12px (xl), padding 48px.
+  - Hover: border accent + bg accent/5.
+- Progress bar: Height 8px, bg gray-3, fill accent.
+- Preview table: Dùng table primitive, max 10 rows.
+- Data quality report: Modal primitive.
+
+**7.8 Email Templates**
+- List view: Table primitive.
+- Edit modal: `Modal` lg (640px), `HtmlEditor` restyle toolbar (icon 16px, padding 8px, radius 4px).
+- Preview modal: Render HTML với sanitized output.
+
+**7.9 Compose Template Modal**
+- Modal md (560px).
+- Contact info: Card sub-component.
+- Content preview: `div` với rendered HTML (không textarea).
+- Copy buttons: Ghost style + icon.
+
+**7.10 Activity Log**
+- Timeline: Group by date.
+  - Dot: 8px circle, color theo action type.
+  - Time: font xs/tertiary.
+  - Content: font md/primary.
+- Filter: `Select` primitive.
+
+**7.11 Trash / Holidays / Ranks / Divisions**
+- Table primitive + `EmptyState` context-aware.
+- CRUD modals: `Modal` primitive + `FormField` wrapper.
+- Confirm delete: `ConfirmationModal` với type confirmation ("DELETE").
+
+**7.12 Excel Generator**
+- Template manager: Table primitive + `Badge` mapping status.
+- Generate panel: `Card` sections, `Select` template, dropzone data file.
+- Preview: Table primitive với expression evaluated.
+- History: Table primitive.
+
+**7.13 Settings (nếu có)**
+- Settings navigation drawer: Collapsible sections.
+- Settings forms: `SettingsTextInput` pattern (label bên trái, input bên phải).
+
+### 5. UI/UX
+
+Xem chi tiết đầy đủ tại `Yuzi/docs/twenty-ui-ux-reference/`:
+- `design-philosophy.md` — Triết lý editorial, whitespace-first, typography-driven.
+- `design-tokens.md` — Color palette, typography, spacing, radius, shadows.
+- `layout-navigation.md` — Resizable sidebar, PageHeader, Breadcrumbs, Mobile nav.
+- `component-conventions.md` — Named exports, props naming, file structure, styled component rules (adapt sang Tailwind).
+- `table-list-patterns.md` — Virtualized, resize, selection, filter chips, context-aware empty states.
+- `form-patterns.md` — react-hook-form + zod, validation UI, input states.
+- `feedback-patterns.md` — Queue toast, dialog manager, skeleton, empty states, confirmation modal.
+- `accessibility.md` — WCAG AA, focus rings, touch targets, semantic HTML, `prefers-reduced-motion`.
+- `icon-system.md` — Sizing, stroke width, `aria-hidden`, `aria-label`.
+
+### 6. Files cần sửa / tạo
+
+#### Files mới (primitives):
+
+| File | Mô tả |
+|------|-------|
+| `src/ui/theme/tokens.css` | CSS custom properties design tokens |
+| `src/ui/layout/PageContainer.tsx` | Page wrapper |
+| `src/ui/layout/PageHeader.tsx` | Page header bar |
+| `src/ui/layout/PageBody.tsx` | Content row |
+| `src/ui/layout/ShowPageContainer.tsx` | Detail page container |
+| `src/ui/layout/Card.tsx` | Base card |
+| `src/ui/layout/Section.tsx` | Section wrapper |
+| `src/ui/layout/Modal.tsx` | Base modal (portal, focus trap, animation) |
+| `src/ui/layout/Table.tsx` | Base table |
+| `src/ui/layout/TableHeader.tsx` | Sortable header |
+| `src/ui/layout/TableRow.tsx` | Table row |
+| `src/ui/layout/TableCell.tsx` | Table cell |
+| `src/ui/display/Badge.tsx` | Status badge |
+| `src/ui/display/EmptyState.tsx` | Context-aware empty state |
+| `src/ui/display/Skeleton.tsx` | Theme-aware skeleton |
+| `src/ui/display/Avatar.tsx` | Avatar |
+| `src/ui/display/AvatarGroup.tsx` | Avatar stack |
+| `src/ui/display/Chip.tsx` | Data chip |
+| `src/ui/display/Pill.tsx` | Status pill |
+| `src/ui/display/Tag.tsx` | Label tag |
+| `src/ui/input/TextInput.tsx` | Text input primitive |
+| `src/ui/input/TextArea.tsx` | Text area primitive |
+| `src/ui/input/Select.tsx` | Select dropdown |
+| `src/ui/input/InputLabel.tsx` | Form label |
+| `src/ui/input/InputErrorHelper.tsx` | Error helper |
+| `src/ui/input/InputHint.tsx` | Hint text |
+| `src/ui/navigation/NavigationDrawerItem.tsx` | Sidebar nav item |
+| `src/ui/navigation/Breadcrumb.tsx` | Breadcrumb |
+| `src/ui/navigation/MobileNavigationBar.tsx` | Mobile bottom nav |
+| `src/ui/feedback/ToastProvider.tsx` | Toast provider (queue) |
+| `src/ui/feedback/useToast.ts` | Toast hook |
+| `src/ui/feedback/ConfirmationModal.tsx` | Danger confirmation modal |
+| `src/ui/feedback/DialogManager.tsx` | Queued dialog manager |
+| `src/ui/feedback/PageContentSkeletonLoader.tsx` | Page skeleton |
+| `src/ui/feedback/TableSkeletonLoader.tsx` | Table skeleton |
+| `src/components/FormField.tsx` | Form field wrapper |
+| `src/components/FormSection.tsx` | Form section wrapper |
+
+#### Files sửa (existing):
+
+| File | Thay đổi |
+|------|----------|
+| `src/index.css` | Thêm tokens import, base 13px, global focus ring, prefers-reduced-motion, form display contents |
+| `src/main.tsx` | Thêm ToastProvider, DialogManager |
+| `src/App.tsx` | Integrate providers |
+| `src/components/Layout.tsx` | Refactor sidebar resizable/collapsible, mobile nav, PageHeader integration |
+| `src/components/PageTransition.tsx` | Update animation, respect prefers-reduced-motion |
+| `src/components/Modal.tsx` | Replace bằng primitive mới hoặc extend |
+| `src/components/Skeleton.tsx` | Replace bằng primitive mới |
+| `src/components/Badge.tsx` | Replace bằng primitive mới |
+| `src/components/EmptyState.tsx` | Replace bằng primitive mới |
+| `src/components/Pagination.tsx` | Style update (radius 4px, font sm) |
+| `src/components/CommandPalette.tsx` | Style update, font scale |
+| `src/components/NotificationDropdown.tsx` | Style update, font scale |
+| `src/components/HtmlEditor.tsx` | Restyle toolbar (icon 16px, padding 8px, radius 4px) |
+| `src/pages/LoginPage.tsx` | Dùng Card, TextInput primitives. Bỏ gradient. |
+| `src/pages/ChangePasswordPage.tsx` | Dùng Card, TextInput primitives. Thêm zod validation. |
+| `src/pages/DashboardPage.tsx` | Dùng Card, Section, PageHeader, Table primitives. Restyle stat cards. |
+| `src/pages/AgentsPage.tsx` | Dùng PageHeader, Table, TextInput, EmptyState primitives. Filter chips. |
+| `src/pages/AgentDetailPage.tsx` | Dùng Card, Section, Table, Avatar primitives. Tab restyle. |
+| `src/pages/RequestsPage.tsx` | Dùng PageHeader, Table, Badge, EmptyState primitives. Kanban cards restyle. |
+| `src/pages/RequestDetailPage.tsx` | Dùng Card, Section, Modal, TextArea, EmptyState primitives. Stepper restyle. |
+| `src/pages/UploadPage.tsx` | Dùng Card, Table, Modal primitives. Dropzone restyle. |
+| `src/pages/EmailTemplatesPage.tsx` | Dùng Table, Modal, FormField primitives. |
+| `src/pages/ActivityLogPage.tsx` | Dùng Section, EmptyState primitives. Timeline restyle. |
+| `src/pages/TrashPage.tsx` | Dùng Table, EmptyState, ConfirmationModal primitives. |
+| `src/pages/HolidaysPage.tsx` | Dùng Table, Modal, FormField primitives. |
+| `src/pages/RanksPage.tsx` | Dùng Table, Modal, FormField primitives. |
+| `src/pages/DivisionsPage.tsx` | Dùng Table, Modal, FormField primitives. |
+| `src/pages/ExcelGeneratorPage.tsx` | Dùng Card, Table, Select, EmptyState primitives. |
+| `src/components/CreateRequestModal.tsx` | Dùng Modal, TextInput, Select, FormField primitives. |
+| `src/components/ExportModal.tsx` | Dùng Modal primitive. |
+| `src/components/ComposeTemplateModal.tsx` | Dùng Modal, Card, EmptyState primitives. |
+| `src/components/SendEmailModal.tsx` | Dùng Modal, TextInput, FormField primitives. |
+| `src/components/DeactivateAgentModal.tsx` | Dùng Modal, ConfirmationModal primitives. |
+| `src/components/RestoreAgentModal.tsx` | Dùng Modal primitive. |
+| `src/components/CountdownConfirmModal.tsx` | Dùng Modal primitive. Style update. |
+| `src/components/dashboard/*.tsx` | Restyle dùng Card, Section primitives. |
+| `src/components/agent-detail/*.tsx` | Restyle dùng Card, Section, Table, Avatar primitives. |
+| `src/components/request-detail/*.tsx` | Restyle dùng Card, Section, Table, TextArea primitives. |
+| `src/components/email-templates/*.tsx` | Restyle dùng Modal, FormField primitives. |
+| `src/components/excel-generator/*.tsx` | Restyle dùng Card, Table, Select, Modal primitives. |
+| `src/hooks/useFocusTrap.ts` | Nâng cấp hỗ trợ focus stack cho nested modals. |
+
+### 7. Schema / SQL changes
+
+**Không cần.** Đây là refactor UI/UX thuần túy, không thay đổi DB schema, tables, indexes, hay RLS policies.
+
+### 8. API / Integration changes
+
+**Không cần.** Không thay đổi API calls, Supabase queries, third-party integrations, hay Edge Functions.
+
+### 9. Test Plan
+
+#### Phase 1-2: Tokens & Layout
+1. Build pass: `npm run build` không lỗi TypeScript hay CSS.
+2. Visual check: Mở app → verify màu sắc, typography (base 13px), spacing đúng tokens.
+3. Responsive:
+   - Desktop: Sidebar full 240px, resizable.
+   - Tablet: Sidebar collapsed icon-only.
+   - Mobile: Sidebar ẩn, bottom nav bar hiển thị.
+4. Focus ring: Tab qua các interactive elements → verify outline 2px accent + 4px offset.
+
+#### Phase 3: Primitives
+5. Component isolation test (tạm thờiv page hoặc Storybook nếu có):
+   - Modal: Open/close animation, focus trap, Escape, backdrop click, portal.
+   - Toast: Enqueue multiple toasts, auto-dismiss, pause on hover, dedupe.
+   - Table: Sort, select, shift-click range.
+   - Input: Focus, error, disabled states.
+   - EmptyState: Switch contexts → verify text/icon thay đổi.
+
+#### Phase 4-5: Table & Form
+6. Table regression:
+   - AgentsPage: Search, filter, sort, select, pagination hoạt động.
+   - RequestsPage: Multi-choice status filter, Kanban click.
+   - ActivityLogPage: Timeline hiển thị đúng.
+7. Form validation:
+   - Login: Email invalid → error. Password < 6 → error.
+   - CreateRequest: Chưa chọn T1 mới → error.
+   - Rank/Division: Tên trống → error.
+
+#### Phase 6: Accessibility & Motion
+8. Keyboard navigation:
+   - Tab qua toàn bộ page → không bị trap ngoài modal.
+   - Modal open → Tab vòng lặp trong modal.
+   - Escape đóng modal/toast.
+9. Screen reader (optional): Verify `aria-label`, `aria-live`, semantic landmarks.
+10. prefers-reduced-motion: Bật trong OS → verify animations tắt, hover translate disabled.
+11. Touch targets: Inspect elements → verify min 40×40px.
+
+#### Phase 7: Page-by-Page
+12. Visual regression checklist (so sánh trước/sau trên tất cả routes):
+    - [ ] Login
+    - [ ] Change Password
+    - [ ] Dashboard
+    - [ ] Agents List
+    - [ ] Agent Detail
+    - [ ] Requests List
+    - [ ] Request Detail
+    - [ ] Upload
+    - [ ] Email Templates
+    - [ ] Activity Log
+    - [ ] Trash
+    - [ ] Holidays
+    - [ ] Ranks
+    - [ ] Divisions
+    - [ ] Excel Generator
+13. Business logic regression:
+    - Tạo request đổi T1 → verify eligibility check vẫn chạy.
+    - Hoàn tất request → verify M1 transition tasks vẫn tạo.
+    - Upload agent → verify upsert theo `staff_id`.
+    - Export Excel → verify file tải về đúng.
+    - Generate mail merge → verify expression evaluate đúng.
+
+### 10. Rollout Plan
+
+1. **Phase 1-2** (Tokens + Layout): Code trên branch `refactor/ui-ux-phase-1`. Test layout responsive + tokens.
+2. **Phase 3** (Primitives): Tiếp tục trên cùng branch. Test từng primitive isolation.
+3. **Phase 4-5** (Table + Form): Test tables + forms chính.
+4. **Phase 6** (A11y + Motion): Song song với Phase 7.
+5. **Phase 7** (Pages): Làm từng page, 2-3 page/ngày. Ưu tiên: Login → Dashboard → Agents → Requests → Detail pages → Còn lại.
+6. **Final QA**: Manual test toàn bộ 15 routes + build pass.
+7. **User acceptance**: Demo cho user trước khi deploy.
+8. **Deploy**: `npm run build` → `vercel --prod` (chờ user xác nhận riêng).
+
+### 11. Notes
+
+- **Backward compatibility**: Giữ nguyên tất cả business logic, API calls, data flow, TanStack Query hooks. Chỉ thay đổi presentation layer.
+- **Tailwind v4**: Dùng `@theme` block và CSS-first configuration. Không dùng `tailwind.config.js` legacy. Không dùng `@apply` nếu có thể tránh (ưu tiên utility classes inline hoặc component extract).
+- **Icons**: Giữ nguyên **Lucide React** để tránh tăng bundle size. Áp dụng sizing conventions của Twenty (sm/md/lg/xl: 14/16/20/24px, stroke 2). Không cài `@tabler/icons-react`.
+- **Font**: Đảm bảo `Inter` đã được load (Google Fonts hoặc self-host trong `index.html`). Nếu chưa có → thêm `<link>` trong `index.html`.
+- **Performance monitoring**: Theo dõi bundle size sau khi thêm nhiều components. Mục tiêu: không tăng quá 20% initial bundle.
+- **Risk mitigation**:
+  - Làm theo phase rõ ràng, test kỹ từng phase trước khi sang phase tiếp.
+  - Nếu phát sinh bug nghiêm trọng trong quá trình refactor → **pause ngay**, ghi vào `PLAN-bug-fixes.md`, fix trước khi tiếp tục.
+  - Không xóa components cũ ngay lập tức — để lại comment `// TODO-REFACTOR[005]: Deprecated, dùng src/ui/...` trong 1 sprint trước khi xóa hoàn toàn.
+- **Docs sync sau mỗi phase**: Cập nhật `CHANGELOG.md` với những gì đã làm. Cập nhật `UI-DESIGN.md` khi design system chính thức thay đổi.
+- **Dependencies cần cài** (nếu chưa có):
+  - `react-hook-form` + `@hookform/resolvers` + `zod` (Phase 5).
+  - `react-window` (Phase 4, optional — chỉ cài nếu virtualized scrolling cần thiết sau test performance).
