@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 interface Props {
@@ -46,35 +47,47 @@ export default function CountdownConfirmModal({
 
   const btnClass =
     confirmVariant === 'danger'
-      ? 'bg-danger text-white hover:bg-danger/90'
-      : 'bg-primary text-white hover:bg-primary-hover'
+      ? 'bg-danger text-white hover:bg-danger-hover'
+      : 'bg-accent text-white hover:bg-accent-hover'
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-modal w-full max-w-md p-6 space-y-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      {/* Full-page backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in"
+        onClick={onCancel}
+        aria-hidden="true"
+      />
+      {/* Centered popup */}
+      <div className="relative bg-bg-primary rounded-sm shadow-modal w-full max-w-md mx-4 p-6 space-y-4 animate-fade-in-scale">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-neutral-900">{title}</h3>
-          <button onClick={onCancel} className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-sm text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors" aria-label="Đóng">
+          <h3 className="text-[1.23rem] font-medium text-text-primary">{title}</h3>
+          <button
+            onClick={onCancel}
+            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-sm text-text-tertiary hover:text-text-secondary hover:bg-bg-secondary transition-colors"
+            aria-label="Đóng"
+          >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
-        <div className="text-sm text-neutral-600">{children}</div>
+        <div className="text-sm text-text-secondary">{children}</div>
         <div className="flex justify-end gap-3 pt-2">
           <button
             onClick={onCancel}
-            className="px-4 h-9 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50"
+            className="px-4 h-9 border border-border-light rounded-sm text-sm text-text-secondary hover:bg-bg-secondary transition-colors"
           >
             Hủy thao tác
           </button>
           <button
             onClick={onConfirm}
             disabled={remaining > 0}
-            className={`px-4 h-9 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed ${btnClass}`}
+            className={`px-4 h-9 rounded-sm text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${btnClass}`}
           >
             {remaining > 0 ? `${confirmText} (${remaining})` : confirmText}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

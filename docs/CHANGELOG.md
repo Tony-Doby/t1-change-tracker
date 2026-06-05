@@ -7,6 +7,20 @@
 
 ## 2026-06-05
 
+### 43. Fix CountdownConfirmModal — Full-page backdrop + center popup
+
+**Backdrop giờ đây mờ toàn bộ page thay vì chỉ content area.**
+
+- `src/components/CountdownConfirmModal.tsx`:
+  - Dùng `createPortal` để render ra `document.body`, tránh bị giới hạn bởi stacking context của parent.
+  - Tăng `z-index` lên `z-[100]` để nổi trên cả sidebar và header.
+  - Thêm `backdrop-blur-sm` cho backdrop đẹp hơn.
+  - Cập nhật style sang tokens mới (bg-bg-primary, rounded-sm, shadow-modal, text-text-primary).
+
+---
+
+## 2026-06-05
+
 ### 42. Tăng base font-size từ 13px lên 16px
 
 **Theo yêu cầu user — tăng size chữ toàn app.**
