@@ -7,6 +7,24 @@
 
 ## 2026-06-05
 
+### 44. Fix BUG-017: BulkActionsBar buttons không click được do click-outside clear selection
+
+**AgentsPage: Nút "Soạn mẫu" và "Chấm dứt" trong BulkActionsBar giờ hoạt động đúng.**
+
+- `src/hooks/useTableSelection.ts`:
+  - Thêm `excludeRefs?: React.RefObject<HTMLElement | null>[]` vào options.
+  - Trong `handleClick`, kiểm tra nếu click target nằm trong bất kỳ `excludeRefs` nào thì skip `clear()`.
+
+- `src/pages/AgentsPage.tsx`:
+  - Tạo `bulkBarRef` và `headerRef`, truyền vào `useTableSelection({ excludeRefs: [bulkBarRef, headerRef] })`.
+  - Bọc `<BulkActionsBar>` trong `<div ref={bulkBarRef}>`.
+  - Bọc vùng nút action ở `<PageHeader>` trong `<div ref={headerRef}>`.
+  - Thêm `useEffect` đóng `ComposeTemplateModal` khi `selected.length !== 1`, tránh modal tự hiện do state "dính".
+
+---
+
+## 2026-06-05
+
 ### 43. Fix CountdownConfirmModal — Full-page backdrop + center popup
 
 **Backdrop giờ đây mờ toàn bộ page thay vì chỉ content area.**

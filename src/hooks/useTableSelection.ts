@@ -2,9 +2,10 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 
 interface UseTableSelectionOptions {
   totalIds: string[]
+  excludeRefs?: React.RefObject<HTMLElement | null>[]
 }
 
-export function useTableSelection({ totalIds }: UseTableSelectionOptions) {
+export function useTableSelection({ totalIds, excludeRefs }: UseTableSelectionOptions) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const lastClickedRef = useRef<string | null>(null)
   const tableRef = useRef<HTMLTableElement | null>(null)
@@ -57,13 +58,17 @@ export function useTableSelection({ totalIds }: UseTableSelectionOptions) {
   // Click outside to deselect
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      // Skip if clicked inside excluded elements (e.g. BulkActionsBar)
+      const isExcluded = excludeRefs?.some((ref) => ref.current?.contains(target))
+      if (isExcluded) return
+      if (tableRef.current && !tableRef.current.contains(target)) {
         clear()
       }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [clear])
+  }, [clear, excludeRefs])
 
   return {
     selected: selectedArray,

@@ -66,6 +66,7 @@
 | 014 | Deactivation: `temp_t1_id` bị set = agent bị deactivate thay vì T2 của M1 | fixed | 2026-05-30 | 2026-05-30 |
 | 015 | Expression parser không evaluate khi cell bị map trùng tên / thiếu inline field reference | fixed | 2026-06-03 | 2026-06-04 |
 | 016 | Dashboard tự reload khi chuyển tab trong app và chuyển browser tab | fixed | 2026-06-04 | 2026-06-04 |
+| 017 | AgentsPage: BulkActionsBar buttons không click được do click-outside clear selection | fixed | 2026-06-05 | 2026-06-05 |
 
 ---
 
@@ -591,7 +592,7 @@ Không cần.
 ## BUG-013: ComposeTemplateModal hiển thị raw HTML tags, copy ra mã HTML
 
 - **Phát hiện**: 2026-05-29
-- **Status**: `planned`
+- **Status**: `fixed`
 - **Severity**: `medium`
 
 ### 1. Mô tả bug
@@ -1038,3 +1039,59 @@ Không cần.
 ### 8. Notes
 - **Business rule:** T1 tạm = T2 của M1 = T1 của agent bị deactivate.
 - **Rollback:** Revert `agent-actions.ts` về phiên bản cũ.
+
+---
+
+---
+
+## BUG-017: AgentsPage: BulkActionsBar buttons không click được do click-outside clear selection
+
+- **Phát hiện**: 2026-06-05
+- **Status**: `planned`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Khi chọn 1 agent trong `AgentsPage`, popup `BulkActionsBar` hiện ra với các nút **"Soạn mẫu"** và **"Chấm dứt"**. Cả hai nút đều không phản hồi khi click. Ngoài ra, nút **"Soạn mẫu"** ở góc phải header cũng không hoạt động khi đã chọn agent.
+
+### 2. Root Cause
+`useTableSelection` hook (`src/hooks/useTableSelection.ts`) có `useEffect` lắng nghe `mousedown` trên `document`. Khi click ra ngoài phần tử được gán `tableRef` (`<tbody>` trong `AgentsPage`), selection bị `clear()` ngay lập tức.
+
+`BulkActionsBar` là component `fixed` position nằm **ngoài** `<tbody>`. Khi user click vào bất kỳ nút nào trong `BulkActionsBar` (ví dụ "Soạn mẫu"), event target nằm ngoài `tbody` → `clear()` chạy → `selected` bị xóa → modal không bao giờ mở được.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Thêm `excludeRefs` vào `useTableSelection` hook để loại trừ các phần tử cụ thể khỏi "click outside" handler:
+
+1. **Sửa `useTableSelection.ts`:**
+   - Thêm prop `excludeRefs?: React.RefObject<HTMLElement | null>[]` vào options.
+   - Trong `handleClick`, kiểm tra nếu `e.target` nằm trong bất kỳ `excludeRefs` nào thì skip `clear()`.
+
+2. **Sửa `AgentsPage.tsx`:**
+   - Tạo `bulkBarRef` cho `BulkActionsBar` và `headerRef` cho vùng nút action ở header.
+   - Truyền cả hai vào `useTableSelection({ excludeRefs: [bulkBarRef, headerRef] })`.
+   - Thêm `useEffect` theo dõi `selected.length`: nếu `!== 1` thì `setShowCompose(false)` để tránh modal "dính" mở khi state cũ.
+
+Alternative: Bọc `<Table>` và `<BulkActionsBar>` trong cùng một `<div>` và gán `tableRef` cho div đó. Nhưng `tableRef` trong hook đang typed là `HTMLTableElement`, nên cách `excludeRefs` linh hoạt hơn.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/hooks/useTableSelection.ts` | Thêm `excludeRefs` prop; skip `clear()` nếu click trong excluded elements |
+| `src/pages/AgentsPage.tsx` | Tạo ref cho BulkActionsBar, truyền vào `useTableSelection` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Chọn 1 agent trong bảng → BulkActionsBar hiện ra.
+2. Click nút **"Soạn mẫu"** trong BulkActionsBar → `ComposeTemplateModal` mở đúng agent đã chọn.
+3. Đóng modal → selection vẫn giữ nguyên (hoặc nếu click ra ngoài cả table + bar thì clear).
+4. Click nút **"Chấm dứt"** trong BulkActionsBar → `DeactivateAgentModal` mở đúng agent.
+5. Click vào nút **"Soạn mẫu"** ở header (góc phải) khi đã chọn 1 agent → modal mở.
+6. Click ra ngoài bảng (vùng trắng trên/bên trái page) → selection bị clear như cũ.
+
+### 8. Notes
+- Đảm bảo `excludeRefs` kiểm tra `ref.current?.contains(e.target as Node)` trước khi kiểm tra `tableRef`.
+- Nếu có nhiều component nằm ngoài table nhưng cần giữ selection trong tương lai, pattern `excludeRefs` có thể tái sử dụng.

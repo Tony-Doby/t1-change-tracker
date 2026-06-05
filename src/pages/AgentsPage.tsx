@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Search, Filter, Download, Mail, Star } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -86,8 +86,16 @@ export default function AgentsPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
+  const bulkBarRef = useRef<HTMLDivElement | null>(null)
+  const headerRef = useRef<HTMLDivElement | null>(null)
   const { selected, isSelected, toggle, selectAll, allSelected, someSelected, clear, tableRef } =
-    useTableSelection({ totalIds: agents.map((a) => a.id) })
+    useTableSelection({ totalIds: agents.map((a) => a.id), excludeRefs: [bulkBarRef, headerRef] })
+
+  useEffect(() => {
+    if (selected.length !== 1) {
+      setShowCompose(false)
+    }
+  }, [selected])
 
   const { widths, startResize } = useColumnResize([
     40, 40, 100, 200, 120, 120, 200, 140, 100, 40,
@@ -182,7 +190,7 @@ export default function AgentsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Agents">
-        <div className="flex items-center gap-2">
+        <div ref={headerRef} className="flex items-center gap-2">
           {role !== 'viewer' && (
             <button
               onClick={() => setShowExport(true)}
@@ -374,34 +382,36 @@ export default function AgentsPage() {
       )}
 
       {selected.length > 0 && (
-        <BulkActionsBar
-          count={selected.length}
-          onClear={clear}
-          actions={
-            <>
-              {role !== 'viewer' && selected.length === 1 && (
-                <button
-                  onClick={() => setShowCompose(true)}
-                  className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
-                >
-                  Soạn mẫu
-                </button>
-              )}
-              {role === 'admin' && (
-                <button
-                  onClick={() => {
-                    // Bulk deactivate — open first selected for now
-                    const first = selected[0]
-                    if (first) setDeactivateAgentId(first)
-                  }}
-                  className="px-3 h-8 border border-danger text-danger rounded-sm text-sm hover:bg-danger-subtle transition-colors"
-                >
-                  Chấm dứt
-                </button>
-              )}
-            </>
-          }
-        />
+        <div ref={bulkBarRef}>
+          <BulkActionsBar
+            count={selected.length}
+            onClear={clear}
+            actions={
+              <>
+                {role !== 'viewer' && selected.length === 1 && (
+                  <button
+                    onClick={() => setShowCompose(true)}
+                    className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
+                  >
+                    Soạn mẫu
+                  </button>
+                )}
+                {role === 'admin' && (
+                  <button
+                    onClick={() => {
+                      // Bulk deactivate — open first selected for now
+                      const first = selected[0]
+                      if (first) setDeactivateAgentId(first)
+                    }}
+                    className="px-3 h-8 border border-danger text-danger rounded-sm text-sm hover:bg-danger-subtle transition-colors"
+                  >
+                    Chấm dứt
+                  </button>
+                )}
+              </>
+            }
+          />
+        </div>
       )}
 
       {showExport && (

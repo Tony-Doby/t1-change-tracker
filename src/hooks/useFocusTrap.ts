@@ -5,6 +5,7 @@ const focusStack: HTMLElement[] = []
 
 export function useFocusTrap(ref: RefObject<HTMLElement | null>, onEscape?: () => void) {
   const activeRef = useRef(false)
+  const didAutoFocus = useRef(false)
 
   useEffect(() => {
     const el = ref.current
@@ -48,10 +49,11 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, onEscape?: () =
     }
 
     el.addEventListener('keydown', handleKey)
-    // Auto-focus first element sau khi stack cập nhật
+    // Auto-focus first element sau khi stack cập nhật (chỉ 1 lần khi mở modal)
     const timer = setTimeout(() => {
-      if (focusStack[focusStack.length - 1] === el) {
+      if (focusStack[focusStack.length - 1] === el && !didAutoFocus.current) {
         first()?.focus()
+        didAutoFocus.current = true
       }
     }, 0)
 
