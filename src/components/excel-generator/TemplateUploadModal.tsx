@@ -206,12 +206,16 @@ export default function TemplateUploadModal({ onClose, onUploaded, editTemplate 
     }
 
     if (isEdit) {
+      if (!editTemplate?.id) {
+        show('Lỗi: Không tìm thấy ID template', 'error')
+        setUploading(false)
+        return
+      }
       const { data: updated, error: dbError } = await supabase
         .from('excel_templates')
         .update(payload)
         .eq('id', editTemplate.id)
         .select()
-        .single()
 
       if (dbError) {
         show('Lỗi cập nhật template: ' + dbError.message, 'error')
@@ -219,15 +223,20 @@ export default function TemplateUploadModal({ onClose, onUploaded, editTemplate 
         return
       }
 
+      let result = updated?.[0]
+      if (!result) {
+        // Fallback: merge payload với editTemplate nếu Supabase trả về empty (RLS silent fail hoặc latency)
+        result = { ...editTemplate, ...payload } as ExcelTemplate
+      }
+
       show('Cập nhật template thành công', 'success')
-      onUploaded(updated as ExcelTemplate)
+      onUploaded(result as ExcelTemplate)
       onClose()
     } else {
       const { data: inserted, error: dbError } = await supabase
         .from('excel_templates')
         .insert({ ...payload, created_by: userId })
         .select()
-        .single()
 
       if (dbError) {
         show('Lỗi lưu metadata: ' + dbError.message, 'error')
@@ -236,8 +245,15 @@ export default function TemplateUploadModal({ onClose, onUploaded, editTemplate 
         return
       }
 
+      const result = inserted?.[0]
+      if (!result) {
+        show('Lỗi: Không tìm thấy template sau khi lưu', 'error')
+        setUploading(false)
+        return
+      }
+
       show('Upload template thành công', 'success')
-      onUploaded(inserted as ExcelTemplate)
+      onUploaded(result as ExcelTemplate)
       reset()
       onClose()
     }

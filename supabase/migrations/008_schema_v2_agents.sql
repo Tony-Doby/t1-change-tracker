@@ -104,9 +104,11 @@ CREATE TABLE IF NOT EXISTS public.agent_timeline_events (
 -- ============================================
 -- 2. Seed default divisions
 -- ============================================
-INSERT INTO public.divisions (name, is_default, is_active)
-VALUES ('Khác', true, true)
-ON CONFLICT DO NOTHING;
+-- NOTE: Division 'Khác' is already seeded in 010_seed_divisions_from_eravntrans.sql
+-- Keeping this commented to avoid duplicate default divisions.
+-- INSERT INTO public.divisions (name, is_default, is_active)
+-- VALUES ('Khác', true, true)
+-- ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 3. ALTER agents — add new columns

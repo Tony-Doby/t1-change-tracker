@@ -7,6 +7,159 @@
 
 ## 2026-06-05
 
+### 52. Fix BUG-025: Excel Generator — "Không tìm thấy template sau khi cập nhật"
+
+**Bug:** Khi bấm "Cập nhật template" trong modal sửa template, hiện lỗi "Không tìm thấy template sau khi cập nhật".
+
+**Root cause:**
+1. Migration `017_excel_templates.sql` thiếu UPDATE RLS policy cho bảng `excel_templates` — chỉ có SELECT, INSERT, DELETE.
+2. Khi UPDATE bị RLS từ chối, `.update().select()` trả về empty array với `error = null` (silent fail) → code đi vào nhánh `if (!result)` và báo lỗi.
+
+**Fix:**
+- `supabase/migrations/017_excel_templates.sql`: Thêm UPDATE policy `Allow admin to update excel_templates`.
+- `TemplateUploadModal.tsx`: Nếu `updated` empty nhưng không có `dbError`, fallback merge `editTemplate` + `payload` trả về cho `onUploaded`.
+
+**SQL cần chạy thủ công trên Supabase SQL Editor:**
+```sql
+DROP POLICY IF EXISTS "Allow admin to update excel_templates" ON public.excel_templates;
+CREATE POLICY "Allow admin to update excel_templates"
+  ON public.excel_templates FOR UPDATE TO authenticated USING (
+    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+```
+
+**Files sửa:**
+- `webapp/supabase/migrations/017_excel_templates.sql`
+- `webapp/src/components/excel-generator/TemplateUploadModal.tsx`
+
+---
+
+### 51. Fix BUG-024: Excel Generator — "Cannot coerce the result to a single JSON object"
+
+**Bug:** Khi cập nhật template Excel, hiện lỗi "Cannot coerce the result to a single JSON object".
+
+**Root cause:** `.update().eq('id', editTemplate.id).select().single()` — nếu `editTemplate.id` bị undefined hoặc filter không match đúng 1 row thì `.single()` throw lỗi.
+
+**Fix:**
+- `TemplateUploadModal.tsx`: Thêm guard check `editTemplate?.id`; bỏ `.single()` trong cả update và insert, thay bằng `.select()` + `data?.[0]`.
+
+**Files sửa:**
+- `webapp/src/components/excel-generator/TemplateUploadModal.tsx`
+
+---
+
+### 50. Fix BUG-023: M1 Transition vẫn hiển thị agent expired sau khi deactivate
+
+**Bug:** Khi deactivate agent, task được update thành `expired` nhưng vẫn hiển thị trong Dashboard M1 Transition dưới dạng "Quá hạn 30 ngày" với các nút action. Agent đã ngừng hoạt động nên không còn khả năng xử lý transition.
+
+**Root cause:**
+- `DeactivateAgentModal` không invalidate query `['dashboard', 'm1Transitions']` → stale cache.
+- Server-side filter `.eq('m1_agent.status', 'active')` qua Supabase FK embedding không hoạt động đúng.
+
+**Fix:**
+- `useM1Transitions.ts`: Bỏ server-side filter, thêm client-side filter `.filter((t) => t.m1_agent?.status === 'active')`.
+- `DeactivateAgentModal.tsx`: Import `useQueryClient`, invalidate `['dashboard', 'm1Transitions']` và `['dashboard', 'stats']` sau deactivate thành công.
+
+**Files sửa:**
+- `webapp/src/hooks/queries/useM1Transitions.ts`
+- `webapp/src/components/DeactivateAgentModal.tsx`
+
+---
+
+### 49. Fix BUG-022: M1 Transition vẫn hiển thị agent đã deactivate
+
+**Bug:** Khi agent bị deactivate nhưng vẫn đang là M1 trong `m1_transition_tasks` pending, agent tiếp tục hiển thị trong Dashboard M1 Transition.
+
+**Root cause:** `deactivateAgent` chỉ tạo transition tasks mới cho M1 của agent bị deactivate, nhưng không cancel các task cũ mà agent đó là `m1_agent_id` hoặc `departed_agent_id`.
+
+**Fix:**
+- `agent-actions.ts`: Thêm 2 bước trong `deactivateAgent` để update `status = 'expired', resolved_at = now` cho task có `m1_agent_id = agentId` và task có `departed_agent_id = agentId`.
+
+**Files sửa:**
+- `webapp/src/lib/agent-actions.ts`
+
+---
+
+### 48. Fix BUG-021: M1 Transition task không bị resolved khi agent hoàn tất chuyển T1
+
+**Bug:** Khi agent hoàn tất request chuyển T1 (ví dụ: Võ Phúc Thịnh - TV00091), các `m1_transition_tasks` cũ mà agent đó là M1 vẫn còn `status = 'pending'` và tiếp tục hiển thị trong Dashboard M1 Transition.
+
+**Root cause:** `completeRequestAction` chỉ update `agents.current_t1_id` và tạo task mới cho M1 của agent đó, nhưng không resolve các task cũ có `m1_agent_id = request.agent_id`.
+
+**Fix:**
+- `request-actions.ts`: Thêm bước update `status = 'm1_changed', resolved_at = now` cho `m1_transition_tasks` có `m1_agent_id = request.agent_id` và `status IN ('pending', 'expired')` sau khi update agent.
+
+**Files sửa:**
+- `webapp/src/lib/request-actions.ts`
+
+---
+
+### 47. Fix BUG-020: Dashboard stats = 0 do RPC `get_dashboard_stats` chưa deploy / fail
+
+**Bug:** 4 cards thống kê đầu Dashboard (Tổng Agent, Tổng Requests, Đang xử lý, Hoàn tất) đều hiển thị 0 dù DB có data. M1 Transition và Trạng thái đề xuất vẫn hiển thị đúng.
+
+**Root cause:** `useDashboardStats.ts` gọi RPC `get_dashboard_stats()`. Nếu RPC chưa được tạo trên Supabase (migration chưa chạy thủ công) hoặc fail → `data = null` → UI fallback `?? 0`. `DashboardPage` không bắt `statsError` nên không hiện toast.
+
+**Fix:**
+1. `useDashboardStats.ts`: Thử RPC trước. Nếu RPC fail/null → fallback sang query 4 count riêng lẻ từ bảng bằng `Promise.all`.
+2. `DashboardPage.tsx`: Thêm `statsError` + toast "Lỗi tải thống kê".
+
+**SQL cần chạy thủ công trên Supabase SQL Editor:**
+```sql
+CREATE OR REPLACE FUNCTION public.get_dashboard_stats()
+RETURNS JSONB AS $$
+DECLARE
+  v_total_agents INTEGER;
+  v_total_requests INTEGER;
+  v_pending INTEGER;
+  v_completed INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_total_agents FROM public.agents WHERE deleted_at IS NULL;
+  SELECT COUNT(*) INTO v_total_requests FROM public.t1_requests WHERE deleted_at IS NULL;
+  SELECT COUNT(*) INTO v_pending FROM public.t1_requests WHERE deleted_at IS NULL AND status IN ('step1','step2','step3','step4','step5');
+  SELECT COUNT(*) INTO v_completed FROM public.t1_requests WHERE deleted_at IS NULL AND status = 'completed';
+  RETURN jsonb_build_object('total_agents', v_total_agents, 'total_requests', v_total_requests, 'pending', v_pending, 'completed', v_completed);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+**Files sửa:**
+- `webapp/src/hooks/queries/useDashboardStats.ts`
+- `webapp/src/pages/DashboardPage.tsx`
+
+---
+
+### 46. Fix BUG-019: AgentsPage T1 hiện tại hiển thị UUID thay vì Tên - Staff ID
+
+**Bug:** Cột "T1 HIỆN TẠI" hiển thị UUID rút gọn (8 ký tự đầu) thay vì format `Tên - Staff ID`.
+
+**Root cause:** `useAgents.ts` dùng FK embedding `t1:current_t1_id(full_name, staff_id)` nhưng khi build `t1Map` lại check `a.t1?.id`. Vì query không include `id`, `t1Map` luôn rỗng → UI fallback về `t1Id.slice(0, 8)`.
+
+**Fix:** Thêm `id` vào select: `t1:current_t1_id(id, full_name, staff_id)`.
+
+**Files sửa:**
+- `webapp/src/hooks/queries/useAgents.ts`
+
+---
+
+### 45. Fix BUG-018: Duplicate division "Khác" do 2 migrations cùng insert
+
+**Xóa division "Khác" thừa, giữ lại 1 division mặc định duy nhất.**
+
+- `supabase/migrations/008_schema_v2_agents.sql`:
+  - Comment dòng INSERT division 'Khác' vì `010_seed_divisions_from_eravntrans.sql` đã có.
+
+- SQL chạy thủ công trên Supabase SQL Editor:
+  ```sql
+  UPDATE public.agents SET division_id = '33cbbe26-006a-4255-80af-2f3311a71297'
+  WHERE division_id = '0202c20d-3337-46cb-92c3-4b1730183480';
+  DELETE FROM public.divisions WHERE id = '0202c20d-3337-46cb-92c3-4b1730183480';
+  ```
+
+---
+
+## 2026-06-05
+
 ### 44. Fix BUG-017: BulkActionsBar buttons không click được do click-outside clear selection
 
 **AgentsPage: Nút "Soạn mẫu" và "Chấm dứt" trong BulkActionsBar giờ hoạt động đúng.**

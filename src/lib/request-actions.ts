@@ -50,7 +50,16 @@ export async function completeRequestAction(
     .eq('id', request.agent_id)
   if (agentError) throw agentError
 
-  // 4. Log activity
+  // 4. Resolve any pending/expired M1 transition tasks for this agent
+  // since they now have an official new T1
+  const { error: resolveTaskError } = await supabase
+    .from('m1_transition_tasks')
+    .update({ status: 'm1_changed', resolved_at: now })
+    .eq('m1_agent_id', request.agent_id)
+    .in('status', ['pending', 'expired'])
+  if (resolveTaskError) throw resolveTaskError
+
+  // 5. Log activity
   await supabase.from('activity_logs').insert({
     agent_id: request.agent_id,
     action_type: 't1_changed',
@@ -61,7 +70,7 @@ export async function completeRequestAction(
     created_by: userId,
   })
 
-  // 5. Query M1s of the departed agent
+  // 6. Query M1s of the departed agent
   const { data: m1s } = await supabase
     .from('agents')
     .select('id')
@@ -84,7 +93,7 @@ export async function completeRequestAction(
     if (taskError) throw taskError
   }
 
-  // 6. Move M1s under temp T1 (or set null if agent had no old T1)
+  // 7. Move M1s under temp T1 (or set null if agent had no old T1)
   const { error: m1UpdateError } = await supabase
     .from('agents')
     .update({ current_t1_id: request.old_t1_id })
@@ -92,7 +101,7 @@ export async function completeRequestAction(
     .is('deleted_at', null)
   if (m1UpdateError) throw m1UpdateError
 
-  // 7. Notify admins
+  // 8. Notify admins
   createNotificationsForAdmins([{
     type: 'request_completed',
     title: 'Đề xuất đã hoàn tất',

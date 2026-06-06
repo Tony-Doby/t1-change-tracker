@@ -56,7 +56,7 @@ export default function DashboardPage() {
   const [requestModalAgentId, setRequestModalAgentId] = useState<string | null>(null)
   const [confirmT2Task, setConfirmT2Task] = useState<TransitionTask | null>(null)
 
-  const { data: stats, isLoading: statsLoading } = useDashboardStatsQuery()
+  const { data: stats, isLoading: statsLoading, error: statsError } = useDashboardStatsQuery()
   const { data: statusCounts = {}, isLoading: countsLoading } = useStatusCountsQuery()
   const { data: b2Requests = [], isLoading: b2Loading } = useB2RequestsQuery()
   const { data: transitions = [], isLoading: transitionsLoading, error: transitionsError } = useM1TransitionsQuery()
@@ -64,6 +64,9 @@ export default function DashboardPage() {
   const { data: t1Changes = [] } = useT1ChangesQuery()
   const { data: rankNamesMap = {} } = useRanksMapQuery()
 
+  if (statsError) {
+    show('Lỗi tải thống kê: ' + (statsError as Error).message, 'error')
+  }
   if (transitionsError) {
     show('Lỗi tải M1 Transition: ' + (transitionsError as Error).message, 'error')
   }

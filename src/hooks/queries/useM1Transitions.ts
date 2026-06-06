@@ -28,7 +28,7 @@ export function useM1TransitionsQuery() {
         .from('m1_transition_tasks')
         .select(`
           *,
-          m1_agent:m1_agent_id(full_name, staff_id, contract_signing_date, rank_name),
+          m1_agent:m1_agent_id(full_name, staff_id, contract_signing_date, rank_name, status),
           temp_t1:temp_t1_id(full_name, staff_id),
           departed_agent:departed_agent_id(full_name, staff_id)
         `)
@@ -37,7 +37,9 @@ export function useM1TransitionsQuery() {
 
       if (error) throw error
 
-      const mapped: TransitionTask[] = (tasks ?? []).map((t: any) => {
+      const mapped: TransitionTask[] = (tasks ?? [])
+        .filter((t: any) => t.m1_agent?.status === 'active')
+        .map((t: any) => {
         const daysLeft = Math.ceil(
           (new Date(t.deadline_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
         )

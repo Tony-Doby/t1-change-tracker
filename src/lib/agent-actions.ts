@@ -75,6 +75,23 @@ export async function deactivateAgent({ agentId, endDate, reason, userId }: Deac
     if (taskError) throw taskError
   }
 
+  // 6. Cancel pending transition tasks where this agent is the M1
+  // (agent deactivated -> no longer needs transition)
+  const { error: cancelM1Error } = await supabase
+    .from('m1_transition_tasks')
+    .update({ status: 'expired', resolved_at: now })
+    .eq('m1_agent_id', agentId)
+    .eq('status', 'pending')
+  if (cancelM1Error) throw cancelM1Error
+
+  // 7. Also cancel pending tasks where this agent is the departed agent
+  const { error: cancelDepartedError } = await supabase
+    .from('m1_transition_tasks')
+    .update({ status: 'expired', resolved_at: now })
+    .eq('departed_agent_id', agentId)
+    .eq('status', 'pending')
+  if (cancelDepartedError) throw cancelDepartedError
+
   createNotificationsForAdmins([{
     type: 'agent_deactivated',
     title: 'Agent đã bị chấm dứt hoạt động',

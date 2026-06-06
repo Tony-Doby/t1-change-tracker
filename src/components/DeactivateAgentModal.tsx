@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { deactivateAgent } from '../lib/agent-actions'
 import { useAuth } from '../hooks/useAuth'
@@ -16,6 +17,7 @@ interface Props {
 export default function DeactivateAgentModal({ agentId, onClose }: Props) {
   const { user } = useAuth()
   const { show } = useToast()
+  const queryClient = useQueryClient()
   const [agent, setAgent] = useState<any>(null)
   const [m1s, setM1s] = useState<any[]>([])
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -60,6 +62,8 @@ export default function DeactivateAgentModal({ agentId, onClose }: Props) {
         reason: reason.trim(),
         userId: user?.id,
       })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'm1Transitions'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] })
       show('Đã chấm dứt hoạt động agent', 'success')
       setShowConfirm(false)
       onClose()

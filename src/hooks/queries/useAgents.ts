@@ -40,7 +40,7 @@ export function useAgentsQuery(options: UseAgentsOptions = {}) {
       // Data query with FK embedding for T1 name
       let query = supabase
         .from('agents')
-        .select(`*, t1:current_t1_id(full_name, staff_id)`)
+        .select(`*, t1:current_t1_id(id, full_name, staff_id)`)
         .is('deleted_at', null)
 
       if (filter === 'no_t1') {

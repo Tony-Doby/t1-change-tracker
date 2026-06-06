@@ -33,6 +33,12 @@ CREATE POLICY "Allow admin to insert excel_templates"
     EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
+DROP POLICY IF EXISTS "Allow admin to update excel_templates" ON public.excel_templates;
+CREATE POLICY "Allow admin to update excel_templates"
+  ON public.excel_templates FOR UPDATE TO authenticated USING (
+    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
 DROP POLICY IF EXISTS "Allow admin to delete excel_templates" ON public.excel_templates;
 CREATE POLICY "Allow admin to delete excel_templates"
   ON public.excel_templates FOR DELETE TO authenticated USING (
