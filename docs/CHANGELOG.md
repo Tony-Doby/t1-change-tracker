@@ -44,6 +44,23 @@
 
 ---
 
+## 2026-06-09
+
+### 55. Fix BUG-027: Agent edit rank không cập nhật rank_name + M1 Transition không cho tạo đề xuất
+
+**Bug:**
+1. Trong Agent Detail → Edit → đổi rank thành CS → lưu → view vẫn hiển thị ASC.
+2. M1 Transition không cho tạo đề xuất cho agent này.
+
+**Root cause:** Form edit chỉ update `rank_id`, không update `rank_name`. Display ưu tiên `rank_name` trước `rank_id`, nên vẫn hiện giá trị cũ. Eligibility check cũng dùng `rank_name != 'ASC'`, nên agent vẫn bị tính là ASC → không đủ điều kiện.
+
+**Fix:** `AgentInfoTab.tsx`: trong `onSubmit`, khi `rank_id` thay đổi, đồng bộ cập nhật `rank_name` tương ứng từ bảng `ranks` (hoặc set `null` nếu xóa rank).
+
+**Files sửa:**
+- `webapp/src/components/agent-detail/AgentInfoTab.tsx`
+
+---
+
 ## 2026-06-05
 
 ### 52. Fix BUG-025: Excel Generator — "Không tìm thấy template sau khi cập nhật"

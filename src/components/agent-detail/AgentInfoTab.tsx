@@ -115,6 +115,12 @@ export default function AgentInfoTab({ agent, relatedMap, rankNamesMap, division
         payload[key] = value
       }
     })
+    // Sync rank_name when rank_id changes
+    if (payload.rank_id && ranks[payload.rank_id]) {
+      payload.rank_name = ranks[payload.rank_id]
+    } else if (payload.rank_id === null || payload.rank_id === undefined) {
+      payload.rank_name = null
+    }
     const { error } = await supabase.from('agents').update(payload).eq('id', agent.id)
     setSaving(false)
     if (error) {
