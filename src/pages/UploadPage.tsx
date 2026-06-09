@@ -12,9 +12,11 @@ import TableRow from '../ui/layout/TableRow'
 import TableCell from '../ui/layout/TableCell'
 import Badge from '../ui/display/Badge'
 
-const REQUIRED_HEADERS = ['staff_id', 'full_name', 'email', 'phone', 'rank_name', 'contract_signing_date', 'current_t1_id', 'introducing_agent_id', 'status']
-const OPTIONAL_HEADERS = ['rank_id', 'register_date', 'agent_start_date', 'end_date', 'deactivation_reason', 'business_email', 'id_card_number', 'date_of_birth', 'id_card_issue_date', 'id_card_issue_place', 'permanent_address', 'place_of_origin', 'gender', 'tax_code', 'bank_name', 'bank_account_number', 'bank_branch_name', 'active_area', 'real_estate_experience', 'broker_licence_number', 'broker_licence_expiry_date', 'success_seminar_date', 'source']
-const ALL_HEADERS = [...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]
+const FULL_REQUIRED_HEADERS = ['staff_id', 'full_name', 'email', 'phone', 'rank_name', 'contract_signing_date', 'current_t1_id', 'introducing_agent_id', 'status']
+const FULL_OPTIONAL_HEADERS = ['rank_id', 'register_date', 'agent_start_date', 'end_date', 'deactivation_reason', 'business_email', 'id_card_number', 'date_of_birth', 'id_card_issue_date', 'id_card_issue_place', 'permanent_address', 'place_of_origin', 'gender', 'tax_code', 'bank_name', 'bank_account_number', 'bank_branch_name', 'active_area', 'real_estate_experience', 'broker_licence_number', 'broker_licence_expiry_date', 'success_seminar_date', 'source']
+const FULL_ALL_HEADERS = [...FULL_REQUIRED_HEADERS, ...FULL_OPTIONAL_HEADERS]
+
+const RANK_REQUIRED_HEADERS = ['staff_id', 'rank_name']
 
 interface ParsedRow {
   row: number
@@ -25,12 +27,17 @@ interface ParsedRow {
 interface ImportReport {
   newCount: number
   updateCount: number
+  successCount: number
+  notFoundCount: number
+  rankNotFoundCount: number
   errors: number
   warnings: { type: string; count: number; rows: number[] }[]
+  detailErrors: string[]
 }
 
 export default function UploadPage() {
   const { show } = useToast()
+  const [importMode, setImportMode] = useState<'full' | 'rank'>('full')
   const [isDragOver, setIsDragOver] = useState(false)
   const [fileName, setFileName] = useState('')
   const [parsing, setParsing] = useState(false)
@@ -51,6 +58,11 @@ export default function UploadPage() {
     setImporting(false)
     setDetectedHeaders([])
     if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const switchMode = (mode: 'full' | 'rank') => {
+    setImportMode(mode)
+    reset()
   }
 
   const parseFile = useCallback(async (file: File) => {
@@ -84,7 +96,9 @@ export default function UploadPage() {
     }
 
     const headers = (json[0] as unknown as string[]).map((h) => String(h).trim().toLowerCase())
-    const missingHeaders = REQUIRED_HEADERS.filter((h) => !headers.includes(h))
+
+    const requiredHeaders = importMode === 'full' ? FULL_REQUIRED_HEADERS : RANK_REQUIRED_HEADERS
+    const missingHeaders = requiredHeaders.filter((h) => !headers.includes(h))
 
     if (missingHeaders.length > 0) {
       show(`Thiếu cột: ${missingHeaders.join(', ')}`, 'error')
@@ -117,24 +131,28 @@ export default function UploadPage() {
 
       const errors: string[] = []
       if (!String(rowData['staff_id'] || '').trim()) errors.push('Thiếu mã NV')
-      if (!String(rowData['full_name'] || '').trim()) errors.push('Thiếu họ tên')
 
-      if (errors.length > 0) errorCount++
-
-      if (!rowData['email']) addWarning('Thiếu email', i)
-      if (!rowData['phone']) addWarning('Thiếu SĐT', i)
-      if (!rowData['current_t1_id']) addWarning('Chưa có T1', i)
+      if (importMode === 'full') {
+        if (!String(rowData['full_name'] || '').trim()) errors.push('Thiếu họ tên')
+        if (errors.length > 0) errorCount++
+        if (!rowData['email']) addWarning('Thiếu email', i)
+        if (!rowData['phone']) addWarning('Thiếu SĐT', i)
+        if (!rowData['current_t1_id']) addWarning('Chưa có T1', i)
+      } else {
+        if (!String(rowData['rank_name'] || '').trim()) errors.push('Thiếu cấp bậc')
+        if (errors.length > 0) errorCount++
+      }
 
       rows.push({ row: i, data: rowData, errors })
     }
 
     setPreview(rows.slice(0, 10))
     setAllRows(rows)
-    setReport({ newCount: 0, updateCount: 0, errors: errorCount, warnings })
+    setReport({ newCount: 0, updateCount: 0, successCount: 0, notFoundCount: 0, rankNotFoundCount: 0, errors: errorCount, warnings, detailErrors: [] })
     setProgress(100)
     setParsing(false)
     show(`Đã đọc ${rows.length} dòng`, 'success')
-  }, [show])
+  }, [show, importMode])
 
   const confirmImport = async () => {
     const validRows = allRows.filter((r) => r.errors.length === 0)
@@ -143,6 +161,12 @@ export default function UploadPage() {
       return
     }
     setImporting(true)
+
+    if (importMode === 'rank') {
+      await confirmRankImport(validRows)
+      setImporting(false)
+      return
+    }
 
     const codes = validRows.map((r) => String(r.data['staff_id']).trim())
     const { data: existing } = await supabase.from('agents').select('staff_id').in('staff_id', codes)
@@ -161,7 +185,7 @@ export default function UploadPage() {
         introducing_agent_id: d['introducing_agent_id'] ? String(d['introducing_agent_id']).trim() : null,
         status: String(d['status'] || 'active').trim(),
       }
-      OPTIONAL_HEADERS.forEach((h) => {
+      FULL_OPTIONAL_HEADERS.forEach((h) => {
         if (d[h] !== undefined && d[h] !== null && d[h] !== '') {
           base[h] = String(d[h]).trim()
         }
@@ -182,6 +206,72 @@ export default function UploadPage() {
     setReport((prev) => prev ? { ...prev, newCount, updateCount } : prev)
     setImporting(false)
     show(`Import thành công: ${newCount} mới, ${updateCount} cập nhật`, 'success')
+  }
+
+  const confirmRankImport = async (validRows: ParsedRow[]) => {
+    const staffIds = validRows.map((r) => String(r.data['staff_id']).trim())
+
+    const [{ data: agentsData }, { data: ranksData }] = await Promise.all([
+      supabase.from('agents').select('id, staff_id').in('staff_id', staffIds),
+      supabase.from('ranks').select('id, name'),
+    ])
+
+    const existingAgentSet = new Set((agentsData ?? []).map((a) => a.staff_id))
+    const rankMap = new Map<string, string>()
+    ranksData?.forEach((r: any) => {
+      rankMap.set(String(r.name).trim().toLowerCase(), r.id)
+    })
+
+    let successCount = 0
+    let notFoundCount = 0
+    let rankNotFoundCount = 0
+    const detailErrors: string[] = []
+
+    for (const r of validRows) {
+      const staffId = String(r.data['staff_id'] || '').trim()
+      const rankName = String(r.data['rank_name'] || '').trim()
+
+      if (!existingAgentSet.has(staffId)) {
+        notFoundCount++
+        continue
+      }
+
+      const rankId = rankMap.get(rankName.toLowerCase())
+      if (!rankId) {
+        rankNotFoundCount++
+        continue
+      }
+
+      const { error } = await supabase
+        .from('agents')
+        .update({ rank_id: rankId, rank_name: rankName })
+        .eq('staff_id', staffId)
+
+      if (error) {
+        detailErrors.push(`${staffId}: ${error.message}`)
+      } else {
+        successCount++
+      }
+    }
+
+    setReport((prev) =>
+      prev
+        ? {
+            ...prev,
+            successCount,
+            notFoundCount,
+            rankNotFoundCount,
+            detailErrors,
+          }
+        : prev
+    )
+    setImporting(false)
+
+    if (detailErrors.length > 0) {
+      show(`Cập nhật xong: ${successCount} thành công, ${detailErrors.length} lỗi`, 'warning')
+    } else {
+      show(`Cập nhật cấp bậc thành công: ${successCount} agent`, 'success')
+    }
   }
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -208,18 +298,62 @@ export default function UploadPage() {
 
   const downloadTemplate = async (format: 'csv' | 'xlsx') => {
     const XLSX = await import('xlsx')
-    const rows = [ALL_HEADERS, ['NV001', 'Nguyễn Văn A', 'a@era.vn', '0901234567', 'Consultant Specialist', '2026-01-01', '', '', 'active', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']]
+    let rows: (string | null)[][]
+    let sheetName: string
+    let fileName: string
+
+    if (importMode === 'full') {
+      rows = [FULL_ALL_HEADERS, ['NV001', 'Nguyễn Văn A', 'a@era.vn', '0901234567', 'Consultant Specialist', '2026-01-01', '', '', 'active', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']]
+      sheetName = 'Agents'
+      fileName = `template_agents.${format}`
+    } else {
+      rows = [RANK_REQUIRED_HEADERS, ['NV001', 'Consultant Specialist']]
+      sheetName = 'RankUpdate'
+      fileName = `template_rank_update.${format}`
+    }
+
     const ws = XLSX.utils.aoa_to_sheet(rows)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Agents')
-    XLSX.writeFile(wb, `template_agents.${format}`)
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+    XLSX.writeFile(wb, fileName)
   }
+
+  const requiredHeaders = importMode === 'full' ? FULL_REQUIRED_HEADERS : RANK_REQUIRED_HEADERS
+  const optionalHeaders = importMode === 'full' ? FULL_OPTIONAL_HEADERS : []
 
   return (
     <div className="max-w-5xl space-y-8">
       <PageHeader title="Upload dữ liệu Agent" />
 
+      <div className="flex gap-2 border-b border-border-hairline pb-1">
+        <button
+          onClick={() => switchMode('full')}
+          className={`px-4 h-9 text-sm font-medium rounded-t-sm border-b-2 transition-colors ${
+            importMode === 'full'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          Import đầy đủ
+        </button>
+        <button
+          onClick={() => switchMode('rank')}
+          className={`px-4 h-9 text-sm font-medium rounded-t-sm border-b-2 transition-colors ${
+            importMode === 'rank'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          Cập nhật cấp bậc
+        </button>
+      </div>
+
       <Section>
+        <div className="text-sm text-text-secondary mb-2">
+          {importMode === 'full'
+            ? 'Import toàn bộ thông tin agent từ file Excel/CSV.'
+            : 'Chỉ cần 2 cột: Staff ID và Rank Name để cập nhật cấp bậc hàng loạt.'}
+        </div>
         <div
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
@@ -281,10 +415,10 @@ export default function UploadPage() {
               <Table>
                 <TableHeader>
                   <TableHeaderCell>Dòng</TableHeaderCell>
-                  {REQUIRED_HEADERS.map((h) => (
+                  {requiredHeaders.map((h) => (
                     <TableHeaderCell key={h}>{h}</TableHeaderCell>
                   ))}
-                  {OPTIONAL_HEADERS.filter((h) => detectedHeaders.includes(h)).map((h) => (
+                  {optionalHeaders.filter((h) => detectedHeaders.includes(h)).map((h) => (
                     <TableHeaderCell key={h}>{h}</TableHeaderCell>
                   ))}
                 </TableHeader>
@@ -292,10 +426,10 @@ export default function UploadPage() {
                   {preview.map((r) => (
                     <TableRow key={r.row} className={r.errors.length > 0 ? 'bg-danger-subtle' : ''}>
                       <TableCell className="text-text-tertiary">{r.row}</TableCell>
-                      {REQUIRED_HEADERS.map((h) => (
+                      {requiredHeaders.map((h) => (
                         <TableCell key={h} className="whitespace-nowrap max-w-[150px] truncate">{String(r.data[h] ?? '')}</TableCell>
                       ))}
-                      {OPTIONAL_HEADERS.filter((h) => detectedHeaders.includes(h)).map((h) => (
+                      {optionalHeaders.filter((h) => detectedHeaders.includes(h)).map((h) => (
                         <TableCell key={h} className="whitespace-nowrap max-w-[150px] truncate">{String(r.data[h] ?? '')}</TableCell>
                       ))}
                     </TableRow>
@@ -323,8 +457,18 @@ export default function UploadPage() {
           <Section gap="sm">
             <h2 className="text-[1.23rem] font-medium text-text-primary">📋 Báo cáo nhập liệu</h2>
             <div className="space-y-1 text-sm">
-              <p className="text-success">✅ Đã nhập: {report.newCount} agent mới</p>
-              <p className="text-accent">🔄 Đã cập nhật: {report.updateCount} agent</p>
+              {importMode === 'full' ? (
+                <>
+                  <p className="text-success">✅ Đã nhập: {report.newCount} agent mới</p>
+                  <p className="text-accent">🔄 Đã cập nhật: {report.updateCount} agent</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-success">✅ Cập nhật thành công: {report.successCount} agent</p>
+                  {report.notFoundCount > 0 && <p className="text-danger">❌ Không tìm thấy agent: {report.notFoundCount}</p>}
+                  {report.rankNotFoundCount > 0 && <p className="text-warning">⚠️ Không tìm thấy cấp bậc: {report.rankNotFoundCount}</p>}
+                </>
+              )}
               <p className="text-text-tertiary">📄 Tổng dòng hợp lệ: {allRows.filter((r) => r.errors.length === 0).length} / {allRows.length}</p>
               {report.errors > 0 && <p className="text-danger">❌ Dòng lỗi (bỏ qua): {report.errors}</p>}
             </div>
@@ -334,6 +478,16 @@ export default function UploadPage() {
                 <ul className="space-y-1 text-sm text-text-secondary">
                   {report.warnings.map((w) => (
                     <li key={w.type}>• {w.count} agent {w.type.toLowerCase()}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {report.detailErrors.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-danger">❌ Lỗi chi tiết:</p>
+                <ul className="space-y-1 text-sm text-text-secondary max-h-40 overflow-y-auto">
+                  {report.detailErrors.map((err, idx) => (
+                    <li key={idx}>• {err}</li>
                   ))}
                 </ul>
               </div>

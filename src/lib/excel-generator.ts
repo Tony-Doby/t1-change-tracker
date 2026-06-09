@@ -91,6 +91,15 @@ function isExpressionOnly(cellValue: string): boolean {
   return /^\([^)]+\)$/.test(cellValue.trim())
 }
 
+function getDataValue(dataRow: Record<string, string>, key: string): string | undefined {
+  if (dataRow[key] !== undefined) return dataRow[key]
+  const lower = key.toLowerCase()
+  for (const [k, v] of Object.entries(dataRow)) {
+    if (k.toLowerCase() === lower) return v
+  }
+  return undefined
+}
+
 const FIELD_REF_REGEX = /\{\{([^}]+)\}\}/g
 
 export function replaceFieldReferences(
@@ -98,12 +107,17 @@ export function replaceFieldReferences(
   dataRow: Record<string, string>,
   mapping: ColumnMapping
 ): string {
+  // Build normalized mapping for case-insensitive field reference lookup
+  const normalizedMapping = new Map<string, FieldMappingValue>()
+  Object.entries(mapping).forEach(([k, v]) => normalizedMapping.set(k.toLowerCase(), v))
+
   return cellValue.replace(FIELD_REF_REGEX, (_match, fieldName) => {
-    const mapped = mapping[fieldName.trim()]
+    const mapped = normalizedMapping.get(fieldName.trim().toLowerCase())
     if (!mapped) return _match
     let val: string
     if (mapped.type === 'column') {
-      val = dataRow[mapped.value] !== undefined ? dataRow[mapped.value] : _match
+      const dataVal = getDataValue(dataRow, mapped.value)
+      val = dataVal !== undefined ? dataVal : _match
     } else {
       val = mapped.value
     }
@@ -200,6 +214,10 @@ export function generateWorkbook(
     return newWb
   }
 
+  // Case-insensitive mapping lookup
+  const normalizedMapping = new Map<string, FieldMappingValue>()
+  Object.entries(mapping).forEach(([k, v]) => normalizedMapping.set(k.toLowerCase(), v))
+
   const templateRow = json[templateHeaderRow] as unknown[]
   const outputRows: unknown[][] = []
 
@@ -226,10 +244,11 @@ export function generateWorkbook(
 
       // 3. Apply direct mapping if this column is mapped (skip for expression-only cells)
       const fieldName = String(templateRow[colIdx] ?? '').trim()
-      const mapped = mapping[fieldName]
+      const mapped = normalizedMapping.get(fieldName.toLowerCase())
       if (mapped && !isExpressionOnly(str)) {
         if (mapped.type === 'column') {
-          value = dataRow[mapped.value] !== undefined ? dataRow[mapped.value] : value
+          const dataVal = getDataValue(dataRow, mapped.value)
+          value = dataVal !== undefined ? dataVal : value
         } else if (mapped.type === 'fixed') {
           value = mapped.value
         }
@@ -282,26 +301,31 @@ export function buildPreview(
   mapping: ColumnMapping,
   templateHeaderRow: number,
   XLSX: typeof XLSXType,
-  limit = 10,
+  limit?: number,
   baseDate = new Date()
 ): { headers: string[]; rows: PreviewRow[]; matched: MatchStatus[] } {
   const fields = detectFields(templateWorkbook, templateHeaderRow, XLSX)
 
+  // Case-insensitive mapping lookup
+  const normalizedMapping = new Map<string, FieldMappingValue>()
+  Object.entries(mapping).forEach(([k, v]) => normalizedMapping.set(k.toLowerCase(), v))
+
   const matched: MatchStatus[] = fields.map((f) => {
-    const m = mapping[f]
+    const m = normalizedMapping.get(f.toLowerCase())
     if (!m) return { field: f, type: 'fixed', value: '', matched: false }
     return { field: f, type: m.type, value: m.value, matched: true }
   })
 
-  const previewRows = dataRows.slice(0, limit)
-
-  if (templateHeaderRow < 0 || templateHeaderRow >= templateWorkbook.SheetNames.length) {
-    return { headers: fields, rows: previewRows, matched }
-  }
+  const previewRows = limit ? dataRows.slice(0, limit) : dataRows
 
   const sheetName = templateWorkbook.SheetNames[0]
   const worksheet = templateWorkbook.Sheets[sheetName]
   const json = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
+
+  if (templateHeaderRow < 0 || templateHeaderRow >= json.length) {
+    return { headers: fields, rows: previewRows, matched }
+  }
+
   const templateRow = json[templateHeaderRow] as unknown[]
 
   const rows: PreviewRow[] = previewRows.map((dataRow, dataIdx) => {
@@ -316,10 +340,11 @@ export function buildPreview(
       value = replaceFieldReferences(value, dataRow, mapping)
 
       if (!isExpressionOnly(cellStr)) {
-        const mapped = mapping[fieldName]
+        const mapped = normalizedMapping.get(fieldName.toLowerCase())
         if (mapped) {
           if (mapped.type === 'column') {
-            value = dataRow[mapped.value] !== undefined ? dataRow[mapped.value] : value
+            const dataVal = getDataValue(dataRow, mapped.value)
+            value = dataVal !== undefined ? dataVal : value
           } else if (mapped.type === 'fixed') {
             value = mapped.value
           }

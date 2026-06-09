@@ -5,6 +5,45 @@
 
 ---
 
+## 2026-06-08
+
+### 53. Feature: Import cập nhật cấp bậc hàng loạt (Rank Update)
+
+**Mô tả:** Thêm chế độ "Cập nhật cấp bậc" trong trang Upload. Chỉ cần 2 cột `staff_id` và `rank_name` trong file Excel/CSV để cập nhật cấp bậc cho hàng loạt agent.
+
+**Technical Design:**
+- `UploadPage.tsx`: Thêm tab switch giữa "Import đầy đủ" và "Cập nhật cấp bậc".
+- Chế độ rank: validate 2 cột `staff_id` + `rank_name`, lookup `ranks` table để ánh xạ `rank_name` → `rank_id` (case-insensitive), sau đó update từng agent theo `staff_id`.
+- Báo cáo: số thành công, số không tìm thấy agent, số không tìm thấy cấp bậc.
+
+**Files sửa:**
+- `webapp/src/pages/UploadPage.tsx`
+
+---
+
+## 2026-06-08
+
+### 54. Fix BUG-026: Excel Generator — Preview trống và chỉ hiển thị 10 dòng
+
+**Bug:**
+1. Preview chỉ hiển thị 10 dòng đầu, user không thể review toàn bộ data.
+2. Preview table hiển thị trống dù mapping đã match — do case mismatch giữa template header row (e.g., "TÊN TÀI LIỆU (*)") và template config fields (e.g., "Tên tài liệu (*)") khiến `mapping[fieldName]` trả về `undefined`.
+
+**Fix:**
+- `excel-generator.ts`:
+  - `buildPreview`: bỏ `limit = 10`, thành `limit?: number` (optional). Khi không truyền limit thì preview toàn bộ rows.
+  - `buildPreview` + `generateWorkbook`: thêm `normalizedMapping` (Map lowercase) để lookup mapping case-insensitive.
+  - Thêm `getDataValue()` helper để lookup giá trị từ `dataRow` case-insensitive (fix case mismatch giữa header file data và tên cột trong mapping).
+  - `replaceFieldReferences`: thêm normalized mapping lookup để xử lý case mismatch trong inline `{{...}}` references.
+  - **BUG chính:** `buildPreview` dòng check `templateHeaderRow >= templateWorkbook.SheetNames.length` — `SheetNames.length` là **số sheet** (thường = 1), không phải số dòng. Khi `templateHeaderRow = 1`, điều kiện này `true`, khiến `buildPreview` return sớm với `rows: previewRows` (data rows nguyên bản có key = data headers). Trong khi `headers` vẫn là template fields → key mismatch → preview trống. **Sửa thành `templateHeaderRow >= json.length`.**
+- `GeneratePanel.tsx`: truyền `undefined` thay vì `10` khi gọi `buildPreview`; cập nhật UI text từ "dòng đầu" → "X / Y dòng"; thêm wrapper `min-w-max` cho preview table để cho phép scroll ngang khi nhiều cột.
+
+**Files sửa:**
+- `webapp/src/lib/excel-generator.ts`
+- `webapp/src/components/excel-generator/GeneratePanel.tsx`
+
+---
+
 ## 2026-06-05
 
 ### 52. Fix BUG-025: Excel Generator — "Không tìm thấy template sau khi cập nhật"

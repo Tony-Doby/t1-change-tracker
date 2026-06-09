@@ -83,6 +83,7 @@
 | 020 | Excel Generator Enhancements — Inline Field Reference + Uppercase + Chọn ngày generate | done | 2026-06-03 | 2026-06-04 |
 | 021 | Excel Generator — Edit Template đã lưu | done | 2026-06-03 | 2026-06-04 |
 | REFACTOR-005 | Twenty UI/UX Full Adoption (Tailwind v4 Preserve) | done | 2026-06-04 | 2026-06-05 |
+| 022 | Import cập nhật cấp bậc hàng loạt (2 cột: staff_id + rank_name) | done | 2026-06-08 | 2026-06-08 |
 
 ---
 

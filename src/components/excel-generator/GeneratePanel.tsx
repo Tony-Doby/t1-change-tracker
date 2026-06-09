@@ -141,7 +141,7 @@ export default function GeneratePanel({ templates }: Props) {
             }
           }
           setMapping(adaptedMapping)
-          const previewData = buildPreview(templateWorkbook, rows, adaptedMapping, selectedTemplate.template_header_row, XLSX, 10, new Date(generateDate))
+          const previewData = buildPreview(templateWorkbook, rows, adaptedMapping, selectedTemplate.template_header_row, XLSX, undefined, new Date(generateDate))
           setPreview(previewData)
           show(`Đã đọc ${rows.length} dòng data. Mapping đã áp dụng tự động.`, 'success')
         } else {
@@ -184,7 +184,7 @@ export default function GeneratePanel({ templates }: Props) {
     setParsing(true)
     try {
       const XLSX = await loadXlsx()
-      const previewData = buildPreview(templateWorkbook, dataRows, mapping, selectedTemplate.template_header_row, XLSX, 10, new Date(generateDate))
+      const previewData = buildPreview(templateWorkbook, dataRows, mapping, selectedTemplate.template_header_row, XLSX, undefined, new Date(generateDate))
       setPreview(previewData)
       setShowMappingPanel(false)
     } catch (e: any) {
@@ -537,7 +537,7 @@ export default function GeneratePanel({ templates }: Props) {
       {preview && preview.rows.length > 0 && !parsing && (
         <Card padding="none">
           <div className="px-4 py-3 border-b border-border-hairline flex items-center justify-between">
-            <h3 className="text-sm font-medium text-text-primary">Preview ({preview.rows.length} dòng đầu)</h3>
+            <h3 className="text-sm font-medium text-text-primary">Preview ({preview.rows.length} / {dataRows.length} dòng)</h3>
             <button
               onClick={() => setShowMappingPanel(true)}
               className="text-xs text-accent hover:underline flex items-center gap-1"
@@ -546,24 +546,26 @@ export default function GeneratePanel({ templates }: Props) {
             </button>
           </div>
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                {preview.headers.map((h) => (
-                  <TableHeaderCell key={h}>{h}</TableHeaderCell>
-                ))}
-              </TableHeader>
-              <tbody>
-                {preview.rows.map((row, idx) => (
-                  <TableRow key={idx}>
-                    {preview.headers.map((h) => (
-                      <TableCell key={h} className="whitespace-nowrap max-w-[200px] truncate">
-                        {String(row[h] ?? '')}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </tbody>
-            </Table>
+            <div className="min-w-max">
+              <Table>
+                <TableHeader>
+                  {preview.headers.map((h) => (
+                    <TableHeaderCell key={h}>{h}</TableHeaderCell>
+                  ))}
+                </TableHeader>
+                <tbody>
+                  {preview.rows.map((row, idx) => (
+                    <TableRow key={idx}>
+                      {preview.headers.map((h) => (
+                        <TableCell key={h} className="whitespace-nowrap max-w-[200px] truncate">
+                          {String(row[h] ?? '')}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
           </div>
         </Card>
       )}
