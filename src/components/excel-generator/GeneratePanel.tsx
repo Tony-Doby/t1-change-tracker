@@ -15,6 +15,7 @@ import { useAuth } from '../../hooks/useAuth'
 import {
   loadXlsx,
   readDataFile,
+  readCsvFile,
   buildPreview,
   generateWorkbook,
   formatGenerateFileName,
@@ -116,10 +117,22 @@ export default function GeneratePanel({ templates }: Props) {
       setShowMappingPanel(false)
 
       try {
-        const arrayBuffer = await file.arrayBuffer()
         const XLSX = await loadXlsx()
-        const wb = XLSX.read(arrayBuffer, { type: 'array' })
-        const { headers, rows } = readDataFile(wb, dataHeaderRow, XLSX)
+        let headers: string[]
+        let rows: Record<string, string>[]
+
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          const text = await file.text()
+          const result = readCsvFile(text, dataHeaderRow)
+          headers = result.headers
+          rows = result.rows
+        } else {
+          const arrayBuffer = await file.arrayBuffer()
+          const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true })
+          const result = readDataFile(wb, dataHeaderRow, XLSX)
+          headers = result.headers
+          rows = result.rows
+        }
         setDataHeaders(headers)
         setDataRows(rows)
 
@@ -137,7 +150,7 @@ export default function GeneratePanel({ templates }: Props) {
             } else {
               const exactMatch = headers.find((h) => h === mapVal.value)
               const caseMatch = headers.find((h) => h.toLowerCase().trim() === mapVal.value.toLowerCase().trim())
-              adaptedMapping[field] = { type: 'column', value: exactMatch || caseMatch || mapVal.value }
+              adaptedMapping[field] = { type: 'column', value: exactMatch || caseMatch || mapVal.value, uppercase: mapVal.uppercase }
             }
           }
           setMapping(adaptedMapping)

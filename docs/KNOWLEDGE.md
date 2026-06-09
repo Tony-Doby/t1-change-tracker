@@ -179,6 +179,17 @@
 - Nếu thêm field (ví dụ `uppercase?: boolean`) → **phải sửa cả 2 file**, không chỉ 1.
 - **Gợi ý refactor sau:** Export từ `types/index.ts`, bỏ định nghĩa cục bộ trong `excel-generator.ts`.
 
+### 4.6 CSV import: SheetJS auto-convert số/date → mất số 0, lỗi date
+- SheetJS `XLSX.read` parse CSV tự động convert giá trị toàn số (CCCD, SĐT) thành `number` → **mất số 0 đầu**.
+- Giá trị giống date (`25/03/2022`) bị parse thành Excel serial number → `String()` ra số lạ (`44508.000...`).
+- **Không dùng `XLSX.read` cho CSV** khi cần giữ nguyên text.
+- **Giải pháp:** Parse CSV raw text thủ công (`file.text()` + custom parser xử lý quoted fields). Đã implement `parseCsvText()` + `readCsvFile()` trong `excel-generator.ts`.
+
+### 4.7 XLSX import: `cellDates: true` + format Date object
+- `XLSX.read(data, { type: 'array', cellDates: true })` để cell date trở thành `Date` object thay vì serial number.
+- `readDataFile` phải format `Date` → `dd/mm/yyyy` thay vì `String(raw[idx])` (mặc định sẽ ra `Wed Oct 16 1977...`).
+- Nếu cell trong xlsx được định dạng text thì vẫn giữ nguyên string.
+
 ---
 
 ## 6. Known Limitations (đang theo dõi)

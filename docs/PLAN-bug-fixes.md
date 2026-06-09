@@ -75,6 +75,12 @@
 | 023 | M1 Transition vẫn hiển thị agent expired sau khi deactivate | fixed | 2026-06-05 | 2026-06-05 |
 | 024 | Excel Generator: "Cannot coerce the result to a single JSON object" khi cập nhật template | fixed | 2026-06-05 | 2026-06-05 |
 | 025 | Excel Generator: "Không tìm thấy template sau khi cập nhật" khi sửa template | fixed | 2026-06-05 | 2026-06-05 |
+| 026 | Excel Generator: Preview trống và chỉ hiển thị 10 dòng | fixed | 2026-06-08 | 2026-06-08 |
+| 027 | Agent edit rank không cập nhật rank_name + M1 Transition không cho tạo đề xuất | fixed | 2026-06-09 | 2026-06-09 |
+| 028 | Excel Generator: VIẾT HOA không hoạt động khi auto-apply saved mapping | fixed | 2026-06-09 | 2026-06-09 |
+| 029 | Excel Generator: CSV import mất số 0 và date bị lỗi | fixed | 2026-06-09 | 2026-06-09 |
+| 030 | Excel Generator: XLSX import date chỉ hiện số (serial date) | fixed | 2026-06-09 | 2026-06-09 |
+| 031 | Excel Generator: Inline refs `{{...}}` không hoạt động trong giá trị cố định (fixed mapping) | fixed | 2026-06-09 | 2026-06-09 |
 
 ---
 
@@ -788,6 +794,208 @@ CREATE POLICY "Allow admin to update excel_templates"
 ### 8. Notes
 - **Lesson learned**: Khi tạo RLS cho bảng mới, phải đảm bảo đủ 4 operations: SELECT, INSERT, UPDATE, DELETE.
 - Nếu UPDATE policy đã được thêm thủ công trên Supabase trước đó nhưng migration local chưa sync → cần đồng bộ lại.
+
+---
+
+---
+
+---
+
+---
+
+## BUG-028: Excel Generator — VIẾT HOA không hoạt động khi auto-apply saved mapping
+
+- **Phát hiện**: 2026-06-09
+- **Status**: `fixed`
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+Trong GeneratePanel, user đã tick "VIẾT HOA" cho field mapping khi tạo template. Khi generate file với template đó, giá trị vẫn hiển thị bình thường (không viết hoa).
+
+### 2. Root Cause
+`GeneratePanel.tsx` khi auto-apply saved mapping từ `selectedTemplate.column_mapping`, tạo lại object cho type `'column'`:
+```tsx
+adaptedMapping[field] = { type: 'column', value: exactMatch || caseMatch || mapVal.value }
+```
+Object mới này **không giữ lại `uppercase` flag** từ `mapVal`. Với type `'fixed'` thì giữ nguyên object nên uppercase vẫn hoạt động.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Thêm `uppercase: mapVal.uppercase` khi tạo adapted mapping cho type `'column'`.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/excel-generator/GeneratePanel.tsx` | Thêm `uppercase: mapVal.uppercase` trong adapt saved mapping |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Tạo template với field `#TEN_CTV#` → tick VIẾT HOA → lưu template.
+2. Upload file data có cột tương ứng chứa tên thường.
+3. Verify preview và file generate hiển thị tên **VIẾT HOA**.
+
+### 8. Notes
+Không.
+
+---
+
+---
+
+---
+
+## BUG-029: Excel Generator — CSV import mất số 0 và date bị lỗi
+
+- **Phát hiện**: 2026-06-09
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Khi import file CSV làm data file:
+- SĐT (`0934888223`) và CCCD (`048177002798`) bị mất số 0 đầu → hiển thị `934888223`, `48177002798`.
+- Ngày sinh và ngày cấp CCCD hiển thị dạng số lạ (ví dụ `44508.00034722222`) thay vì `dd/mm/yyyy`.
+
+### 2. Root Cause
+SheetJS `XLSX.read` parse CSV tự động:
+- Giá trị toàn số (CCCD, SĐT) → parse thành `number` → mất số 0 đầu.
+- Giá trị giống date (`25/03/2022`) → parse thành Excel serial date → `String()` ra số lạ.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Không dùng `XLSX.read` cho CSV. Thay vào đó:
+1. Đọc raw text: `file.text()`.
+2. Parse CSV thủ công với custom parser xử lý quoted fields (`"..."`) và escape (`""` → `"`).
+3. Tất cả giá trị giữ nguyên dạng string.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/lib/excel-generator.ts` | Thêm `parseCsvText()`, `readCsvFile()` |
+| `src/components/excel-generator/GeneratePanel.tsx` | Phân nhánh: `.csv` → `readCsvFile()`, `.xlsx/.xls` → `XLSX.read()` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Upload CSV có CCCD bắt đầu bằng `0`, SĐT bắt đầu bằng `0`.
+2. Verify preview giữ nguyên số 0.
+3. Upload CSV có ngày `dd/mm/yyyy`.
+4. Verify preview hiển thị đúng `dd/mm/yyyy`, không ra số serial.
+
+### 8. Notes
+- Parser CSV tự viết xử lý quoted fields theo RFC 4180 cơ bản. Không hỗ trợ multi-line cell (trừ khi cell được quote).
+
+---
+
+---
+
+---
+
+## BUG-030: Excel Generator — XLSX import date chỉ hiện số (serial date)
+
+- **Phát hiện**: 2026-06-09
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Khi import file XLSX làm data file, các cột ngày tháng (ngày sinh, ngày cấp CCCD) chỉ hiển thị số nguyên (ví dụ `28414`, `44419`) thay vì `dd/mm/yyyy`.
+
+### 2. Root Cause
+`XLSX.read(data, { type: 'array' })` mặc định `cellDates: false`. Cell chứa date trong Excel được lưu dưới dạng **serial number** (số ngày tính từ 1899-12-30). `sheet_to_json` trả về số này, và `String(raw[idx])` chỉ chuyển thành string số.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+1. `XLSX.read(..., { cellDates: true })` để SheetJS chuyển serial date thành `Date` object.
+2. Trong `readDataFile`, khi gặp `Date` object, format thành `dd/mm/yyyy` thay vì dùng `String(date)` (mặc định sẽ ra `Wed Oct 16 1977...`).
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/lib/excel-generator.ts` | Thêm `formatDateDDMMYYYY()`; sửa `readDataFile` để format `Date` object |
+| `src/components/excel-generator/GeneratePanel.tsx` | Truyền `cellDates: true` cho `XLSX.read` khi file là xlsx |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Upload XLSX có cell date định dạng `dd/mm/yyyy`.
+2. Verify preview hiển thị đúng `16/10/1977`, không ra `28414`.
+3. Generate file → verify cell trong file output cũng đúng `dd/mm/yyyy`.
+
+### 8. Notes
+- Nếu cell trong xlsx được định dạng text (không phải date) thì vẫn giữ nguyên string.
+
+---
+
+---
+
+---
+
+---
+
+---
+
+---
+
+## BUG-031: Excel Generator — Inline refs `{{...}}` không hoạt động trong giá trị cố định
+
+- **Phát hiện**: 2026-06-09
+- **Status**: `fixed`
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+Khi user nhập giá trị cố định (fixed) trong mapping panel chứa inline field reference `{{...}}`, giá trị không được thay thế mà xuất ra nguyên xi.
+
+Ví dụ:
+- Field `#ten_ctv#` trong template được map loại "Cố định" với giá trị: `Hợp Đồng Nguyên Tắc - {{#Fullname_CTV#}} - {{#staff_id_ctv#}}`
+- Kết quả generate: `Hợp Đồng Nguyên Tắc - {{#Fullname_CTV#}} - {{#staff_id_ctv#}}` (không thay `{{...}}`)
+- Kỳ vọng: `Hợp Đồng Nguyên Tắc - Phạm Quỳnh Châu - CP02798`
+
+### 2. Root Cause
+Trong `generateWorkbook` và `buildPreview`, flow xử lý:
+1. `replaceFieldReferences` chạy trên cell template ban đầu
+2. `apply direct mapping` ghi đè giá trị (nếu fixed: `value = mapped.value`)
+3. Không có bước xử lý `{{...}}` nào chạy lại trên `mapped.value`
+
+→ Giá trị cố định chứa `{{...}}` bị xuất ra nguyên xi.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Sửa `generateWorkbook` và `buildPreview` trong `excel-generator.ts`:
+- Sau khi `mapped.type === 'fixed'` gán `value = mapped.value`, thêm bước `replaceFieldReferences(value, dataRow, mapping)` để xử lý inline refs trong giá trị cố định.
+- Logic cũ (cell template viết trực tiếp `{{...}}`) vẫn hoạt động bình thường.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/lib/excel-generator.ts` | Thêm `replaceFieldReferences` sau khi apply fixed mapping (2 chỗ: `generateWorkbook` + `buildPreview`) |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Tạo template với field `#ten_ctv#`.
+2. Trong mapping panel, chọn "Cố định" và nhập: `HDNT - {{#Fullname_CTV#}} - {{#staff_id_ctv#}}`.
+3. Upload file data có cột `Fullname_CTV` và `staff_id_ctv`.
+4. Verify preview hiển thị: `HDNT - Phạm Quỳnh Châu - CP02798` (không còn `{{...}}`).
+5. Generate file → verify kết quả đúng.
+
+### 8. Notes
+- Không ảnh hưởng đến mapping type `'column'` (vẫn lấy giá trị từ data như cũ).
+- Không ảnh hưởng đến expression parser `(dd/mm/yyyy)`, `(R.num)`.
+
+---
+
+---
 
 ---
 

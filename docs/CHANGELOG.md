@@ -5,6 +5,47 @@
 
 ---
 
+## 2026-06-09
+
+### 56. Fix BUG-028 + BUG-029 + BUG-030: Excel Generator — Uppercase, CSV date/zero, XLSX serial date
+
+**Bug:**
+1. Tick "VIẾT HOA" trong mapping nhưng giá trị không viết hoa khi generate.
+2. Import file CSV: ngày tháng hiển thị lỗi (Excel serial date), SĐT và CCCD mất số 0 đầu.
+3. Import file XLSX: ngày tháng chỉ hiện số (Excel serial date).
+
+**Root cause:**
+1. `GeneratePanel.tsx` khi auto-apply saved mapping từ template, tạo lại object `FieldMappingValue` cho type `'column'` nhưng quên giữ lại `uppercase` flag.
+2. `XLSX.read` parse CSV tự động convert giá trị giống số/date thành `number` (mất số 0) hoặc Excel serial date.
+3. `XLSX.read` mặc định `cellDates: false`, nên cell date trong xlsx trả về serial number.
+
+**Fix:**
+- `GeneratePanel.tsx`:
+  - Thêm `uppercase: mapVal.uppercase` khi adapt saved mapping cho type `'column'`.
+  - Phân nhánh đọc file: `.csv` → dùng raw text parser tự viết (giữ nguyên string); `.xlsx/.xls` → `XLSX.read(..., { cellDates: true })`.
+- `excel-generator.ts`:
+  - Thêm `parseCsvText()` + `readCsvFile()`: parser CSV đơn giản xử lý quoted fields, giữ nguyên nội dung text (không mất số 0, không lỗi date).
+  - Sửa `readDataFile()`: format `Date` object thành `dd/mm/yyyy` thay vì `String(date)`.
+
+**Files sửa:**
+- `webapp/src/components/excel-generator/GeneratePanel.tsx`
+- `webapp/src/lib/excel-generator.ts`
+
+---
+
+### 57. Fix BUG-031: Excel Generator — Inline refs `{{...}}` không hoạt động trong giá trị cố định
+
+**Bug:** Nhập giá trị cố định trong mapping panel chứa `{{...}}` (ví dụ: `Hợp Đồng Nguyên Tắc - {{#Fullname_CTV#}} - {{#staff_id_ctv#}}`) nhưng generate ra nguyên xi, không thay thế `{{...}}`.
+
+**Root cause:** `generateWorkbook` và `buildPreview` chạy `replaceFieldReferences` trước khi apply direct mapping. Sau khi `mapped.type === 'fixed'` ghi đè `value = mapped.value`, không có bước nào xử lý `{{...}}` trên giá trị cố định.
+
+**Fix:** Thêm `replaceFieldReferences(value, dataRow, mapping)` ngay sau khi gán giá trị cố định trong cả `generateWorkbook` và `buildPreview`.
+
+**Files sửa:**
+- `webapp/src/lib/excel-generator.ts`
+
+---
+
 ## 2026-06-08
 
 ### 53. Feature: Import cập nhật cấp bậc hàng loạt (Rank Update)

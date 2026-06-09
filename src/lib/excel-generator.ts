@@ -149,6 +149,103 @@ export function detectFields(
   return row.map((cell) => String(cell ?? '').trim())
 }
 
+// ─────────────────────────────────────────────────────────────
+// CSV raw-text parser (preserves leading zeros, exact dates)
+// ─────────────────────────────────────────────────────────────
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = []
+  let cell = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cell += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (char === ',' && !inQuotes) {
+      cells.push(cell)
+      cell = ''
+    } else {
+      cell += char
+    }
+  }
+  cells.push(cell)
+  return cells
+}
+
+function parseCsvText(text: string): string[][] {
+  const lines: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (char === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        current += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+      current += char
+    } else if (char === '\n' && !inQuotes) {
+      lines.push(current)
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  if (current.length > 0 || lines.length === 0) {
+    lines.push(current)
+  }
+
+  return lines.map((line) => {
+    const clean = line.endsWith('\r') ? line.slice(0, -1) : line
+    return parseCsvLine(clean)
+  })
+}
+
+export function readCsvFile(
+  csvText: string,
+  headerRowIndex: number
+): { headers: string[]; rows: Record<string, string>[] } {
+  const json = parseCsvText(csvText)
+
+  if (json.length === 0 || headerRowIndex < 0 || headerRowIndex >= json.length) {
+    return { headers: [], rows: [] }
+  }
+
+  const headers = json[headerRowIndex].map((h) => h.trim())
+  const rows: Record<string, string>[] = []
+
+  for (let i = headerRowIndex + 1; i < json.length; i++) {
+    const raw = json[i]
+    const row: Record<string, string> = {}
+    headers.forEach((h, idx) => {
+      row[h] = raw[idx] !== undefined ? raw[idx] : ''
+    })
+    rows.push(row)
+  }
+
+  return { headers, rows }
+}
+
+// ─────────────────────────────────────────────────────────────
+// XLSX read with date handling
+// ─────────────────────────────────────────────────────────────
+
+function formatDateDDMMYYYY(date: Date): string {
+  const d = String(date.getDate()).padStart(2, '0')
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const y = date.getFullYear()
+  return `${d}/${m}/${y}`
+}
+
 export function readDataFile(
   workbook: XLSXType.WorkBook,
   headerRowIndex: number,
@@ -169,7 +266,12 @@ export function readDataFile(
     const raw = json[i] as unknown[]
     const row: Record<string, string> = {}
     headers.forEach((h, idx) => {
-      row[h] = raw[idx] !== undefined ? String(raw[idx]) : ''
+      const val = raw[idx]
+      if (val instanceof Date) {
+        row[h] = formatDateDDMMYYYY(val)
+      } else {
+        row[h] = val !== undefined ? String(val) : ''
+      }
     })
     rows.push(row)
   }
@@ -251,6 +353,7 @@ export function generateWorkbook(
           value = dataVal !== undefined ? dataVal : value
         } else if (mapped.type === 'fixed') {
           value = mapped.value
+          value = replaceFieldReferences(value, dataRow, mapping)
         }
         if (mapped.uppercase && value) {
           value = value.toUpperCase()
@@ -347,6 +450,7 @@ export function buildPreview(
             value = dataVal !== undefined ? dataVal : value
           } else if (mapped.type === 'fixed') {
             value = mapped.value
+            value = replaceFieldReferences(value, dataRow, mapping)
           }
           if (mapped.uppercase && value) {
             value = value.toUpperCase()
