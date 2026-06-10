@@ -46,10 +46,18 @@ function applyDateOffset(date: Date, token: string, offset: number): void {
 }
 
 function formatDateToken(token: string, date: Date): string {
-  if (token === 'dd') return String(date.getDate()).padStart(2, '0')
-  if (token === 'mm') return String(date.getMonth() + 1).padStart(2, '0')
-  if (token === 'yy') return String(date.getFullYear() % 100).padStart(2, '0')
-  if (token === 'yyyy') return String(date.getFullYear())
+  const options: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Ho_Chi_Minh' }
+  if (token === 'dd') options.day = '2-digit'
+  else if (token === 'mm') options.month = '2-digit'
+  else if (token === 'yy' || token === 'yyyy') options.year = 'numeric'
+
+  const parts = new Intl.DateTimeFormat('vi-VN', options).formatToParts(date)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+
+  if (token === 'dd') return get('day').padStart(2, '0')
+  if (token === 'mm') return get('month').padStart(2, '0')
+  if (token === 'yy') return get('year').slice(-2).padStart(2, '0')
+  if (token === 'yyyy') return get('year')
   return ''
 }
 
@@ -239,11 +247,32 @@ export function readCsvFile(
 // XLSX read with date handling
 // ─────────────────────────────────────────────────────────────
 
+export function parseDateFromInput(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 function formatDateDDMMYYYY(date: Date): string {
-  const d = String(date.getDate()).padStart(2, '0')
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const y = date.getFullYear()
+  const parts = new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).formatToParts(date)
+  const d = parts.find((p) => p.type === 'day')?.value ?? ''
+  const m = parts.find((p) => p.type === 'month')?.value ?? ''
+  const y = parts.find((p) => p.type === 'year')?.value ?? ''
   return `${d}/${m}/${y}`
+}
+
+function isDateFormatted(w: string | undefined): boolean {
+  if (!w) return false
+  return /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(w.trim())
+}
+
+function excelSerialToDate(serial: number): Date {
+  const epoch = new Date(Date.UTC(1899, 11, 30))
+  return new Date(epoch.getTime() + serial * 86400000)
 }
 
 export function readDataFile(
@@ -253,26 +282,31 @@ export function readDataFile(
 ): { headers: string[]; rows: Record<string, string>[] } {
   const sheetName = workbook.SheetNames[0]
   const worksheet = workbook.Sheets[sheetName]
-  const json = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
+  const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
 
-  if (json.length === 0 || headerRowIndex < 0 || headerRowIndex >= json.length) {
-    return { headers: [], rows: [] }
+  // Read headers from the specified row
+  const headers: string[] = []
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: headerRowIndex, c })]
+    headers.push(cell ? String(cell.v ?? cell.w ?? '').trim() : '')
   }
 
-  const headers = (json[headerRowIndex] as unknown[]).map((h) => String(h).trim())
   const rows: Record<string, string>[] = []
-
-  for (let i = headerRowIndex + 1; i < json.length; i++) {
-    const raw = json[i] as unknown[]
+  for (let r = headerRowIndex + 1; r <= range.e.r; r++) {
     const row: Record<string, string> = {}
-    headers.forEach((h, idx) => {
-      const val = raw[idx]
-      if (val instanceof Date) {
-        row[h] = formatDateDDMMYYYY(val)
+    for (let c = 0; c < headers.length; c++) {
+      const h = headers[c]
+      const cellRef = XLSX.utils.encode_cell({ r, c })
+      const cell = worksheet[cellRef]
+      if (!cell) {
+        row[h] = ''
+      } else if (cell.t === 'n' && isDateFormatted(cell.w)) {
+        // Excel serial date: compute from serial to avoid SheetJS timezone shift
+        row[h] = formatDateDDMMYYYY(excelSerialToDate(cell.v as number))
       } else {
-        row[h] = val !== undefined ? String(val) : ''
+        row[h] = String(cell.v ?? cell.w ?? '')
       }
-    })
+    }
     rows.push(row)
   }
 

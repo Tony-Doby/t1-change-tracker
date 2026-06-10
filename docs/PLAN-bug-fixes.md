@@ -81,6 +81,7 @@
 | 029 | Excel Generator: CSV import mất số 0 và date bị lỗi | fixed | 2026-06-09 | 2026-06-09 |
 | 030 | Excel Generator: XLSX import date chỉ hiện số (serial date) | fixed | 2026-06-09 | 2026-06-09 |
 | 031 | Excel Generator: Inline refs `{{...}}` không hoạt động trong giá trị cố định (fixed mapping) | fixed | 2026-06-09 | 2026-06-09 |
+| 032 | Excel Generator: Ngày trong tab Generate bị giảm 1 ngày khi export | fixed | 2026-06-10 | 2026-06-10 |
 
 ---
 
@@ -994,6 +995,68 @@ Không cần.
 - Không ảnh hưởng đến expression parser `(dd/mm/yyyy)`, `(R.num)`.
 
 ---
+
+---
+
+---
+
+## BUG-032: Excel Generator — Ngày trong tab Generate bị giảm 1 ngày khi export
+
+- **Phát hiện**: 2026-06-10
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Trong tab **Generate** của Excel Generator, khi generate file Excel, ngày tháng bị giảm mất 1 ngày so với dữ liệu gốc hoặc ngày đã chọn trong date picker. Ví dụ: ngày `18/09/2022` trong file data / date picker sau khi generate ra file Excel chỉ còn `17/09/2022`.
+
+### 2. Root Cause
+Có 2 điểm xử lý date không đồng bộ timezone `Asia/Ho_Chi_Minh`:
+
+**A. Date picker `generateDate` parse sai:**
+```tsx
+new Date(generateDate) // generateDate = "2022-09-18"
+```
+`new Date("2022-09-18")` theo ECMAScript parse như **UTC 00:00** (`2022-09-18T00:00:00Z`). Sau đó expression parser dùng `.getDate()` lấy theo local timezone. Ở GMT+7 vẫn ra 18, nhưng cách này không robust — nếu chạy trên máy timezone khác hoặc có offset sẽ lệch.
+
+**B. Format Date object từ file data dùng local methods:**
+`formatDateDDMMYYYY()` dùng `date.getDate()` / `date.getMonth()` / `date.getFullYear()` — đây là local timezone của browser. File Excel lưu date dưới dạng serial UTC; khi SheetJS với `cellDates: true` trả về `Date` object, nếu file gốc tạo ở timezone có offset khác GMT+7 (ví dụ GMT+8) thì local parse có thể làm tròn xuống ngày trước đó.
+
+Ngoài ra, `formatDateToken` trong expression parser cũng dùng local `.getDate()` thay vì formatter cố định GMT+7.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+**Phase 1 — expression + date picker:**
+1. Thêm `parseDateFromInput(dateStr)` để parse `YYYY-MM-DD` thành Date ở local timezone.
+2. Sửa `formatDateDDMMYYYY()` và `formatDateToken()` dùng `Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })`.
+3. `GeneratePanel.tsx`: thay `new Date(generateDate)` bằng `parseDateFromInput(generateDate)`.
+
+**Phase 2 — XLSX data import date serial (phát sinh khi test):**
+- SheetJS `cellDates: true` parse Excel serial date thành `Date` object bị lệch timezone (serial `44822` → `2022-09-17T16:59:30Z` thay vì `2022-09-18T00:00:00Z`).
+- **Fix:** Bỏ `cellDates: true`; rewrite `readDataFile()` iterate cells, detect date serial qua `cell.w` match pattern `\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}`, tính ngày chính xác từ serial theo **1900 epoch** (`1899-12-30`), rồi format bằng `formatDateDDMMYYYY()`.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/lib/excel-generator.ts` | Thêm `parseDateFromInput`, `excelSerialToDate`, `isDateFormatted`; sửa `formatDateDDMMYYYY`, `formatDateToken`; rewrite `readDataFile` để iterate cells và detect date serial |
+| `src/components/excel-generator/GeneratePanel.tsx` | Dùng `parseDateFromInput(generateDate)`; bỏ `cellDates: true` khi đọc file data XLSX |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Vào `/excel-generator` → chọn template có expression `(dd/mm/yyyy)`.
+2. Chọn ngày generate = `18/09/2022`.
+3. Upload file data **CSV** có ngày `18/09/2022` → verify preview đúng.
+4. Upload file data **XLSX** có cell date serial `44822` (hiển thị `18/09/2022` trong Excel) → verify preview đúng `18/09/2022`, không bị `17/09/2022`.
+5. Generate file → mở Excel → verify cell ngày đúng.
+6. Test expression `(ddmmyy)`, `(mm/yyyy)`, `([dd-1]mmyy)` → verify offset tính đúng.
+
+### 8. Notes
+- Align với `KNOWLEDGE.md` section 3.2: toàn app định dạng ngày theo `Asia/Ho_Chi_Minh`.
+- SheetJS `cellDates: true` có known issue với timezone offset khi parse Excel serial date. Tính ngày từ serial + 1900 epoch là cách chính xác nhất.
+- CSV parser không bị ảnh hưởng.
 
 ---
 

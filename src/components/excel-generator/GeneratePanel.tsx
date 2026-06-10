@@ -19,6 +19,7 @@ import {
   buildPreview,
   generateWorkbook,
   formatGenerateFileName,
+  parseDateFromInput,
 } from '../../lib/excel-generator'
 import type { ExcelTemplate, FieldMappingValue } from '../../types'
 import type * as XLSXType from 'xlsx'
@@ -128,7 +129,7 @@ export default function GeneratePanel({ templates }: Props) {
           rows = result.rows
         } else {
           const arrayBuffer = await file.arrayBuffer()
-          const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true })
+          const wb = XLSX.read(arrayBuffer, { type: 'array' })
           const result = readDataFile(wb, dataHeaderRow, XLSX)
           headers = result.headers
           rows = result.rows
@@ -154,7 +155,7 @@ export default function GeneratePanel({ templates }: Props) {
             }
           }
           setMapping(adaptedMapping)
-          const previewData = buildPreview(templateWorkbook, rows, adaptedMapping, selectedTemplate.template_header_row, XLSX, undefined, new Date(generateDate))
+          const previewData = buildPreview(templateWorkbook, rows, adaptedMapping, selectedTemplate.template_header_row, XLSX, undefined, parseDateFromInput(generateDate))
           setPreview(previewData)
           show(`Đã đọc ${rows.length} dòng data. Mapping đã áp dụng tự động.`, 'success')
         } else {
@@ -197,7 +198,7 @@ export default function GeneratePanel({ templates }: Props) {
     setParsing(true)
     try {
       const XLSX = await loadXlsx()
-      const previewData = buildPreview(templateWorkbook, dataRows, mapping, selectedTemplate.template_header_row, XLSX, undefined, new Date(generateDate))
+      const previewData = buildPreview(templateWorkbook, dataRows, mapping, selectedTemplate.template_header_row, XLSX, undefined, parseDateFromInput(generateDate))
       setPreview(previewData)
       setShowMappingPanel(false)
     } catch (e: any) {
@@ -219,7 +220,7 @@ export default function GeneratePanel({ templates }: Props) {
         mapping,
         selectedTemplate.template_header_row,
         XLSX,
-        new Date(generateDate)
+        parseDateFromInput(generateDate)
       )
       const generatedBlob = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' })
       const generatedFileName = formatGenerateFileName(selectedTemplate.name)

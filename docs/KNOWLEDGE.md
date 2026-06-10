@@ -185,10 +185,19 @@
 - **Không dùng `XLSX.read` cho CSV** khi cần giữ nguyên text.
 - **Giải pháp:** Parse CSV raw text thủ công (`file.text()` + custom parser xử lý quoted fields). Đã implement `parseCsvText()` + `readCsvFile()` trong `excel-generator.ts`.
 
-### 4.7 XLSX import: `cellDates: true` + format Date object
-- `XLSX.read(data, { type: 'array', cellDates: true })` để cell date trở thành `Date` object thay vì serial number.
-- `readDataFile` phải format `Date` → `dd/mm/yyyy` thay vì `String(raw[idx])` (mặc định sẽ ra `Wed Oct 16 1977...`).
-- Nếu cell trong xlsx được định dạng text thì vẫn giữ nguyên string.
+### 4.7 XLSX import: KHÔNG dùng `cellDates: true` — dùng serial + 1900 epoch (BUG-032 Phase 2)
+- **TUYỆT ĐỐI KHÔNG DÙNG** `cellDates: true` khi đọc file data XLSX. SheetJS parse Excel serial date thành `Date` object bị lệch timezone (ví dụ serial `44822` → `2022-09-17T16:59:30Z` thay vì `2022-09-18T00:00:00Z`).
+- `readDataFile()` iterate cells thay vì `sheet_to_json`. Detect date serial bằng `cell.w` match pattern `\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}`.
+- `excelSerialToDate(serial)` — tính ngày chính xác từ serial theo **1900 epoch** (`1899-12-30`). Serial `44822` → `2022-09-18T00:00:00Z`.
+- Sau khi có Date chính xác, format bằng `formatDateDDMMYYYY()` với `Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })`.
+- Cell string/number khác: dùng `cell.v` (raw value) để giữ nguyên nội dung, không dùng `cell.w` (có thể có dấu phẩy phân cách).
+
+### 4.8 Date handling trong Excel Generator — LUÔN dùng `Asia/Ho_Chi_Minh` (BUG-032)
+- Toàn bộ luồng Excel Generator phải xử lý date theo timezone `Asia/Ho_Chi_Minh`, không dùng local timezone của browser.
+- `parseDateFromInput(dateStr)` — parse `YYYY-MM-DD` từ `<input type="date">` thành Date ở **local timezone** (`new Date(y, m - 1, d)`) thay vì `new Date("YYYY-MM-DD")` (mặc định parse UTC 00:00).
+- `formatDateDDMMYYYY()` — dùng `Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })` để format Date object.
+- `formatDateToken()` trong expression parser — dùng `Intl.DateTimeFormat` với `timeZone: 'Asia/Ho_Chi_Minh'` để lấy `dd`, `mm`, `yy`, `yyyy`.
+- **Lưu ý đặc biệt:** SheetJS `cellDates: true` có known issue với timezone offset. Tính ngày từ serial + 1900 epoch là cách chính xác nhất.
 
 ---
 

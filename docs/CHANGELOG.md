@@ -5,6 +5,44 @@
 
 ---
 
+## 2026-06-10
+
+### 58. Fix BUG-032: Excel Generator — Ngày trong tab Generate bị giảm 1 ngày khi export
+
+**Bug:** Trong tab Generate của Excel Generator, ngày tháng bị giảm mất 1 ngày khi generate file Excel. Ví dụ: `18/09/2022` trong file data hoặc date picker sau khi generate ra chỉ còn `17/09/2022`.
+
+**Root cause:**
+1. `GeneratePanel.tsx` dùng `new Date(generateDate)` với `generateDate` dạng `YYYY-MM-DD` → ECMAScript parse như UTC 00:00, sau đó expression parser lấy ngày bằng `.getDate()` theo local timezone. Cách này không robust và có thể lệch khi timezone không đồng nhất.
+2. `formatDateDDMMYYYY()` và `formatDateToken()` trong `excel-generator.ts` dùng `date.getDate()` / `date.getMonth()` / `date.getFullYear()` — local methods phụ thuộc timezone máy tính. File Excel lưu date dạng serial UTC; khi SheetJS chuyển về `Date` object, local parse có thể làm tròn xuống ngày trước đó.
+
+**Fix:**
+- `excel-generator.ts`:
+  - Thêm `parseDateFromInput(dateStr)` để parse `YYYY-MM-DD` thành Date ở **local timezone** (`new Date(y, m - 1, d)`).
+  - Sửa `formatDateDDMMYYYY()` dùng `Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })` thay vì local getters.
+  - Sửa `formatDateToken()` trong expression parser dùng `Intl.DateTimeFormat` với timezone `Asia/Ho_Chi_Minh` để lấy `dd`, `mm`, `yy`, `yyyy`.
+- `GeneratePanel.tsx`: Thay `new Date(generateDate)` bằng `parseDateFromInput(generateDate)` ở 3 chỗ (auto-apply mapping, apply mapping, generate workbook).
+
+**Files sửa:**
+- `webapp/src/lib/excel-generator.ts`
+- `webapp/src/components/excel-generator/GeneratePanel.tsx`
+
+### 59. Fix BUG-032 (Phase 2): Excel Generator — XLSX data import date bị lệch timezone
+
+**Phát sinh khi test:** CSV đúng nhưng XLSX vẫn lỗi. File XLSX data chứa cell date serial (ví dụ `44822`), SheetJS `cellDates: true` parse thành `Date` object bị lệch ~8 tiếng (`2022-09-17T16:59:30Z` thay vì `2022-09-18T00:00:00Z`).
+
+**Fix:**
+- `excel-generator.ts`:
+  - Thêm `isDateFormatted(w)` detect date serial qua formatted text pattern `\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}`.
+  - Thêm `excelSerialToDate(serial)` tính ngày chính xác từ serial theo **1900 epoch** (`1899-12-30`).
+  - Rewrite `readDataFile()`: iterate cells thay vì `sheet_to_json`, detect date serial và format bằng `formatDateDDMMYYYY()`; string/number khác giữ nguyên `cell.v`.
+- `GeneratePanel.tsx`: Bỏ `cellDates: true` khi đọc file data XLSX.
+
+**Files sửa:**
+- `webapp/src/lib/excel-generator.ts`
+- `webapp/src/components/excel-generator/GeneratePanel.tsx`
+
+---
+
 ## 2026-06-09
 
 ### 56. Fix BUG-028 + BUG-029 + BUG-030: Excel Generator — Uppercase, CSV date/zero, XLSX serial date
