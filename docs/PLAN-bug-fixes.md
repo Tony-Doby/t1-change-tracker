@@ -55,6 +55,7 @@
 | 023 | Dropdown placeholder trong HtmlEditor bị cắt và không scroll được | fixed | 2026-06-11 | 2026-06-11 |
 | 024 | Placeholder `{{tempT1Name}}` bị trùng giá trị với `{{oldT1Name}}` | fixed | 2026-06-11 | 2026-06-11 |
 | 025 | ComposeTemplateModal load sai T1 cũ / Temp T1 / New T1 | fixed | 2026-06-11 | 2026-06-11 |
+| 026 | ComposeTemplateModal query `t1_requests` bị 400 Bad Request do cú pháp `.not('status', 'in', ...)` sai | fixed | 2026-06-11 | 2026-06-11 |
 
 ---
 
@@ -351,3 +352,47 @@ Không cần.
 
 ### 8. Notes
 - Rollback: Revert `ComposeTemplateModal.tsx`.
+
+---
+
+## BUG-026: ComposeTemplateModal query `t1_requests` bị 400 Bad Request do cú pháp `.not('status', 'in', ...)` sai
+
+- **Phát hiện**: 2026-06-11
+- **Status**: `fixed`
+- **Severity**: `critical`
+
+### 1. Mô tả bug
+Khi mở `ComposeTemplateModal` từ B2 list, tất cả email T1 mới / T1 cũ / T1 tạm đều hiển thị "—". Console log hiển thị lỗi `400 Bad Request` từ Supabase REST API.
+
+### 2. Root Cause
+Cú pháp filter status trong Supabase JS client sai:
+```ts
+.not('status', 'in', "('completed','cancelled')")  // ❌ Sai
+```
+Supabase REST API yêu cầu dấu nháy kép bên trong:
+```ts
+.not('status', 'in', '("completed","cancelled")')  // ✅ Đúng
+```
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Sửa 1 dòng trong `ComposeTemplateModal.tsx` dòng 149.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/ComposeTemplateModal.tsx` | Sửa cú pháp `.not('status', 'in', ...)` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Mở B2 list, bấm "Tạo email mẫu".
+2. Verify: Console không còn lỗi 400.
+3. Verify: T1 cũ, T1 mới hiển thị đúng email.
+4. Build pass. 56/56 tests pass.
+
+### 8. Notes
+- Rollback: Revert 1 dòng.

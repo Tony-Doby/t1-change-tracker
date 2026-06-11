@@ -146,7 +146,7 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
         .from('t1_requests')
         .select('id, old_t1_id, proposed_new_t1_id, temp_t1_id, step2_confirmed_at')
         .eq('agent_id', a.id)
-        .not('status', 'in', "('completed','cancelled')")
+        .not('status', 'in', '("completed","cancelled")')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()

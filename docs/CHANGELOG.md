@@ -7,6 +7,25 @@
 
 ## 2026-06-11
 
+### 68. Bug BUG-026: ComposeTemplateModal query `t1_requests` bị 400 Bad Request do cú pháp `.not('status', 'in', ...)` sai
+
+**Mô tả:** Khi mở `ComposeTemplateModal` từ B2 list, query `t1_requests` trả về `400 Bad Request` vì cú pháp filter status dùng dấu nháy đơn thay vì nháy kép.
+
+**Root Cause:**
+```ts
+.not('status', 'in', "('completed','cancelled')")  // ❌ Sai — 400 Bad Request
+```
+Supabase REST API yêu cầu dấu nháy kép bên trong: `("completed","cancelled")`.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx` — sửa cú pháp dòng 149
+
+**Kết quả:** Build pass. 56/56 tests pass.
+
+---
+
+## 2026-06-11
+
 ### 67. Bug BUG-025: ComposeTemplateModal load sai T1 cũ / Temp T1 / New T1
 
 **Mô tả:** Khi mở `ComposeTemplateModal` từ Dashboard M1 Transition, placeholder `{{oldT1Name}}`, `{{newT1Name}}`, `{{tempT1Name}}` render sai giá trị:
