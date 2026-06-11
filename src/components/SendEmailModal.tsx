@@ -10,6 +10,7 @@ interface Props {
   agent: Agent
   t1Old: Agent | null
   newT1: Agent | null
+  tempT1: Agent | null
   templateSubject: string
   templateBody: string
   templateKey: string
@@ -20,13 +21,14 @@ interface Props {
 const defaultPlaceholders = [
   '{{agentName}}', '{{staffId}}', '{{oldT1Name}}', '{{oldT1Email}}',
   '{{newT1Name}}', '{{newT1Email}}', '{{newT1StaffId}}', '{{date}}',
-  '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}', '{{b3Deadline}}',
+  '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}', '{{tempT1StaffId}}', '{{b3Deadline}}',
 ]
 
 export default function SendEmailModal({
   agent,
   t1Old,
   newT1,
+  tempT1,
   templateSubject,
   templateBody,
   templateKey,
@@ -50,9 +52,10 @@ export default function SendEmailModal({
     '{{date}}': new Date().toLocaleDateString('vi-VN'),
     '{{deadlineDate}}': new Date(Date.now() + 30 * 86400000).toLocaleDateString('vi-VN'),
     '{{notifyDate}}': new Date().toLocaleDateString('vi-VN'),
-    '{{tempT1Name}}': t1Old?.full_name ?? '',
+    '{{tempT1Name}}': tempT1?.full_name ?? '',
+    '{{tempT1StaffId}}': tempT1?.staff_id ?? '',
     '{{b3Deadline}}': b3Deadline ?? '',
-  }), [agent, t1Old, newT1, b3Deadline])
+  }), [agent, t1Old, newT1, tempT1, b3Deadline])
 
   const renderedSubject = useMemo(() => {
     let s = subject

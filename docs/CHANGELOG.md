@@ -7,6 +7,35 @@
 
 ## 2026-06-11
 
+### 66. Bug BUG-024: Placeholder `{{tempT1Name}}` bị trùng giá trị với `{{oldT1Name}}`
+
+**Mô tả:** Placeholder `{{tempT1Name}}` và `{{tempT1StaffId}}` trong email template đang render cùng giá trị với `{{oldT1Name}}` / `{{oldT1StaffId}}`, vì code chưa load `temp_t1` từ database mà hardcode map tới `t1Old`.
+
+**Root Cause:**
+1. `ComposeTemplateModal.tsx` — `loadData()` không select `temp_t1_id` từ `t1_requests`, không load agent tạm.
+2. `SendEmailModal.tsx` — thiếu prop `tempT1`, `previewData['{{tempT1Name}}']` dùng `t1Old?.full_name` thay vì `tempT1?.full_name`.
+3. UI hiển thị email liên quan cũng gán `T1 tạm` = `t1Old?.email`.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`:
+  - Thêm state `tempT1`
+  - Select thêm `temp_t1_id` từ `t1_requests`
+  - Load agent tạm từ `temp_t1_id`
+  - Sửa replace `{{tempT1Name}}` / `{{tempT1StaffId}}` dùng `tempT1`
+  - Sửa UI email liên quan: `T1 tạm` hiển thị `tempT1?.email`
+  - Truyền `tempT1` xuống `SendEmailModal`
+- `webapp/src/components/SendEmailModal.tsx`:
+  - Thêm prop `tempT1: Agent | null`
+  - Thêm `{{tempT1StaffId}}` vào danh sách placeholder
+  - Sửa `previewData['{{tempT1Name}}']` → `tempT1?.full_name`
+  - Thêm `previewData['{{tempT1StaffId}}']` → `tempT1?.staff_id`
+
+**Kết quả:** Build pass. `{{tempT1Name}}` giờ render tên T1 tạm thực sự, không còn trùng T1 cũ.
+
+---
+
+## 2026-06-11
+
 ### 65. Bug BUG-023: Dropdown placeholder trong HtmlEditor bị cắt và không scroll được
 
 **Mô tả:** Khi mở dropdown "Chèn placeholder" trong modal chỉnh sửa mẫu email (`TemplateEditModal`), danh sách 14 placeholders bị cắt ngang bởi container `HtmlEditor` (do `overflow-hidden`) và không có scroll riêng.

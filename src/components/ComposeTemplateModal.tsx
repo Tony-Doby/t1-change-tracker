@@ -59,6 +59,7 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
   const [agent, setAgent] = useState<any>(null)
   const [t1Old, setT1Old] = useState<any>(null)
   const [newT1, setNewT1] = useState<any>(null)
+  const [tempT1, setTempT1] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [templates, setTemplates] = useState(defaultTemplates)
   const [selectedKey, setSelectedKey] = useState(defaultTemplates[0].key)
@@ -106,7 +107,7 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
     if (a?.id) {
       const { data: req } = await supabase
         .from('t1_requests')
-        .select('id, proposed_new_t1_id, step2_confirmed_at')
+        .select('id, proposed_new_t1_id, temp_t1_id, step2_confirmed_at')
         .eq('agent_id', a.id)
         .not('status', 'in', "('completed','cancelled')")
         .order('created_at', { ascending: false })
@@ -118,6 +119,13 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
         setNewT1(t1New)
       } else {
         setNewT1(null)
+      }
+
+      if (req?.temp_t1_id) {
+        const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', req.temp_t1_id).single()
+        setTempT1(t1Temp)
+      } else {
+        setTempT1(null)
       }
 
       if (req?.step2_confirmed_at) {
@@ -145,8 +153,8 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
       .replace(/{{date}}/g, formatDate(new Date()))
       .replace(/{{deadlineDate}}/g, formatDate(new Date(Date.now() + 30 * 86400000)))
       .replace(/{{notifyDate}}/g, formatDate(new Date()))
-      .replace(/{{tempT1Name}}/g, t1Old?.full_name ?? '')
-      .replace(/{{tempT1StaffId}}/g, t1Old?.staff_id ?? '')
+      .replace(/{{tempT1Name}}/g, tempT1?.full_name ?? '')
+      .replace(/{{tempT1StaffId}}/g, tempT1?.staff_id ?? '')
       .replace(/{{b3Deadline}}/g, b3Deadline)
   }, [template, agent, t1Old, newT1, b3Deadline])
 
@@ -213,7 +221,7 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
                 { label: 'Agent', email: agent?.email },
                 { label: 'T1 mới', email: newT1?.email },
                 { label: 'T1 cũ', email: t1Old?.email },
-                { label: 'T1 tạm', email: t1Old?.email },
+                { label: 'T1 tạm', email: tempT1?.email },
               ].map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between bg-neutral-50 rounded-lg p-3 text-sm">
                   <div>
@@ -262,6 +270,7 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
           templateBody={template.body}
           templateKey={selectedKey}
           b3Deadline={b3Deadline}
+          tempT1={tempT1}
           onClose={() => setShowSendModal(false)}
         />
       )}

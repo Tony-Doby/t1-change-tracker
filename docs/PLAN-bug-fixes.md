@@ -53,6 +53,7 @@
 | 021 | M1 Transition task không bị resolved khi agent hoàn tất chuyển T1 | planned | 2026-06-05 | — |
 | 022 | B2PendingAlert không hiển thị do addBusinessDays parse ISO datetime sai | fixed | 2026-06-11 | 2026-06-11 |
 | 023 | Dropdown placeholder trong HtmlEditor bị cắt và không scroll được | fixed | 2026-06-11 | 2026-06-11 |
+| 024 | Placeholder `{{tempT1Name}}` bị trùng giá trị với `{{oldT1Name}}` | fixed | 2026-06-11 | 2026-06-11 |
 
 ---
 
@@ -236,3 +237,59 @@ Không cần.
 ### 8. Notes
 - Rollback: Revert 3 dòng trong `HtmlEditor.tsx`.
 
+
+---
+
+## BUG-024: Placeholder `{{tempT1Name}}` bị trùng giá trị với `{{oldT1Name}}`
+
+- **Phát hiện**: 2026-06-11
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Placeholder `{{tempT1Name}}` và `{{tempT1StaffId}}` trong email template đang render cùng giá trị với `{{oldT1Name}}` / `{{oldT1StaffId}}`. Ví dụ: nếu T1 cũ là "Trần Văn B", thì cả `{{oldT1Name}}` và `{{tempT1Name}}` đều ra "Trần Văn B", dù trong DB `temp_t1_id` là một ngườii khác.
+
+### 2. Root Cause
+1. `ComposeTemplateModal.tsx` — `loadData()` không select `temp_t1_id` từ `t1_requests`, nên không có dữ liệu T1 tạm. Code "fallback" map `{{tempT1Name}}` → `t1Old?.full_name`.
+2. `SendEmailModal.tsx` — thiếu prop `tempT1`, `previewData['{{tempT1Name}}']` cũng dùng `t1Old?.full_name`.
+3. UI hiển thị email liên quan cũng gán `T1 tạm` = `t1Old?.email`.
+
+### 3. SQL Verify
+```sql
+-- Kiểm tra request có temp_t1_id khác old_t1_id
+SELECT id, agent_id, old_t1_id, temp_t1_id, proposed_new_t1_id
+FROM t1_requests
+WHERE temp_t1_id IS NOT NULL AND old_t1_id IS NOT NULL
+  AND temp_t1_id != old_t1_id;
+```
+
+### 4. Solution
+1. Trong `ComposeTemplateModal.tsx`:
+   - Select thêm `temp_t1_id` từ `t1_requests`
+   - Load agent tạm từ `temp_t1_id`
+   - Sửa replace `{{tempT1Name}}` / `{{tempT1StaffId}}` dùng `tempT1`
+   - Sửa UI email liên quan: `T1 tạm` hiển thị `tempT1?.email`
+   - Truyền `tempT1` xuống `SendEmailModal`
+2. Trong `SendEmailModal.tsx`:
+   - Thêm prop `tempT1: Agent | null`
+   - Thêm `{{tempT1StaffId}}` vào danh sách placeholder
+   - Sửa `previewData` dùng `tempT1?.full_name` / `tempT1?.staff_id`
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/ComposeTemplateModal.tsx` | Load `tempT1`, sửa replace + UI |
+| `src/components/SendEmailModal.tsx` | Thêm prop `tempT1`, sửa previewData + placeholders |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Tạo request có `temp_t1_id` khác `old_t1_id`.
+2. Mở `ComposeTemplateModal`, chọn template có `{{tempT1Name}}` và `{{oldT1Name}}`.
+3. Verify: hai placeholder render tên khác nhau.
+4. Verify UI email liên quan: T1 cũ và T1 tạm hiển thị email khác nhau.
+5. Build pass.
+
+### 8. Notes
+- Rollback: Revert 4 file.
