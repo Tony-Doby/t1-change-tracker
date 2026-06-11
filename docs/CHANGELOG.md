@@ -7,6 +7,26 @@
 
 ## 2026-06-11
 
+### 65. Bug BUG-023: Dropdown placeholder trong HtmlEditor bị cắt và không scroll được
+
+**Mô tả:** Khi mở dropdown "Chèn placeholder" trong modal chỉnh sửa mẫu email (`TemplateEditModal`), danh sách 14 placeholders bị cắt ngang bởi container `HtmlEditor` (do `overflow-hidden`) và không có scroll riêng.
+
+**Root Cause:**
+1. Container `HtmlEditor` có `overflow-hidden` cắt mọi phần tử `absolute` tràn ra ngoài boundary.
+2. Dropdown menu không có `max-height` + `overflow-y-auto`, nên với nhiều item nó tràn dài và bị clip.
+
+**Files sửa:**
+- `webapp/src/components/HtmlEditor.tsx`:
+  - Bỏ `overflow-hidden` ở container ngoài cùng (dòng 136)
+  - Thêm `overflow-hidden rounded-md` vào div editor area (dòng 221) để giữ góc bo tròn
+  - Thêm `max-h-60 overflow-y-auto` vào dropdown menu (dòng 202) để tự cuộn khi dài
+
+**Kết quả:** Build pass. Dropdown hiển thị đầy đủ, có scroll riêng, không bị cắt.
+
+---
+
+## 2026-06-11
+
 ### 62. Thêm placeholder `{{b3Deadline}}` vào email template
 
 **Mô tả:** Bổ sung placeholder `{{b3Deadline}}` để hiển thị ngày hết hạn 3 ngày làm việc của B2 (ngày xác nhận B2 + 3 ngày làm việc, trừ T7/CN/ngày lễ) trong email template.

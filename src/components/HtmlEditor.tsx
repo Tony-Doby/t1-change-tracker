@@ -133,7 +133,7 @@ export default function HtmlEditor({
   )
 
   return (
-    <div className="border border-neutral-300 rounded-md overflow-hidden bg-white">
+    <div className="border border-neutral-300 rounded-md bg-white">
       {/* Tabs */}
       <div className="flex items-center border-b border-neutral-200 bg-neutral-50">
         {!readOnly && (
@@ -199,7 +199,7 @@ export default function HtmlEditor({
             {showPlaceholderMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowPlaceholderMenu(false)} />
-                <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-neutral-200 rounded-md shadow-lg py-1 min-w-[160px]">
+                <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-neutral-200 rounded-md shadow-lg py-1 min-w-[160px] max-h-60 overflow-y-auto">
                   {placeholders.map((ph) => (
                     <button
                       key={ph}
@@ -218,7 +218,7 @@ export default function HtmlEditor({
       )}
 
       {/* Editor area */}
-      <div style={{ height }}>
+      <div className="overflow-hidden rounded-md" style={{ height }}>
         {mode === 'visual' && (
           <div
             ref={editorRef}

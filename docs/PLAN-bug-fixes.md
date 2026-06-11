@@ -52,6 +52,7 @@
 |----|---------|--------|----------------|----------|
 | 021 | M1 Transition task không bị resolved khi agent hoàn tất chuyển T1 | planned | 2026-06-05 | — |
 | 022 | B2PendingAlert không hiển thị do addBusinessDays parse ISO datetime sai | fixed | 2026-06-11 | 2026-06-11 |
+| 023 | Dropdown placeholder trong HtmlEditor bị cắt và không scroll được | fixed | 2026-06-11 | 2026-06-11 |
 
 ---
 
@@ -193,4 +194,45 @@ Không cần.
 ### 8. Notes
 - `eligibility.test.ts` có test `addBusinessDays` nhưng chỉ dùng `YYYY-MM-DD` string. Cần thêm test case với ISO datetime string để regression-proof.
 - Rollback: Revert 1 dòng trong `eligibility.ts`.
+
+---
+
+## BUG-023: Dropdown placeholder trong HtmlEditor bị cắt và không scroll được
+
+- **Phát hiện**: 2026-06-11
+- **Status**: `fixed`
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+Trong modal chỉnh sửa mẫu email (`TemplateEditModal`), khi bấm dropdown "Chèn placeholder", danh sách 14 placeholders bị cắt ngang bởi container `HtmlEditor` và không thể scroll. Phần dưới của dropdown biến mất, user không thể chọn các placeholder ở cuối danh sách.
+
+### 2. Root Cause
+1. Container ngoài cùng của `HtmlEditor` có class `overflow-hidden`, tạo một clipping boundary. Dropdown menu dùng `absolute` positioning nhưng vẫn bị cắt khi vượt ra ngoài container cha.
+2. Dropdown menu không có `max-height` hay `overflow-y-auto`, nên khi có 14 items nó tràn dài xuống dưới và bị `overflow-hidden` cắt bỏ.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+1. Bỏ `overflow-hidden` ở container ngoài cùng của `HtmlEditor` để dropdown không bị clip.
+2. Thêm `overflow-hidden rounded-md` vào div editor area (phần `style={{ height }}`) để vẫn giữ góc bo tròn cho khung soạn thảo.
+3. Thêm `max-h-60 overflow-y-auto` vào dropdown menu để nó tự cuộn khi danh sách dài, tránh tràn ra ngoài modal.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/HtmlEditor.tsx` | Bỏ `overflow-hidden` container ngoài; thêm `overflow-hidden rounded-md` vào editor area; thêm `max-h-60 overflow-y-auto` vào dropdown menu |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Mở modal chỉnh sửa mẫu email (`TemplateEditModal`).
+2. Bấm dropdown "Chèn placeholder".
+3. Verify: dropdown hiển thị đầy đủ, có thanh scroll nếu danh sách dài, không bị cắt bởi container.
+4. Verify: có thể click chọn placeholder ở cuối danh sách (ví dụ: `{{b3Deadline}}`).
+5. Build pass.
+
+### 8. Notes
+- Rollback: Revert 3 dòng trong `HtmlEditor.tsx`.
 
