@@ -26,6 +26,18 @@
 
 ## 2026-06-11
 
+### 64. Bug BUG-022: B2PendingAlert không hiển thị do addBusinessDays parse ISO datetime sai
+
+**Mô tả:** Request đang ở B2 (`step2_confirmed_at` có giá trị) nhưng biến mất khỏi Dashboard. Root cause: `addBusinessDays` nhận ISO datetime string từ Supabase → parse ra `NaN` → `Invalid Date` → so sánh filter luôn trả về `false`.
+
+**Files sửa:**
+- `webapp/src/lib/eligibility.ts` — `addBusinessDays`: thêm `startDateStr.slice(0, 10)` trước khi split để handle cả ISO datetime
+- `webapp/src/lib/eligibility.test.ts` — thêm test case `handles ISO datetime strings from Supabase`
+
+**Kết quả:** Build pass. 56/56 tests pass.
+
+---
+
 ### 63. Feature FEAT-025: Email Activities Table cho M1 Transition Tracking
 
 **Mô tả:** Tạo bảng `email_activities` riêng để audit việc copy email trong M1 Transition. Thay thế logic cũ (tính khi Resend thành công) bằng logic mới: tính khi user bấm "Copy nội dung" trong `ComposeTemplateModal`.

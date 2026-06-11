@@ -183,7 +183,8 @@ export function addBusinessDays(
   days: number,
   holidays: Set<string>
 ): Date {
-  const [y, m, d] = startDateStr.split('-').map(Number)
+  const dateOnly = startDateStr.slice(0, 10)
+  const [y, m, d] = dateOnly.split('-').map(Number)
   const date = new Date(y, m - 1, d)
   let remaining = days
   while (remaining > 0) {

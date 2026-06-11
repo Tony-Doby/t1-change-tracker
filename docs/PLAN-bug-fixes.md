@@ -51,13 +51,14 @@
 | ID | Tiêu đề | Status | Ngày phát hiện | Ngày fix |
 |----|---------|--------|----------------|----------|
 | 021 | M1 Transition task không bị resolved khi agent hoàn tất chuyển T1 | planned | 2026-06-05 | — |
+| 022 | B2PendingAlert không hiển thị do addBusinessDays parse ISO datetime sai | fixed | 2026-06-11 | 2026-06-11 |
 
 ---
 
 ## BUG-021: M1 Transition task không bị resolved khi agent hoàn tất chuyển T1
 
 - **Phát hiện**: 2026-06-05
-- **Status**: `planned`
+- **Status**: `fixed`
 - **Severity**: `high`
 
 ### 1. Mô tả bug
@@ -121,4 +122,75 @@ Không cần. Cột `resolved_at` đã tồn tại trong `m1_transition_tasks`.
 ---
 
 ---
+
+
+## BUG-022: B2PendingAlert không hiển thị do addBusinessDays parse ISO datetime sai
+
+- **Phát hiện**: 2026-06-11
+- **Status**: `planned`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Request đang ở B2 (`status = 'step2'`, `step2_confirmed_at` có giá trị) nhưng không hiển thị trong Dashboard section **"B2 chờ phản hồi chấp thuận"** (`B2PendingAlert`). Component hoàn toàn biến mất khỏi Dashboard (return null) vì request không rơi vào `b2Pending`, `b2Alert`, hay `b2Eligible` nào.
+
+### 2. Root Cause
+`addBusinessDays()` trong `src/lib/eligibility.ts` parse `startDateStr` bằng cách split theo dấu `-`:
+```ts
+const [y, m, d] = startDateStr.split('-').map(Number)
+```
+
+Khi nhận ISO datetime string từ Supabase (ví dụ: `"2026-06-10T10:00:00+00:00"`):
+- `d = Number("10T10:00:00+00:00")` = **NaN**
+- `new Date(2026, 5, NaN)` = **Invalid Date**
+- `isBusinessDay("NaN-NaN-NaN", holidays)` = true (vì `getDay()` của Invalid Date = NaN, không phải 0/6)
+- Loop chạy 3 lần, `remaining` giảm về 0, function trả về **Invalid Date**
+
+Trong `DashboardPage.tsx`:
+```ts
+const b2Pending = b2Requests.filter((r) => today <= r.deadline3)
+// Invalid Date <= valid Date → false (theo JS spec)
+```
+
+→ Request bị "nuốt" — không vào `b2Pending`, `b2Alert`, hay `b2Eligible`.
+
+### 3. SQL Verify
+```sql
+-- Tìm requests ở B2 đã xác nhận
+SELECT id, agent_id, step2_confirmed_at, status
+FROM t1_requests
+WHERE status = 'step2' AND step2_confirmed_at IS NOT NULL
+ORDER BY step2_confirmed_at DESC;
+```
+
+### 4. Solution
+Sửa `addBusinessDays` để cắt lấy phần date (`YYYY-MM-DD`) trước khi parse:
+```ts
+const dateOnly = startDateStr.slice(0, 10)
+const [y, m, d] = dateOnly.split('-').map(Number)
+```
+
+Fix tại `addBusinessDays` thay vì từng chỗ gọi vì:
+- Bảo vệ tất cả callers: `useB2RequestsQuery`, `RequestDetailPage`, v.v.
+- `addBusinessDays` không nên giả định input luôn là `YYYY-MM-DD`
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/lib/eligibility.ts` | `addBusinessDays`: thêm `startDateStr.slice(0, 10)` trước khi split |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Trong Supabase SQL Editor, kiểm tra `addBusinessDays` với ISO datetime string:
+   ```sql
+   -- Không cần, fix ở frontend
+   ```
+2. Chạy `npm run test` — verify 26 tests eligibility vẫn pass
+3. Trên dev server (localhost:5174), verify request B2 đã xác nhận hiển thị trong Dashboard
+4. Kiểm tra `RequestDetailPage` — deadline B2 vẫn tính đúng
+
+### 8. Notes
+- `eligibility.test.ts` có test `addBusinessDays` nhưng chỉ dùng `YYYY-MM-DD` string. Cần thêm test case với ISO datetime string để regression-proof.
+- Rollback: Revert 1 dòng trong `eligibility.ts`.
 

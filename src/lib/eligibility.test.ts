@@ -224,6 +224,14 @@ describe('eligibility', () => {
       expect(result.getMonth()).toBe(5) // June
       expect(result.getDate()).toBe(12)
     })
+
+    it('handles ISO datetime strings from Supabase', () => {
+      // Friday 2024-06-07T10:30:00Z + 1 business day = Monday 2024-06-10
+      const result = addBusinessDays('2024-06-07T10:30:00+00:00', 1, new Set())
+      expect(result.getFullYear()).toBe(2024)
+      expect(result.getMonth()).toBe(5) // June
+      expect(result.getDate()).toBe(10)
+    })
   })
 
   describe('checkCanChooseNewT1', () => {
