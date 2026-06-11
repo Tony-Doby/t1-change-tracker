@@ -102,7 +102,7 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
       // Load directly from request ID
       const { data: req } = await supabase
         .from('t1_requests')
-        .select('id, old_t1_id, proposed_new_t1_id, temp_t1_id, step2_confirmed_at')
+        .select('id, old_t1_id, proposed_new_t1_id, step2_confirmed_at')
         .eq('id', requestId)
         .single()
 
@@ -120,8 +120,15 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
         setNewT1(null)
       }
 
-      if (req?.temp_t1_id) {
-        const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', req.temp_t1_id).single()
+      // Load tempT1 from m1_transition_tasks (t1_requests does not have temp_t1_id)
+      const { data: task } = await supabase
+        .from('m1_transition_tasks')
+        .select('temp_t1_id')
+        .eq('parent_request_id', requestId)
+        .maybeSingle()
+
+      if (task?.temp_t1_id) {
+        const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', task.temp_t1_id).single()
         setTempT1(t1Temp)
       } else {
         setTempT1(null)
@@ -178,7 +185,7 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
       // Load from active request
       const { data: req } = await supabase
         .from('t1_requests')
-        .select('id, old_t1_id, proposed_new_t1_id, temp_t1_id, step2_confirmed_at')
+        .select('id, old_t1_id, proposed_new_t1_id, step2_confirmed_at')
         .eq('agent_id', a.id)
         .not('status', 'in', '("completed","cancelled")')
         .order('created_at', { ascending: false })
@@ -199,9 +206,20 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
         setNewT1(null)
       }
 
-      if (req?.temp_t1_id) {
-        const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', req.temp_t1_id).single()
-        setTempT1(t1Temp)
+      // Load tempT1 from m1_transition_tasks (t1_requests does not have temp_t1_id)
+      if (req?.id) {
+        const { data: task } = await supabase
+          .from('m1_transition_tasks')
+          .select('temp_t1_id')
+          .eq('parent_request_id', req.id)
+          .maybeSingle()
+
+        if (task?.temp_t1_id) {
+          const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', task.temp_t1_id).single()
+          setTempT1(t1Temp)
+        } else {
+          setTempT1(null)
+        }
       } else {
         setTempT1(null)
       }
