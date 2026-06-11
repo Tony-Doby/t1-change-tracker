@@ -15,6 +15,9 @@ npm install
 npm run dev        # dev server
 npm run build      # production build (tsc + vite build)
 npm run preview    # preview production
+npm run verify     # tsc + build + lint (smoke test pre-check)
+npm run test       # vitest run (unit tests)
+npm run test:watch # vitest watch mode
 ```
 
 ---

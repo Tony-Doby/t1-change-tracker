@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Copy, Mail } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useToast } from './Toast'
 import { formatDate } from '../lib/date-utils'
+import { addBusinessDays } from '../lib/eligibility'
 import Modal from './Modal'
 import type { EmailTemplate } from '../types'
 import SendEmailModal from './SendEmailModal'
@@ -53,6 +55,7 @@ Phòng Vận Hành ERA`,
 
 export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Props) {
   const { show } = useToast()
+  const queryClient = useQueryClient()
   const [agent, setAgent] = useState<any>(null)
   const [t1Old, setT1Old] = useState<any>(null)
   const [newT1, setNewT1] = useState<any>(null)
@@ -60,6 +63,7 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
   const [templates, setTemplates] = useState(defaultTemplates)
   const [selectedKey, setSelectedKey] = useState(defaultTemplates[0].key)
   const [showSendModal, setShowSendModal] = useState(false)
+  const [b3Deadline, setB3Deadline] = useState('')
 
   useEffect(() => {
     loadData()
@@ -83,6 +87,10 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
 
   async function loadData() {
     setLoading(true)
+
+    const { data: holidaysData } = await supabase.from('holidays').select('holiday_date')
+    const holidays = new Set<string>((holidaysData ?? []).map((h: any) => h.holiday_date.slice(0, 10)))
+
     const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
     setAgent(a)
 
@@ -94,10 +102,11 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
       setT1Old(null)
     }
 
+    let b3Date = ''
     if (a?.id) {
       const { data: req } = await supabase
         .from('t1_requests')
-        .select('id, proposed_new_t1_id')
+        .select('id, proposed_new_t1_id, step2_confirmed_at')
         .eq('agent_id', a.id)
         .not('status', 'in', "('completed','cancelled')")
         .order('created_at', { ascending: false })
@@ -110,7 +119,13 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
       } else {
         setNewT1(null)
       }
+
+      if (req?.step2_confirmed_at) {
+        const d = addBusinessDays(req.step2_confirmed_at.slice(0, 10), 3, holidays)
+        b3Date = formatDate(d)
+      }
     }
+    setB3Deadline(b3Date)
 
     setLoading(false)
   }
@@ -132,14 +147,31 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
       .replace(/{{notifyDate}}/g, formatDate(new Date()))
       .replace(/{{tempT1Name}}/g, t1Old?.full_name ?? '')
       .replace(/{{tempT1StaffId}}/g, t1Old?.staff_id ?? '')
-  }, [template, agent, t1Old, newT1])
+      .replace(/{{b3Deadline}}/g, b3Deadline)
+  }, [template, agent, t1Old, newT1, b3Deadline])
 
-  const copyContent = () => {
+  const copyContent = async () => {
     const tmp = document.createElement('div')
     tmp.innerHTML = rendered
     const plain = tmp.innerText || tmp.textContent || ''
     navigator.clipboard.writeText(plain)
     show('Đã copy nội dung', 'success')
+
+    if (m1TaskId) {
+      try {
+        const preview = plain.replace(/<[^>]*>/g, '').slice(0, 200)
+        const { data: { user } } = await supabase.auth.getUser()
+        await supabase.from('email_activities').insert({
+          task_id: m1TaskId,
+          action_type: 'copy_content',
+          content_preview: preview || null,
+          created_by: user?.id ?? null,
+        })
+        queryClient.invalidateQueries({ queryKey: ['dashboard', 'm1Transitions'] })
+      } catch (err) {
+        console.error('Lỗi ghi email activity:', err)
+      }
+    }
   }
 
   const copyEmails = () => {
@@ -229,7 +261,7 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
           templateSubject={template.subject}
           templateBody={template.body}
           templateKey={selectedKey}
-          m1TaskId={m1TaskId}
+          b3Deadline={b3Deadline}
           onClose={() => setShowSendModal(false)}
         />
       )}

@@ -8,6 +8,7 @@ const previewData: Record<string, string> = {
   '{{newT1Name}}': 'Lê Thị D', '{{newT1Email}}': 'ltd@era.com', '{{newT1StaffId}}': 'TV22904',
   '{{date}}': '25/05/2026', '{{deadlineDate}}': '24/06/2026', '{{notifyDate}}': '25/05/2026',
   '{{tempT1Name}}': 'Nguyễn Văn E', '{{tempT1StaffId}}': 'TV99999',
+  '{{b3Deadline}}': '28/05/2026',
 }
 
 function getPreviewHtml(template: Template) {

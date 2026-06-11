@@ -62,352 +62,155 @@
 
 | ID | Tiêu đề | Status | Đề xuất | Hoàn thành |
 |----|---------|--------|---------|------------|
-| 001 | Tích hợp gửi email thật (Resend + HTML editor) | done | 2026-05-28 | 2026-05-29 |
 | 002 | Supabase Realtime updates (comments, status) | backlog | 2026-05-28 | — |
-| 003 | In-app Notifications (badge, dropdown) | done | 2026-05-28 | 2026-05-29 |
 | 004 | Refactor pages sang TanStack Query | partial | 2026-05-28 | — |
 | 005 | Search/Filter server-side cho presets phức tạp | backlog | 2026-05-28 | — |
-| 006 | Schema v2 — Align agents table with eravnTrans | done | 2026-05-28 | 2026-05-29 |
-| 007 | Agent Deactivation với Restore Point & Downline Transition | done | 2026-05-28 | 2026-05-29 |
 | 008 | Division Safety Net — Force Recompute & getAgentDivision RPC | fixed | 2026-05-29 | 2026-05-29 |
-| 009 | Dashboard stat cards navigation (→ Agents / Requests / Filter) | done | 2026-05-29 | 2026-05-29 |
-| 010 | Requests multi-choice status filter (toggle on/off) | done | 2026-05-29 | 2026-05-29 |
-| 011 | Ranks modal CRUD (popup Thêm/Sửa, bỏ footer form) | done | 2026-05-29 | 2026-05-29 |
-| 012 | Divisions modal CRUD + table height (popup Thêm/Sửa, bỏ max-h) | done | 2026-05-29 | 2026-05-29 |
-| 013 | M1 Transition — Search, T1 cũ + Lý do, Email Tracking | done | 2026-05-29 | 2026-05-29 |
-| 014 | Quản lý mẫu email dạng danh sách (list view + modal edit) | done | 2026-05-29 | 2026-05-29 |
-| 015 | Thêm mẫu email mới (popup trình soạn thảo) | done | 2026-05-29 | 2026-05-29 |
-| 017 | Dashboard B2: Thêm search bar và nút "Tạo email mẫu" | done | 2026-05-29 | 2026-05-29 |
-| 018 | ComposeTemplateModal: Refactor email section (1 section, 4 emails, copy từng email) | done | 2026-05-29 | 2026-05-29 |
-| 019 | Mail Merge Generator (template + data → file Excel) | done | 2026-06-02 | 2026-06-03 |
-| 020 | Excel Generator Enhancements — Inline Field Reference + Uppercase + Chọn ngày generate | done | 2026-06-03 | 2026-06-04 |
-| 021 | Excel Generator — Edit Template đã lưu | done | 2026-06-03 | 2026-06-04 |
-| REFACTOR-005 | Twenty UI/UX Full Adoption (Tailwind v4 Preserve) | done | 2026-06-04 | 2026-06-05 |
-| 022 | Import cập nhật cấp bậc hàng loạt (2 cột: staff_id + rank_name) | done | 2026-06-08 | 2026-06-08 |
+| 009 | Dashboard stat cards navigation (→ Agents / Requests / Filter) | planned | 2026-05-29 | — |
+| 010 | Requests multi-choice status filter (toggle on/off) | planned | 2026-05-29 | — |
+| 011 | Ranks modal CRUD (popup Thêm/Sửa, bỏ footer form) | planned | 2026-05-29 | — |
+| 012 | Divisions modal CRUD + table height (popup Thêm/Sửa, bỏ max-h) | planned | 2026-05-29 | — |
+| 013 | M1 Transition — Search, T1 cũ + Lý do, Email Tracking | planned | 2026-05-29 | — |
+| 018 | ComposeTemplateModal — Refactor email section (1 section, 4 emails, copy từng email) | planned | 2026-05-29 | — |
+| REFACTOR-005 | Twenty UI/UX Full Adoption (Tailwind v4 Preserve) | in_progress | 2026-06-04 | — |
+| 024 | Testing Infrastructure — Smoke Test + Unit Test (Vitest) | done | 2026-06-10 | 2026-06-10 |
+| 025 | Email Activities Table cho M1 Transition Tracking | done | 2026-06-11 | 2026-06-11 |
 
 ---
 
-## FEAT-001: Tích hợp gửi email thật (Resend + HTML editor)
+## FEAT-024: Testing Infrastructure — Smoke Test + Unit Test (Vitest)
 
-- **Đề xuất**: 2026-05-28
-- **Status**: `done`
-- **Priority**: `medium`
-- **Hoàn thành**: 2026-05-29
-
-### Current Status (as of 2026-05-29)
-
-**Đã làm:**
-- `supabase/migrations/014_email_logs.sql` — Bảng `email_logs` + `cc_emails` (jsonb) + indexes + RLS.
-- `supabase/functions/send-email/index.ts` — Edge Function gọi Resend API, lưu log, xử lý CORS.
-- `src/types/index.ts` — Thêm interface `EmailLog` với `cc_emails`.
-- `src/components/HtmlEditor.tsx` — **Mới** — Editor 3 tabs: Visual (contentEditable + toolbar), Code (HTML raw), Preview (rendered with dynamic values). Hỗ trợ bold, italic, underline, link, text color, align, undo, chèn placeholder dropdown. Tự động convert plain text → HTML (\n\n → `<p>`, \n → `<br>`).
-- `src/components/SendEmailModal.tsx` — **Mới** — Popup gửi email: To (editable), CC (dynamic list thêm/xóa), Subject (readonly rendered), Body (HtmlEditor preview mode), nút Gửi gọi Edge Function.
-- `src/components/ComposeTemplateModal.tsx` — Thêm nút [Gửi email] mở `SendEmailModal`. Giữ nguyên Copy nội dung + Copy email.
-- `src/pages/EmailTemplatesPage.tsx` — Thay textarea plain text bằng `HtmlEditor`, preview modal render HTML thay vì `whitespace-pre-wrap`.
-
-**Chưa làm / Chờ IT:**
-- Verify domain `myera.com.vn` với Resend (cần IT thêm DNS records SPF/DKIM/DMARC).
-- Trong lúc chờ: dùng `onboarding@resend.dev` để test, sau đó đổi `from` thành `opt@myera.com.vn`.
-- Cần chạy migration `014_email_logs.sql` trên DB production.
-- Cần deploy Edge Function lên Supabase.
-
-### 1. Mô tả feature
-Gửi email trực tiếp từ app qua Resend, sử dụng mẫu email HTML có sẵn với dynamic values (`{{agentName}}`, `{{staffId}}`, v.v.). Ngườii dùng có thể soạn email HTML trong `EmailTemplatesPage` (3 chế độ: Visual, Code, Preview) và gửi từ `ComposeTemplateModal` với khả năng thêm CC.
-
-### 2. Motivation / Why
-- Giảm thao tác thủ công (không cần copy ra Gmail/Outlook).
-- Email gửi từ `opt@myera.com.vn` — chuyên nghiệp, đồng bộ thương hiệu.
-- Lưu lịch sử gửi email để audit.
-- Hỗ trợ HTML: format đẹp, link clickable, màu sắc.
-
-### 3. Scope
-
-**In scope:**
-- Resend qua Supabase Edge Function.
-- From: `opt@myera.com.vn` (sau khi verify domain) hoặc `onboarding@resend.dev` (test).
-- HTML editor 3 tabs trong `EmailTemplatesPage`.
-- SendEmailModal với To, CC nhiều ngườii, Subject rendered, Body preview.
-- Lưu log vào `email_logs` (bao gồm `cc_emails`).
-
-**Out of scope:**
-- Gửi hàng loạt / bulk email (backlog sau).
-- Queue/retry mechanism.
-- Attachment gửi kèm.
-- Email scheduling.
-
-### 4. Technical Design
-**Supabase Edge Function:**
-- Nhận payload: `to`, `cc[]`, `from`, `subject`, `html`, `template_key`, `agent_id`.
-- Gọi `https://api.resend.com/emails` bằng `fetch`.
-- Sau khi gửi: insert log vào `email_logs` qua `service_role` key.
-- Lấy `sent_by` từ JWT token trong request header.
-
-**HtmlEditor:**
-- Visual mode: `contentEditable` div + `document.execCommand` cho formatting.
-- Code mode: `<textarea>` hiển thị HTML raw.
-- Preview mode: `dangerouslySetInnerHTML` với placeholders replaced.
-- Auto-convert plain text → HTML khi load để backward-compatible với templates cũ.
-
-### 5. UI/UX
-- `EmailTemplatesPage`: Soạn mẫu bằng HtmlEditor, placeholder dropdown trong toolbar, preview render HTML.
-- `ComposeTemplateModal`: [Copy nội dung] [Copy email] [Gửi email]. Nút Gửi disabled nếu agent không có email.
-- `SendEmailModal`: To (default = agent.email), CC (thêm/xóa từng dòng), Subject auto-rendered, Body preview HTML, [Gửi] có loading spinner.
-
-### 6. Files cần sửa / tạo
-| File | Thay đổi |
-|------|----------|
-| `supabase/functions/send-email/index.ts` | **Mới** — Edge Function gọi Resend + lưu log |
-| `supabase/migrations/014_email_logs.sql` | **Mới** — Bảng `email_logs` với `cc_emails` jsonb |
-| `src/types/index.ts` | Thêm `EmailLog` interface |
-| `src/components/HtmlEditor.tsx` | **Mới** — 3-tabs HTML editor |
-| `src/components/SendEmailModal.tsx` | **Mới** — Popup gửi email với CC |
-| `src/components/ComposeTemplateModal.tsx` | Thêm nút [Gửi email], import SendEmailModal |
-| `src/pages/EmailTemplatesPage.tsx` | Thay textarea → HtmlEditor, preview render HTML |
-
-### 7. Schema / SQL changes
-```sql
-CREATE TABLE IF NOT EXISTS public.email_logs (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  sent_at timestamptz DEFAULT now(),
-  sent_by uuid REFERENCES auth.users(id),
-  recipient_email text NOT NULL,
-  cc_emails jsonb DEFAULT '[]',
-  recipient_agent_id uuid REFERENCES agents(id),
-  template_key text NOT NULL,
-  subject text NOT NULL,
-  body text NOT NULL,
-  status text NOT NULL CHECK (status IN ('sent', 'failed')),
-  error_message text
-);
-
-CREATE INDEX idx_email_logs_sent_at ON public.email_logs(sent_at DESC);
-CREATE INDEX idx_email_logs_recipient ON public.email_logs(recipient_agent_id, sent_at DESC);
-
-ALTER TABLE public.email_logs ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Allow all authenticated to read email_logs"
-  ON public.email_logs FOR SELECT TO authenticated USING (true);
-
-CREATE POLICY "Allow all authenticated to insert email_logs"
-  ON public.email_logs FOR INSERT TO authenticated WITH CHECK (true);
-```
-
-### 8. API / Integration changes
-- Edge Function: `POST /functions/v1/send-email`
-- Secret: `RESEND_API_KEY` trong Supabase Dashboard → Edge Functions → Secrets
-- Secret: `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (cho insert log)
-
-### 9. Test Plan
-1. Chạy migration `014_email_logs.sql` trên Supabase SQL Editor.
-2. Deploy Edge Function: `supabase functions deploy send-email`.
-3. Thêm `RESEND_API_KEY` vào Supabase Secrets.
-4. Mở EmailTemplatesPage → soạn mẫu HTML → Lưu.
-5. Mở ComposeTemplateModal → bấm [Gửi email].
-6. Điền To + CC → bấm Gửi.
-7. Verify email đến hộp thư (check spam nếu dùng `onboarding@resend.dev`).
-8. Verify `email_logs` có row mới với `status = 'sent'` và `cc_emails` đúng.
-9. Test lỗi: sai API key → `status = 'failed'`, có `error_message`.
-
-### 10. Rollout Plan
-1. Chạy migration SQL trên Supabase.
-2. Deploy Edge Function.
-3. Config `RESEND_API_KEY` trong Secrets.
-4. Test với `onboarding@resend.dev`.
-5. Khi IT verify domain `myera.com.vn` xong: đổi `from` trong `SendEmailModal` thành `opt@myera.com.vn`.
-6. Build + deploy frontend.
-
-### 11. Notes
-- **Domain verify:** `opt@myera.com.vn` cần verify DNS trước khi dùng production. Dùng `onboarding@resend.dev` để dev/test.
-- **Rate limit:** Resend free = 3.000 emails/tháng.
-- **Plain text → HTML:** Templates cũ (plain text) sẽ tự động convert khi load vào HtmlEditor lần đầu. Sau khi lưu lại sẽ thành HTML.
-- **CC format:** `cc_emails` lưu dạng JSON array trong DB, hiển thị là string array trong TypeScript.
-- **2026-05-29**: Thêm placeholder `{{oldT1StaffId}}` và `{{tempT1StaffId}}` vào `ComposeTemplateModal` (replace bằng `t1Old?.staff_id`).
-
----
-
----
-
-## FEAT-020: Excel Generator Enhancements — Inline Field Reference + Uppercase + Chọn ngày generate
-
-- **Đề xuất**: 2026-06-03
-- **Status**: `done`
+- **Đề xuất**: 2026-06-10
+- **Status**: `planned`
 - **Priority**: `high`
-- **Hoàn thành**: 2026-06-04
 
 ### 1. Mô tả feature
-Nâng cấp Excel Generator (FEAT-019) để hỗ trợ:
-1. **Inline Field Reference**: Syntax `{{Tên Field}}` trong cell template để kết hợp data động + expression `(R.num)`, `(dd/mm/yyyy)` + text cố định trong cùng 1 cell.
-2. **Uppercase Toggle**: Checkbox "VIẾT HOA" cho từng field mapping. Nếu tick → giá trị được `.toUpperCase()` trước khi chèn vào cell.
-3. **Chọn ngày generate**: Input date picker trong tab Generate. User chọn ngày cụ thể → expression parser `(dd)`, `(mm)`, `(yy)`... sẽ dùng ngày này thay vì `new Date()`.
+Triển khai **2 lớp bảo vệ** để đảm bảo các tính năng cũ không bị vỡ sau mỗi lần sửa code:
+
+**Option 1 — Smoke Test + Build Verification:**
+- Script `npm run verify` chạy `tsc -b && vite build && eslint .`
+- File `docs/SMOKE-TEST.md` liệt kê 15 trang + luồng chính, test thủ công sau mỗi lần sửa code.
+
+**Option 2 — Unit Test với Vitest:**
+- Cài `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`
+- Viết unit test cho các hàm pure: `eligibility.ts`, `date-utils.ts`, `excel-generator.ts` (expression parser)
 
 ### 2. Motivation / Why
-- User cần viết cell dạng: `{{Họ và tên}} - (ddmmyy)(R.num)` → `Trần Lê Toàn Hữu - 03062607`
-- User cần viết hoa toàn bộ 1 trường (ví dụ: tên công ty, chức danh)
-- User cần generate file với ngày cụ thể (ví dụ: backdate hợp đồng ngày 15/03/2026)
+- Hiện tại mỗi lần sửa code không có cách nào nhanh để biết tính năng cũ có bị vỡ không.
+- `npm run build` chỉ check type + bundle, không check logic.
+- Eligibility rules (90 ngày, 180 ngày, 3 lần, ASC) là business-critical — cần test tự động để tránh regression.
+- Expression parser trong Excel Generator đã từng bị bug nhiều lần (BUG-015, BUG-031, BUG-032) — cần test suite bảo vệ.
 
 ### 3. Scope
 
 **In scope:**
-- Regex `{{([^}]+)}}` để detect inline field reference
-- Hàm `replaceFieldReferences()` trong `excel-generator.ts`
-- Luồng xử lý cell mới: (1) Evaluate expression → (2) Replace `{{Field}}` → (3) Uppercase nếu có
-- Thêm `uppercase?: boolean` vào `FieldMappingValue` interface
-- Checkbox VIẾT HOA trong TemplateUploadModal và GeneratePanel mapping panel
-- Input `type="date"` trong GeneratePanel để chọn ngày generate
-- Truyền `baseDate` param từ GeneratePanel xuống `buildPreview()` và `generateWorkbook()`
+- Build verification script (`npm run verify`)
+- Smoke Test Checklist (`docs/SMOKE-TEST.md`) cover 15 routes
+- Vitest setup + config
+- Unit tests cho `src/lib/eligibility.ts` (tất cả exported functions)
+- Unit tests cho `src/lib/date-utils.ts` (formatDate, formatDateTime, formatTime)
+- Unit tests cho `src/lib/excel-generator.ts` (expression parser: `evaluateExpression`, `replaceExpressionsInCell`)
 
 **Out of scope:**
-- Thay đổi schema DB (không cần thêm cột, `column_mapping` JSONB đã đủ)
-- Thay đổi cách detect field từ export template
+- Không viết E2E test (Playwright) — để sau
+- Không test React components (quá nhiều, để Phase 2)
+- Không test Supabase RPC calls (cần mock phức tạp, để sau)
+- Không CI/CD automation — chỉ chạy local
 
 ### 4. Technical Design
 
-**Inline Field Reference:**
-```typescript
-const FIELD_REF_REGEX = /{{([^}]+)}}/g
-
-function replaceFieldReferences(
-  cellValue: string,
-  dataRow: Record<string, string>,
-  mapping: ColumnMapping
-): string {
-  return cellValue.replace(FIELD_REF_REGEX, (_match, fieldName) => {
-    const mapped = mapping[fieldName.trim()]
-    if (!mapped) return _match
-    if (mapped.type === 'column') {
-      return dataRow[mapped.value] !== undefined ? dataRow[mapped.value] : _match
-    }
-    return mapped.value
-  })
-}
+#### 4.1 Build Verification
+Thêm script vào `package.json`:
+```json
+"verify": "tsc -b && vite build && eslint .",
+"test": "vitest run",
+"test:watch": "vitest"
 ```
 
-**Luồng xử lý 1 cell trong `generateWorkbook`:**
-```
-Cell template: "{{Họ và tên}} - (ddmmyy)(R.num)"
-↓
-1. replaceExpressionsInCell → "{{Họ và tên}} - 03062607"
-2. replaceFieldReferences  → "Trần Lê Toàn Hữu - 03062607"
-3. uppercase nếu mapped.uppercase === true
-```
+#### 4.2 Smoke Test Checklist
+File `webapp/docs/SMOKE-TEST.md` gồm 3 phần:
+1. **Pre-check**: `npm run verify` pass
+2. **Page-by-Page Checklist** (15 routes):
+   - Login → phân quyền
+   - Dashboard → stat cards, B2 eligible, M1 Transition
+   - Agents → list, search, filter, pagination, bookmark, bulk actions
+   - Agent Detail → info, M1 table, T1 history, deactivate/restore
+   - Requests → list, multi-choice filter, kanban
+   - Request Detail → timeline, comments, approve/reject
+   - Upload → import agent, validate, preview
+   - Email Templates → list, edit, preview, compose
+   - Activity Log → timeline, filter
+   - Trash → restore, permanent delete
+   - Holidays / Ranks / Divisions → CRUD
+   - Excel Generator → templates, generate, history, upline lookup
+   - Change Password
+3. **Business Logic Regression** (5 luồng cốt lõi):
+   - Tạo request đổi T1 → eligibility check đúng
+   - Hoàn tất request → M1 transition tasks tạo đúng
+   - Upload agent → upsert theo `staff_id`
+   - Export Excel → file tải về đúng
+   - Generate mail merge → expression evaluate đúng
 
-**Uppercase:**
-- UI: Thêm `<input type="checkbox">` VIẾT HOA trong mỗi row mapping
-- Data: `{ type: 'column', value: 'Họ và tên', uppercase: true }`
-- Logic: `if (mapped?.uppercase && value) value = value.toUpperCase()`
+Mỗi mục có checkbox `[ ]` để đánh dấu.
 
-**Chọn ngày generate:**
-- State `generateDate: Date` trong GeneratePanel (default = new Date())
-- Input date picker hiển thị format `dd/mm/yyyy`
-- Truyền `generateDate` vào `generateWorkbook(..., baseDate = generateDate)` và `buildPreview(..., baseDate = generateDate)`
+#### 4.3 Vitest Setup
+- Cài packages: `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `@vitest/coverage-v8` (optional)
+- Tạo `vitest.config.ts` (hoặc dùng `vite.config.ts`):
+  - `test.environment: 'jsdom'`
+  - `test.globals: true` (để dùng `describe`, `it`, `expect` không cần import)
+  - `test.include: ['src/**/*.test.ts']`
+- Tạo `src/test/setup.ts` import `@testing-library/jest-dom`
+
+#### 4.4 Unit Test — `eligibility.ts`
+Test các hàm:
+- `checkEligibility()` — tất cả scenarios:
+  - Agent không tồn tại
+  - `proposedT1Id = null`
+  - `proposedT1Id === agentId`
+  - `proposedT1Id === current_t1_id`
+  - Trong 90 ngày: đã đổi 0 lần vs >=1 lần
+  - >90 ngày: đổi <3 lần vs >=3 lần
+  - Rank ASC vs không ASC
+  - `daysSinceLastChange < 180` vs >=180
+  - `rankNamesMap` lookup
+- `getT1Capacity()` — đếm M1, recent accept
+- `isBusinessDay()` — thứ 7, CN, holiday
+- `addBusinessDays()` — cộng trừ đúng ngày
+- `checkCanChooseNewT1()` — tương tự `checkEligibility` nhưng output khác
+- `getM1ImpactSummary()` — aggregate đúng
+
+#### 4.5 Unit Test — `date-utils.ts`
+Test `formatDate()`, `formatDateTime()`, `formatTime()`:
+- Input `null` / `undefined` → `'—'`
+- Input string ISO → format đúng `dd/mm/yyyy`
+- Input Date object → format đúng
+- Timezone Asia/Ho_Chi_Minh (không bị lệch UTC)
+
+#### 4.6 Unit Test — `excel-generator.ts` (Expression Parser)
+Test `evaluateExpression()` và `replaceExpressionsInCell()`:
+- `(ddmmyy)` → đúng ngày
+- `(dd/mm/yyyy)` → đúng format
+- `([dd-1]mmyy)` → ngày trừ 1
+- `(R.num)` → row index + 1
+- `([R.num-1])` → row index
+- `(ddmmyyyy)` + baseDate cụ thể → verify output
+- Literal mix: `So (dd) thang (mm) nam (yyyy)` → replace đúng từng token
+- Không replace ngoài dấu `()`: `abc ddmmyy xyz` → giữ nguyên
 
 ### 5. UI/UX
-
-**Template cell example:**
-| Cell trong export template | Ý nghĩa |
-|---|---|
-| `(R.num)` | Số thứ tự |
-| `{{Họ và tên}}` | Lấy data theo mapping |
-| `{{Họ và tên}} - (ddmmyy)(R.num)` | Kết hợp data + expression |
-| `HỢP ĐỒNG NGUYÊN TẮC` | Text cố định (không đổi) |
-
-**Generate Panel thêm:**
-- Input "Ngày áp dụng cho expression:" (date picker)
-
-**Mapping Panel thêm:**
-- Mỗi row có thêm checkbox `[ ] VIẾT HOA` bên phải giá trị map
+Không có UI mới — đây là infrastructure.
 
 ### 6. Files cần sửa / tạo
+
 | File | Thay đổi |
 |------|----------|
-| `src/types/index.ts` | Thêm `uppercase?: boolean` vào `FieldMappingValue` |
-| `src/lib/excel-generator.ts` | Thêm `FIELD_REF_REGEX`, `replaceFieldReferences`, cập nhật `generateWorkbook` + `buildPreview` (inline ref + uppercase + baseDate param) |
-| `src/components/excel-generator/TemplateUploadModal.tsx` | Thêm checkbox VIẾT HOA trong mapping panel |
-| `src/components/excel-generator/GeneratePanel.tsx` | Thêm input date picker cho ngày generate; thêm checkbox VIẾT HOA trong mapping panel; truyền ngày vào preview/generate |
-
-### 7. Schema / SQL changes
-Không cần. `column_mapping` là JSONB, đã hỗ trợ thêm key `uppercase`.
-
-### 8. API / Integration changes
-Không cần.
-
-### 9. Test Plan
-1. Template cell: `{{Họ và tên}} - (ddmmyy)(R.num)` → verify output đúng format
-2. Template cell: `{{Công ty}}` với uppercase ticked → verify viết hoa toàn bộ
-3. Chọn ngày generate = `15/03/2026` → verify `(dd/mm/yyyy)` ra `15/03/2026`
-4. Template cell không có `{{...}}` và không có `( ... )` → giữ nguyên text cố định
-5. Template cell chỉ có `(R.num)` → không bị ảnh hưởng bởi mapping
-
-### 10. Rollout Plan
-1. Cập nhật `types/index.ts`
-2. Sửa `excel-generator.ts`
-3. Sửa UI components
-4. Test với template hợp đồng nguyên tắc của user
-
-### 11. Notes
-- Backward compatible: template cũ không có `{{...}}` vẫn hoạt động bình thường
-- Nếu `{{Field Name}}` không tìm thấy trong mapping → giữ nguyên `{{Field Name}}` để user dễ debug
-
----
-
----
-
-## FEAT-021: Excel Generator — Edit Template đã lưu
-
-- **Đề xuất**: 2026-06-03
-- **Status**: `done`
-- **Priority**: `medium`
-- **Hoàn thành**: 2026-06-04
-
-### 1. Mô tả feature
-Cho phép admin mở lại modal upload để chỉnh sửa template đã lưu: đổi tên, mô tả, thay đổi mapping, thay file template (export/import), sửa số dòng header.
-
-### 2. Motivation / Why
-- Hiện tại chỉ có thể xóa và tạo lại template nếu muốn sửa mapping hoặc tên
-- User cần điều chỉnh template thường xuyên (thêm field, sửa mapping, đổi tên)
-
-### 3. Scope
-
-**In scope:**
-- Nút "Sửa" trong Template Manager table
-- Modal upload chuyển sang chế độ edit khi có `editTemplate` prop
-- Pre-fill tất cả dữ liệu cũ: name, description, template_header_row, import_header_row, fields, import_headers, column_mapping
-- Giữ file cũ nếu user không upload file mới
-- Nếu upload file mới → xóa file cũ trong Storage + upload file mới
-- Update DB row thay vì insert
-
-**Out of scope:**
-- Version history cho template
-- Diff/preview thay đổi trước khi save
-
-### 4. Technical Design
-
-**Component `TemplateUploadModal`:**
-- Thêm prop `editTemplate?: ExcelTemplate`
-- Nếu `editTemplate` tồn tại:
-  - Pre-fill state từ `editTemplate`
-  - Hiển thị tên file cũ thay vì dropzone rỗng
-  - Nút "Thay file mới" để mở dropzone nếu muốn đổi file
-  - On save: gọi `.update()` thay vì `.insert()`
-
-**File Storage handling:**
-```typescript
-// Khi edit và upload file mới
-if (newExportFile && editTemplate?.storage_path) {
-  await supabase.storage.from('excel-templates').remove([editTemplate.storage_path])
-}
-```
-
-### 5. UI/UX
-- Template Manager table: thêm icon `Pencil` bên cạnh icon Download và Trash
-- Modal title đổi từ "Thêm template Excel" → "Sửa template Excel" khi edit
-- Dropzone hiển thị: "File hiện tại: [tên file]" + nút "Thay file mới"
-
-### 6. Files cần sửa / tạo
-| File | Thay đổi |
-|------|----------|
-| `src/components/excel-generator/TemplateUploadModal.tsx` | Thêm prop `editTemplate`, chế độ edit, pre-fill, update DB, handle file replacement |
-| `src/components/excel-generator/TemplateManager.tsx` | Thêm nút Edit (Pencil), mở modal với `editTemplate` |
+| `package.json` | Thêm scripts `verify`, `test`, `test:watch`; thêm devDependencies |
+| `vitest.config.ts` | **Mới** — Vitest config |
+| `src/test/setup.ts` | **Mới** — jest-dom matchers |
+| `webapp/docs/SMOKE-TEST.md` | **Mới** — Smoke test checklist |
+| `src/lib/eligibility.test.ts` | **Mới** — Unit tests cho eligibility |
+| `src/lib/date-utils.test.ts` | **Mới** — Unit tests cho date-utils |
+| `src/lib/excel-generator.test.ts` | **Mới** — Unit tests cho expression parser |
 
 ### 7. Schema / SQL changes
 Không cần.
@@ -416,22 +219,34 @@ Không cần.
 Không cần.
 
 ### 9. Test Plan
-1. Click "Sửa" template → modal mở với đúng dữ liệu cũ
-2. Đổi tên template → save → verify tên mới trong DB
-3. Đổi mapping 1 field → save → verify mapping mới trong DB
-4. Thay file export template mới → save → verify file cũ bị xóa trong Storage, file mới tồn tại
-5. Không thay file → save → verify file cũ vẫn giữ nguyên
+1. Chạy `npm run verify` → pass (type check + build + lint)
+2. Chạy `npm run test` → tất cả unit test pass
+3. Mở `SMOKE-TEST.md`, chạy thử 5-10 mục để verify checklist khả thi
 
 ### 10. Rollout Plan
-1. Sửa `TemplateUploadModal` để hỗ trợ edit mode
-2. Sửa `TemplateManager` thêm nút Edit
-3. Test edit với template có sẵn
+1. Cài dependencies + Vitest config
+2. Viết `SMOKE-TEST.md`
+3. Viết `date-utils.test.ts` (dễ nhất)
+4. Viết `eligibility.test.ts`
+5. Viết `excel-generator.test.ts`
+6. Chạy `npm run verify` + `npm run test`
+7. Cập nhật `CHANGELOG.md`
 
 ### 11. Notes
-- Cần đảm bảo `onUploaded` callback vẫn được gọi để refresh danh sách template
-- Nếu xóa file cũ trong Storage fail (ví dụ đã bị xóa trước đó) → bỏ qua lỗi, vẫn tiếp tục upload file mới
-
----
+- **Ưu điểm:**
+  - Chạy nhanh (`npm run test` ~3-5 giây)
+  - Phát hiện regression sớm trước khi deploy
+  - Smoke test không cần viết code, chỉ cần checklist
+- **Nhược điểm:**
+  - Smoke test thủ công vẫn tốn 5-10 phút mỗi lần
+  - Unit test không cover UI interactions
+  - Khi refactor eligibility logic, phải cập nhật test
+- **Rủi ro & Mitigation:**
+  | Rủi ro | Mitigation |
+  |--------|------------|
+  | Test bị outdated khi business rules thay đổi | Ghi rõ trong test description, review test khi sửa rules |
+  | `jsdom` conflict với Vite/React 19 | Dùng `@vitejs/plugin-react` + `vitest@latest`, test trên 1 file trước |
+  | `daysSince()` dùng `new Date()` nên test có thể flaky theo ngày chạy | Mock `Date.now()` trong test |
 
 ---
 
@@ -502,127 +317,6 @@ Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đ
 - Supabase free tier: 200 concurrent connections, 100 channels/connection.
 - Nên `unsubscribe` khi component unmount để tránh leak.
 - Có thể cần filter `schema: 'public', table: '...', filter: 'id=eq....'` để giảm traffic.
-
----
-
----
-
-## FEAT-003: In-app Notifications (badge, dropdown)
-
-- **Đề xuất**: 2026-05-28
-- **Status**: `done`
-- **Priority**: `medium`
-- **Hoàn thành**: 2026-05-29
-
-### Current Status (as of 2026-05-29)
-
-**Đã làm:**
-- `supabase/migrations/013_notifications.sql` — Bảng `notifications` + RLS + indexes.
-- `src/types/index.ts` — Type `Notification`.
-- `src/lib/notifications.ts` — Helpers: `createNotification`, `createNotificationsForAdmins`, `markNotificationAsRead`, `markAllNotificationsAsRead`, `getUnreadNotificationCount`.
-- `src/components/NotificationDropdown.tsx` — Query từ `notifications` table, badge đếm unread từ DB, mark read trong DB, poll 30s, icon theo type.
-- Tích hợp tạo notification tự động trong:
-  - `CreateRequestModal` → `request_new`
-  - `RequestDetailPage` (hủy) → `request_cancelled`
-  - `RequestDetailPage` (comment) → `comment_new`
-  - `request-actions.ts` (hoàn tất) → `request_completed`
-  - `agent-actions.ts` (deactivate/restore) → `agent_deactivated` / `agent_restored`
-- Đã tích hợp vào `Layout.tsx` (header).
-
-**Chưa làm:**
-- Realtime update (cần FEAT-002).
-
-### 1. Mô tả feature
-Xây dựng hệ thống thông báo trong app: badge trên chuông header hiển thị số noti chưa đọc, dropdown liệt kê các thông báo (request mới, comment mới, B2 alert, M1 transition expired).
-
-### 2. Motivation / Why
-- Hiện tại badge chuông là UI tĩnh, không có chức năng.
-- Ngườii dùng cần được thông báo khi có sự kiện quan trọng mà không cần refresh.
-
-### 3. Scope
-
-**In scope:**
-- Bảng `notifications` mới trong DB.
-- Dropdown panel hiển thị danh sách noti.
-- Badge đếm số noti chưa đọc.
-- Nút "Đánh dấu đã đọc" / "Đánh dấu tất cả đã đọc".
-- Tạo notification khi: request mới được tạo, comment mới, B2 quá hạn, M1 transition expired.
-
-**Out of scope:**
-- Push notification (browser push).
-- Email notification (làm ở FEAT-001).
-- Notification preferences/settings.
-
-### 4. Technical Design
-- Bảng `notifications` lưu: `id`, `user_id` (recipient), `type`, `title`, `message`, `link`, `read`, `created_at`.
-- Trigger PostgreSQL hoặc application-level insert khi có event.
-- Header component query `notifications` với `read = false` để hiển thị badge.
-- Dropdown dùng `Popover` hoặc tự implement.
-- Kết hợp với FEAT-002 (Realtime) để noti mới đến ngay lập tức.
-
-### 5. UI/UX
-- Chuông header có badge số màu đỏ khi có noti chưa đọc.
-- Click chuông mở dropdown panel, hiển thị ~10 noti gần nhất.
-- Mỗi noti hiển thị: icon theo type, title, thời gian tương đối ("2 phút trước").
-- Click noti → navigate đến link liên quan, đánh dấu đã đọc.
-
-### 6. Files cần sửa / tạo
-| File | Thay đổi |
-|------|----------|
-| `supabase/migrations/006_add_notifications.sql` | Bảng `notifications` |
-| `src/types/index.ts` | Thêm type `Notification` |
-| `src/components/NotificationBell.tsx` | Component mới: badge + dropdown |
-| `src/components/Layout.tsx` | Tích hợp NotificationBell vào header |
-| `src/lib/notifications.ts` | Helper tạo notification (dùng trong các action) |
-| `src/pages/RequestDetailPage.tsx` | Tạo noti khi có comment mới |
-| `src/pages/DashboardPage.tsx` | Tạo noti khi có B2/M1 alert |
-
-### 7. Schema / SQL changes
-```sql
-CREATE TABLE public.notifications (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id uuid NOT NULL REFERENCES auth.users(id),
-  type text NOT NULL CHECK (type IN ('request_new','comment_new','b2_alert','m1_expired','request_completed')),
-  title text NOT NULL,
-  message text,
-  link text,
-  read boolean DEFAULT false,
-  created_at timestamptz DEFAULT now()
-);
-
-CREATE INDEX idx_notifications_user_read ON public.notifications(user_id, read, created_at DESC);
-
-ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can only see their own notifications"
-  ON public.notifications FOR SELECT TO authenticated USING (user_id = auth.uid());
-
-CREATE POLICY "Users can update their own notifications"
-  ON public.notifications FOR UPDATE TO authenticated USING (user_id = auth.uid());
-
-CREATE POLICY "Allow insert notifications"
-  ON public.notifications FOR INSERT TO authenticated WITH CHECK (true);
-```
-
-### 8. API / Integration changes
-- Có thể cần RPC hoặc Edge Function để bulk mark-as-read.
-
-### 9. Test Plan
-1. Tạo request mới → verify recipient nhận noti trong dropdown.
-2. Thêm comment → verify ngườii liên quan nhận noti.
-3. Badge cập nhật đúng số chưa đọc.
-4. Click "Đánh dấu đã đọc" → badge giảm, noti đổi style.
-5. Click noti → navigate đúng trang.
-
-### 10. Rollout Plan
-1. Tạo bảng + RLS policies.
-2. Deploy UI components.
-3. Thêm logic tạo noti vào các flow hiện có (tạo request, comment, v.v.).
-
-### 11. Notes
-- Cần xác định rõ `user_id` nhận noti: ví dụ comment thì ai nhận? (owner request? admin?)
-- Cân nhắc cleanup noti cũ (>90 ngày) để bảng không phình to.
-- Nên làm sau FEAT-002 (Realtime) để noti đến realtime.
 
 ---
 
@@ -820,540 +514,6 @@ $$;
 - `quota_exceeded` cần `COUNT` subquery → có thể chậm với 2500 rows nếu không có index. Cân nhắc add index trên `t1_changes.agent_id`.
 - `near_180d` cần tìm `MAX(change_date)` per agent → dùng `LATERAL` hoặc window function.
 - Nếu RPC quá phức tạp, có thể tách thành 3 function riêng (`get_near_91d`, `get_near_180d`, `get_quota_exceeded`) rồi union.
-
----
-
----
-
-## FEAT-006: Schema v2 — Align agents table with eravnTrans
-
-- **Đề xuất**: 2026-05-28
-- **Status**: `done`
-- **Priority**: `high`
-- **Hoàn thành**: 2026-05-29
-
-### Current Status (as of 2026-05-29)
-
-**Đã làm:**
-- `supabase/migrations/008_schema_v2_agents.sql` (414 dòng) — Đã có đầy đủ:
-  - 6 bảng mới: `divisions`, `division_head_history`, `rank_profiles`, `ranks`, `agent_referrer_log`, `agent_info_history_log`, `agent_timeline_events`
-  - ALTER `agents`: thêm ~25 cột mới (`agent_code`, `referrer_id`, `rank_id`, `register_date`, `end_date`, `deactivation_reason`, `bank_name`, `id_card_number`, v.v.)
-  - Trigger sync `referrer_id` ↔ `current_t1_id`
-  - Trigger `recompute_division_on_referrer_change`
-  - Update RPC `check_eligibility` + `get_t1_capacity` hỗ trợ schema mới
-  - RLS policies + indexes
-- `src/types/index.ts` — `Agent` interface đã cập nhật đầy đủ cột mới.
-- `AgentDetailPage` — Đã hiển thị đầy đủ 3 section: Thông tin cá nhân, Ngân hàng & Thuế, Nghề nghiệp.
-- `UploadPage` — Đã có OPTIONAL_HEADERS cho ~25 cột schema v2.
-- `AgentsPage`/`DashboardPage` — Đã dùng pattern `referrer_id ?? current_t1_id` và `rank_name ?? rankNamesMap[rank_id]`.
-- `RanksPage`/`DivisionsPage` — Đã có UI quản lý đầy đủ.
-- Seed data `ranks` tự động từ `rank_name` hiện có trong DB.
-- Migration chạy thủ công trên Supabase SQL Editor (do user xác nhận đã chạy).
-- `AgentDetailPage` — Đã thêm section "Thông tin cá nhân" (CCCD, ngày sinh, giới tính, ngày cấp, nơi cấp, nguyên quán, địa chỉ), "Ngân hàng & Thuế" (ngân hàng, số TK, chi nhánh, mã số thuế), "Nghề nghiệp" (khu vực, kinh nghiệm BĐS, chứng chỉ MG, hết hạn, seminar).
-- `UploadPage` — Đã có đầy đủ OPTIONAL_HEADERS cho ~25 cột mới của schema v2.
-- `AgentsPage`/`DashboardPage` — Đã dùng pattern `referrer_id ?? current_t1_id` và `rank_name ?? rankNamesMap[rank_id]`.
-
-### 1. Mô tả feature
-Nâng cấp schema bảng `agents` và các bảng phụ trợ để **chuẩn hóa theo eravnTrans**. Mục tiêu: lưu trữ nhiều thông tin hơn, dùng tên field giống eravnTrans, tách các entity liên quan (`ranks`, `divisions`) thành bảng riêng với FK chặt chẽ.
-
-### 2. Motivation / Why
-- `rank_name` hiện tại là text tự do → dễ sai chính tả, không chuẩn hóa.
-- `division_id` là number đơn thuần → không có danh sách division chuẩn.
-- Thiếu thông tin cá nhân, nghề nghiệp, ngân hàng, lịch sử thay đổi.
-- eravnTrans đã có schema mature với audit log (`agent_timeline_events`), history log (`agent_info_history_log`), referrer log (`agent_referrer_log`) → replicate patterns đã validated.
-
-### 3. Scope
-
-**In scope:**
-- ALTER TABLE `agents`: đổi tên + thêm cột giống eravnTrans.
-- Tạo bảng `ranks`, `rank_profiles` **giống y hệt eravnTrans** (schema độc lập, seed data từ eravnTrans).
-- Tạo bảng `divisions` **dựa trên eravnTrans + thêm fields riêng** phục vụ logic T1 Tracker.
-- Tạo bảng `agent_referrer_log`, `agent_info_history_log`, `agent_timeline_events`.
-- Migration data từ schema cũ sang schema mới (không mất data).
-- Update `types/index.ts`, queries, UI.
-
-**Out of scope:**
-- Không đổi bảng `t1_requests`, `t1_changes`, `m1_transition_tasks` (làm ở FEAT khác nếu cần).
-- Không replicate toàn bộ eravnTrans (chỉ lấy phần liên quan agents).
-- Không đụng đến finance/commission/ledger.
-
-### 4. Technical Design
-
-#### 4.1 Mapping bảng `agents` hiện tại → eravnTrans
-
-| T1 Tracker hiện tại | eravnTrans | Hành động | Ghi chú |
-|---------------------|------------|-----------|---------|
-| `id` | `id` | Giữ nguyên | UUID PK |
-| `staff_id` | `agent_code` | **Đổi tên?** | Xem phương án dưới |
-| `full_name` | `full_name` | Giữ nguyên | |
-| `email` | `email` | Giữ nguyên | |
-| `phone` | `phone` | Giữ nguyên | |
-| `rank_name` (text) | `rank_id` (FK → ranks) | **Tách bảng** | Cần seed data ranks |
-| `contract_signing_date` | `contract_signing_date` | Giữ nguyên | NOT NULL |
-| `current_t1_id` | `referrer_id` | **Đổi tên** | Self-referencing FK |
-| `introducing_agent_id` | `introducing_agent_id` | Giữ nguyên | Self-referencing FK |
-| `division_id` (number) | `division_id` (FK → divisions) | **Thêm FK** | Cần seed data divisions |
-| `cumulative_personal_revenue` | `cumulative_personal_revenue` | Giữ nguyên | |
-| `my_era_points` | — | **Cần quyết định** | eravnTrans không có field này trong `agents`. Có thể bỏ hoặc giữ |
-| `status` | `status`? | Giữ nguyên | eravnTrans dùng `deactivation_reason` + `end_date` thay vì enum |
-| `deleted_at` | — | Giữ nguyên | Soft delete của T1 Tracker, eravnTrans không có |
-| — | `register_date` | **Thêm** | Ngày đăng ký |
-| — | `agent_start_date` | **Thêm** | Ngày bắt đầu làm agent |
-| — | `end_date` | **Thêm** | Ngày kết thúc HĐ |
-| — | `deactivation_reason` | **Thêm** | Lý do nghỉ |
-| — | `business_email` | **Thêm** | Email công việc |
-| — | `id_card_number` | **Thêm** | CCCD/CMND |
-| — | `date_of_birth` | **Thêm** | |
-| — | `id_card_issue_date` | **Thêm** | |
-| — | `id_card_issue_place` | **Thêm** | |
-| — | `permanent_address` | **Thêm** | |
-| — | `place_of_origin` | **Thêm** | |
-| — | `gender` | **Thêm** | |
-| — | `tax_code` | **Thêm** | Mã số thuế |
-| — | `bank_name` | **Thêm** | |
-| — | `bank_account_number` | **Thêm** | |
-| — | `bank_branch_name` | **Thêm** | |
-| — | `active_area` | **Thêm** | Khu vực hoạt động |
-| — | `real_estate_experience` | **Thêm** | Kinh nghiệm BĐS |
-| — | `broker_licence_number` | **Thêm** | Số chứng chỉ môi giới |
-| — | `broker_licence_expiry_date` | **Thêm** | |
-| — | `success_seminar_date` | **Thêm** | Ngày seminar thành công |
-| — | `source` | **Thêm** | Nguồn agent đến từ đâu |
-| — | `special_bonus_profile_id` | **Thêm** | FK → special_bonus_profiles (nếu cần) |
-| `created_at` | `created_at` | Giữ nguyên | |
-| `updated_at` | `updated_at` | Giữ nguyên | Thêm nếu chưa có |
-
-#### 4.2 Phương án quyết định tên field `staff_id`
-
-| Phương án | Mô tả | Ưu điểm | Nhược điểm |
-|-----------|-------|---------|------------|
-| **A (Khuyến nghị)** | Giữ `staff_id`, **thêm** `agent_code` (có thể = `staff_id` hoặc khác) | Không break data hiện tại, có thể có 2 mã khác nhau (nội bộ vs đối ngoại) | Có 2 trường mã |
-| **B** | Đổi `staff_id` → `agent_code` | Giống eravnTrans 100% | Break toàn bộ code hiện tại, cần migration + refactor lớn |
-| **C** | Giữ `staff_id`, không thêm `agent_code` | Đơn giản | Không giống eravnTrans |
-
-**Tôi khuyến nghị Phương án A** — giữ `staff_id` làm business key hiện tại, thêm `agent_code` để sau này có thể map với eravnTrans nếu cần sync.
-
-#### 4.3 Bảng mới cần tạo (giống eravnTrans + custom)
-
-```sql
--- divisions (eravnTrans + custom fields cho T1 Tracker)
-CREATE TABLE divisions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name varchar(255) NOT NULL,              -- Division Name
-  head_agent_id uuid REFERENCES agents(id), -- Division Head
-  is_official boolean DEFAULT false,       -- Official Division
-  is_default boolean DEFAULT false,        -- true = Division "Khác" (fallback)
-  established_at date,
-  is_active boolean DEFAULT true,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
--- division_head_history (track lịch sử head division)
-CREATE TABLE division_head_history (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  division_id uuid REFERENCES divisions(id) ON DELETE CASCADE,
-  head_agent_id uuid REFERENCES agents(id),
-  started_at timestamptz DEFAULT now(),
-  ended_at timestamptz,
-  reason text,
-  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL
-);
-
--- rank_profiles (giống eravnTrans)
-CREATE TABLE rank_profiles (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  start_date date,
-  end_date date,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
--- ranks (giống y hệt eravnTrans — đầy đủ cột)
-CREATE TABLE ranks (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  rank_profile_id uuid REFERENCES rank_profiles(id) ON DELETE RESTRICT,
-  name text NOT NULL,
-  rank_type varchar(20), -- e.g. 'agent', 'consultant', 'specialist'
-  revenue_threshold numeric(18,0),
-  commission_tier integer,
-  t0_rate numeric(10,4),
-  t1_rate numeric(10,4),
-  t2_rate numeric(10,4),
-  t3_rate numeric(10,4),
-  t4_rate numeric(10,4),
-  t1_unlock numeric(18,0),
-  t2_unlock numeric(18,0),
-  t3_unlock numeric(18,0),
-  t4_unlock numeric(18,0),
-  head_rate numeric(10,4),
-  division_rate numeric(10,4),
-  group_division_rate numeric(10,4),
-  profit_sharing_pool_rate numeric(10,4),
-  sort_order integer,
-  non_upgradable boolean DEFAULT false,
-  created_at timestamptz DEFAULT now()
-);
-
--- agent_referrer_log (lịch sử T1/upline)
-CREATE TABLE agent_referrer_log (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id uuid REFERENCES agents(id) ON DELETE CASCADE,
-  referrer_id uuid REFERENCES agents(id),
-  effective_date date,
-  end_date date,
-  reason text,
-  created_at timestamptz DEFAULT now()
-);
-
--- agent_info_history_log (lịch sử thay đổi field)
-CREATE TABLE agent_info_history_log (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id uuid REFERENCES agents(id) ON DELETE CASCADE,
-  changed_field text NOT NULL,
-  old_value text,
-  new_value text,
-  changed_by_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  changed_at timestamptz DEFAULT now()
-);
-
--- agent_timeline_events (audit log đầy đủ)
-CREATE TABLE agent_timeline_events (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id uuid REFERENCES agents(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  kind varchar(20) NOT NULL,
-  status varchar(30),
-  action text,
-  message text,
-  message_ref uuid,
-  created_at timestamptz DEFAULT now()
-);
-```
-
-#### 4.4 Division Logic (Business Rules)
-
-**Quy tắc tính Division của Agent X:**
-```
-1. X là head_agent_id của Division D?
-     → YES: X thuộc D
-2. X có referrer_id (T1)?
-     → YES: Đi lên T1 tree → gặp head_agent_id đầu tiên → X thuộc Division đó
-     → (T1 tree override explicit division_id)
-3. X có division_id explicit (được gán thủ công / cũ)?
-     → YES: X thuộc division_id đó
-4. Fallback → Division "Khác" (divisions.is_default = true)
-```
-
-**Head Transfer Flow (A → B):**
-1. Admin chọn Division → chọn head mới (B)
-2. Hệ thống preview affected agents + boundary detection
-3. CountdownConfirmModal 10s
-4. **A chọn "Ở lại"** → Giữ nguyên `A.division_id` (explicit). A không bị recompute.
-5. **A chọn "Rời"** → Set `A.division_id = NULL`. A rơi vào Division "Khác" (vì A không có T1).
-6. Recompute `division_id` cho downline của B (recursive, skip sub-heads).
-
-**Safety Net (3 lớp):**
-- **Lớp 1:** Trigger PostgreSQL → auto-recompute `division_id` khi `referrer_id` thay đổi
-- **Lớp 2:** App function `getAgentDivision(agentId)` → toàn bộ app dùng hàm này, không đọc `division_id` trực tiếp
-- **Lớp 3:** Admin "Recompute Division" button → force recalculate toàn bộ
-
-#### 4.5 Migration strategy (không mất data)
-
-**Bước 1:** Tạo bảng mới (`divisions` với Division "Khác", `rank_profiles`, `ranks`, `division_head_history`).
-**Bước 2:** Seed data `ranks` từ các giá trị `rank_name` duy nhất hiện có trong DB.
-**Bước 3:** Seed Division "Khác": `INSERT INTO divisions (name, is_default) VALUES ('Khác', true)`.
-**Bước 4:** ALTER TABLE `agents`:
-- Thêm cột `rank_id` → update từ `rank_name`
-- Thêm cột `agent_code` → copy từ `staff_id`
-- Thêm các cột mới (register_date, id_card_number, ...)
-- Đổi tên `current_t1_id` → `referrer_id`
-- Xóa cột `rank_name` (sau khi đã migrate xong)
-**Bước 5:** Tạo bảng `agent_referrer_log`, seed từ `t1_changes` (lịch sử đổi T1).
-**Bước 6:** Enable RLS + policies cho các bảng mới.
-**Bước 7:** Tạo trigger `recompute_division_on_referrer_change`.
-
-### 5. Files cần sửa / tạo
-
-| File | Thay đổi |
-|------|----------|
-| `supabase/migrations/008_schema_v2_agents.sql` | Migration: tạo bảng mới + ALTER agents |
-| `src/types/index.ts` | Update `Agent` interface, thêm interfaces mới |
-| `src/pages/AgentsPage.tsx` | Query thêm fields, hiển thị thêm cột |
-| `src/pages/AgentDetailPage.tsx` | Thêm tab/info card: cá nhân, ngân hàng, nghề nghiệp |
-| `src/pages/UploadPage.tsx` | Validate + map thêm headers mới |
-| `src/components/CreateRequestModal.tsx` | Query agent với fields mới nếu cần |
-| `src/lib/eligibility.ts` | Nếu `rank_name` đổi thành `rank_id` → update logic check |
-| `docs/CHANGELOG.md` | Ghi nhận |
-| `docs/KNOWLEDGE.md` | Cập nhật schema mới |
-
-### 6. Schema / SQL changes
-
-Migration file `008_schema_v2_agents.sql` sẽ chứa toàn bộ ALTER TABLE + CREATE TABLE. Cần chạy thủ công trên Supabase SQL Editor theo từng bước.
-
-### 7. Test Plan
-
-1. **Migration test:** Chạy SQL trên dev DB → verify không mất data agents hiện tại.
-2. **Rank migration:** Verify mỗi agent có `rank_id` đúng mapping từ `rank_name` cũ.
-3. **Referrer log:** Verify `agent_referrer_log` có ít nhất bằng số record `t1_changes`.
-4. **Upload test:** Import file Excel với headers mới → upsert đúng.
-5. **UI test:** AgentDetail hiển thị đầy đủ tab/info mới.
-6. **Eligibility test:** Rank check vẫn hoạt động đúng sau khi đổi sang `rank_id`.
-
-### 8. Rollout Plan
-
-1. Backup DB production trước khi chạy migration.
-2. Chạy migration trên dev/test DB trước.
-3. Deploy code frontend (có thể backward-compatible tạm thờivì thêm cột nullable).
-4. Chạy migration trên production.
-5. Verify data integrity.
-
-### 9. Notes
-
-- **Quyết định đã xác nhận:**
-  1. ✅ Giữ `staff_id`, thêm `agent_code` (nullable, default copy từ `staff_id`)
-  2. ✅ Bỏ `my_era_points`
-  3. ✅ Giữ `rank_profiles` (track quá trình lên cấp)
-  4. ✅ Bỏ `special_bonus_profiles`
-  5. ✅ Bảng `ranks` độc lập, schema giống eravnTrans, seed data từ eravnTrans
-  6. ✅ Bảng `divisions` thêm `head_agent_id` (Division Head) và `is_official` (Official Division)
-  7. ✅ Division "Khác" là division mặc định (fallback) cho agent không có T1 và không phải head
-  8. ✅ Head Transfer có CountdownConfirmModal 10s + preview affected agents
-  9. ✅ Có bảng `division_head_history` track lịch sử head division
-- **Backward compatibility:** Các cột mới đều nullable → không break code cũ ngay lập tức.
-- **Performance:** Bảng `agent_timeline_events` có thể lớn nhanh → cần index `(agent_id, created_at)`.
-- **Division safety:** Phương án A (Explicit + 3 lớp an toàn) đã được chọn. Explicit `division_id` chỉ có hiệu lực khi `referrer_id IS NULL`. Khi `referrer_id` thay đổi → trigger auto-recompute.
-
----
-
----
-
-## FEAT-007: Agent Deactivation với Restore Point & Downline Transition
-
-- **Đề xuất**: 2026-05-28
-- **Status**: `done`
-- **Priority**: `high`
-- **Hoàn thành**: 2026-05-29
-
-### Current Status (as of 2026-05-29)
-
-**Đã làm:**
-- `supabase/migrations/009_agent_deactivation.sql` — Đã có:
-  - Bảng `agent_deactivation_snapshots`
-  - Function `create_deactivation_snapshot()`
-  - RLS policies
-  - Seed `agent_referrer_log` từ `t1_changes`
-- `src/components/DeactivateAgentModal.tsx` — UI đầy đủ: date picker, dropdown lý do, preview M1, CountdownConfirmModal 10s.
-- `src/components/RestoreAgentModal.tsx` — UI đầy đủ: 2 mode (full/light), preview affected M1s, CountdownConfirmModal.
-- `src/lib/agent-actions.ts` — `deactivateAgent()` + `restoreAgent()` đầy đủ logic (snapshot, timeline, transition tasks, cancel/restore downline).
-- `src/pages/AgentsPage.tsx` — Admin đã thấy nút PowerOff (deactivate) / Power (restore) trên mỗi row.
-- `src/pages/AgentDetailPage.tsx` — Đã có tab "Lịch sử chấm dứt" (hiển thị khi agent có lịch sử deactivate).
-- `src/components/Layout.tsx` — Đã có menu "Ranks" và "Divisions" trong sidebar.
-
-**Chưa làm:**
-- Chưa chạy migration `009_agent_deactivation.sql` trên DB production — **bắt buộc chạy thủ công trong Supabase SQL Editor**.
-- `Layout.tsx` chưa có menu mới "Quản lý Ranks/Divisions" (dù Ranks/Divisions pages đã có trong nav admin).
-
-### 1. Mô tả feature
-Cho phép admin chấm dứt hoạt động (deactivate) agent. Agent không bị xóa mà được lưu toàn bộ thông tin lúc chấm dứt. Có thể restore (kích hoạt lại). Toàn bộ downline của agent bị chấm dứt sẽ được xử lý tương tự như khi T1 chuyển đi (M1 Transition).
-
-### 2. Motivation / Why
-- Hiện tại chỉ có soft delete (`deleted_at`) nhưng không track lý do, ngày chấm dứt.
-- Khi agent nghỉ, các M1 dưới line cần được xử lý (chọn T1 mới trong 30 ngày).
-- Cần khả năng restore nếu deactivate nhầm hoặc agent quay lại.
-
-### 3. Scope
-
-**In scope:**
-- Deactivate agent: date picker + lý do + countdown confirm + restore point.
-- Restore agent: khôi phục agent về active (có countdown confirm).
-- Auto-create M1 transition tasks cho downline của agent bị deactivate.
-- Admin quyền edit: `agents`, `ranks`, `divisions` (cập nhật RLS + UI).
-
-**Out of scope:**
-- Không xóa vĩnh viễn agent (hard delete).
-- Không tích hợp với hệ thống lương/thưởng.
-
-### 4. Technical Design
-
-#### 4.1 Deactivation Flow
-
-```
-Admin chọn agent → Bấm "Chấm dứt hoạt động"
-  → Modal hiện:
-      - Date picker: Ngày chấm dứt (default = today)
-      - Dropdown/Textarea: Lý do chấm dứt
-      - Preview: Danh sách M1 sẽ bị ảnh hưởng
-  → CountdownConfirmModal 10s
-  → Confirm:
-      1. Set agent.status = 'inactive'
-      2. Set agent.end_date = selected_date
-      3. Set agent.deactivation_reason = reason
-      4. Insert agent_info_history_log (action = 'deactivated')
-      5. Create restore_point record
-      6. Query all M1s of agent → create m1_transition_tasks
-         - parent_request_id = null (không phải từ t1_request)
-         - departed_agent_id = agent.id
-         - m1_agent_id = each M1
-         - deadline_date = end_date + 30 days
-         - status = 'pending'
-      7. Send notification/toast
-```
-
-#### 4.2 Restore Flow
-
-```
-Admin chọn agent inactive → Bấm "Kích hoạt lại"
-  → Modal:
-      - Warning về downline
-      - Radio options:
-          ⭕ "Khôi phục toàn bộ" — Kéo tất cả M1 cũ về (override cả M1 đã chọn T1 mới)
-          ⭕ "Khôi phục nhẹ" — Chỉ khôi phục agent. M1 đã chọn T1 mới thì giữ nguyên.
-      - Preview danh sách M1 sẽ bị ảnh hưởng theo option đã chọn
-  → CountdownConfirmModal 10s
-  → Confirm:
-      1. Set agent.status = 'active'
-      2. Set agent.end_date = null
-      3. Set agent.deactivation_reason = null
-      4. Insert agent_info_history_log (action = 'restored')
-      5. Cancel pending m1_transition_tasks của agent này
-      6. Nếu chọn "toàn bộ": Update M1s → current_t1_id = restored_agent_id
-      7. Nếu chọn "nhẹ": Chỉ update M1s chưa chọn T1 mới → current_t1_id = restored_agent_id
-```
-
-#### 4.3 Restore Point
-
-Restore point = snapshot trạng thái agent trước khi deactivate:
-
-```sql
-CREATE TABLE agent_deactivation_snapshots (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id uuid REFERENCES agents(id) ON DELETE CASCADE,
-  deactivated_at timestamptz DEFAULT now(),
-  deactivated_by uuid REFERENCES auth.users(id),
-  end_date date,
-  deactivation_reason text,
-  referrer_id uuid,           -- T1 lúc chấm dứt
-  division_id uuid,           -- Division lúc chấm dứt
-  rank_id uuid,               -- Rank lúc chấm dứt
-  cumulative_personal_revenue numeric, -- Doanh số lúc chấm dứt
-  snapshot_data jsonb,        -- Toàn bộ agent record dạng JSON (backup)
-  restored_at timestamptz,
-  restored_by uuid REFERENCES auth.users(id)
-);
-```
-
-#### 4.4 Admin Edit Permissions (RLS + UI)
-
-| Bảng | Admin | Operator | Viewer |
-|------|-------|----------|--------|
-| `agents` | Full CRUD + deactivate/restore | Edit 1 số field (email, phone, address...) | Chỉ xem |
-| `ranks` | Full CRUD | Chỉ xem | Chỉ xem |
-| `divisions` | Full CRUD + transfer head | Chỉ xem | Chỉ xem |
-| `rank_profiles` | Full CRUD | Chỉ xem | Chỉ xem |
-
-**UI Changes:**
-- `AgentsPage`: Admin thấy nút "Chấm dứt" / "Kích hoạt lại". Operator thấy nút "Sửa".
-- `AgentDetailPage`: Tab "Lịch sử chấm dứt" (nếu agent từng bị deactivate).
-- Admin menu mới: "Quản lý Ranks", "Quản lý Divisions".
-
-#### 4.5 Downline Transition khi Deactivate
-
-Tương tự M1 Transition khi T1 chuyển đi:
-- Mỗi M1 của agent bị deactivate được tạo 1 `m1_transition_task`
-- Deadline = `end_date` + 30 ngày (business days?)
-- Temp T1 = `referrer_id` của agent bị deactivate (nếu có) hoặc null
-- Sau 30 ngày: admin bấm "Áp dụng T2 làm T1" hoặc M1 chọn T1 mới
-
-**Khác biệt với T1 Change:**
-- Không có `t1_request` nguồn (`parent_request_id = null`)
-- `departed_agent_id` = agent bị deactivate
-- Agent bị deactivate không còn active → không thể làm T1 của ai
-
-### 5. Files cần sửa / tạo
-
-| File | Thay đổi |
-|------|----------|
-| `supabase/migrations/009_agent_deactivation.sql` | Bảng `agent_deactivation_snapshots`, trigger, RLS policies |
-| `src/types/index.ts` | Thêm interfaces: `AgentDeactivationSnapshot`, update `Agent` |
-| `src/pages/AgentsPage.tsx` | Thêm nút deactivate/restore (admin only) |
-| `src/pages/AgentDetailPage.tsx` | Thêm tab lịch sử chấm dứt, info card ngày chấm dứt |
-| `src/components/DeactivateAgentModal.tsx` | Modal mới: date picker + reason + preview M1 + countdown |
-| `src/components/RestoreAgentModal.tsx` | Modal mới: confirm restore + warning + countdown |
-| `src/lib/agent-actions.ts` | Hàm `deactivateAgent()`, `restoreAgent()` reusable |
-| `src/pages/RanksPage.tsx` | Trang quản lý ranks (admin only) |
-| `src/pages/DivisionsPage.tsx` | Trang quản lý divisions (admin only) |
-| `src/components/Layout.tsx` | Thêm menu admin: Ranks, Divisions |
-
-### 6. Schema / SQL changes
-
-```sql
--- Agent deactivation snapshot
-CREATE TABLE agent_deactivation_snapshots (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id uuid NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  deactivated_at timestamptz DEFAULT now(),
-  deactivated_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  end_date date NOT NULL,
-  deactivation_reason text NOT NULL,
-  referrer_id uuid,
-  division_id uuid,
-  rank_id uuid,
-  cumulative_personal_revenue numeric,
-  snapshot_data jsonb NOT NULL,
-  restored_at timestamptz,
-  restored_by uuid REFERENCES auth.users(id) ON DELETE SET NULL
-);
-
--- Index để tìm snapshot nhanh
-CREATE INDEX idx_deactivation_snapshots_agent ON agent_deactivation_snapshots(agent_id, deactivated_at DESC);
-```
-
-### 7. Test Plan
-
-1. **Deactivate test:**
-   - Chọn agent có 3 M1 → deactivate → verify 3 `m1_transition_tasks` được tạo
-   - Verify `agent_deactivation_snapshots` có 1 record với `snapshot_data` đầy đủ
-   - Verify agent.status = 'inactive', end_date đúng
-
-2. **Restore test:**
-   - Restore agent vừa deactivate → verify agent.status = 'active'
-   - Verify `restored_at` được ghi
-   - Verify pending `m1_transition_tasks` bị cancel
-
-3. **RLS test:**
-   - Admin: thấy đủ nút deactivate, edit ranks, edit divisions
-   - Operator: chỉ thấy nút edit agent (không deactivate), không thấy menu ranks/divisions
-   - Viewer: không thấy nút edit gì cả
-
-4. **Edge case:**
-   - Deactivate agent không có M1 → không tạo transition task
-   - Restore agent sau khi M1s đã chọn T1 mới → M1s giữ nguyên T1 mới, agent phải tự rebuild downline
-
-### 8. Rollout Plan
-
-1. Deploy schema migration.
-2. Deploy code frontend (nút deactivate/restore ẩn/hiện theo role).
-3. Test trên dev với sample agent có M1.
-
-### 9. Notes
-
-- **Lý do chấm dứt:** Dropdown preset (`'nghỉ việc'`, `'vi phạm'`, `'chuyển công ty'`, `'khác'`) + textarea nếu chọn `'khác'`.
-- **Restore và downline:** Khi restore, agent được khôi phục toàn bộ từ snapshot. Các M1 transition tasks bị cancel. M1s tự động gán lại cho agent (rebuild downline). Nếu M1 đã chọn T1 mới trong thờigian deactivate → ưu tiên giữ T1 mới, không gán lại.
-- **Date picker:** Ngày chấm dứt có thể là ngày trong quá khứ (nếu admin nhập trễ) hoặc tương lai (nếi báo trước).
-
----
-
-## Hướng dẫn thêm feature mới
-
-Khi muốn phát triển feature mới:
-1. Copy template ở đầu file.
-2. Điền thông tin, đặt `status: backlog`.
-3. Xác định scope rõ ràng (in scope / out of scope).
-4. Cập nhật `status: planned` khi có technical design rõ ràng.
-5. **Chỉ code sau khi plan được review/approve.**
-6. Sau khi hoàn thành: `status: done`, ghi `CHANGELOG.md`, cập nhật `Hoàn thành` trong Feature Registry.
 
 ---
 
@@ -1935,108 +1095,6 @@ CREATE INDEX IF NOT EXISTS idx_m1_tasks_email_count
 
 ---
 
-## FEAT-014: Quản lý mẫu email dạng danh sách (list view + modal edit)
-
-- **Đề xuất**: 2026-05-29
-- **Status**: `done`
-- **Priority**: `medium`
-- **Hoàn thành**: 2026-05-29
-
-### 1. Mô tả feature
-Chuyển trang `EmailTemplatesPage` từ dạng **card mở sẵn editor** sang dạng **danh sách gọn**, click vào row để mở modal chỉnh sửa.
-
-### 2. Motivation
-- Hiện tại mỗi template render thành 1 card lớn, editor luôn mở → page dài, khó quan sát nhiều mẫu.
-- User cần overview nhanh trước khi chọn mẫu để sửa.
-
-### 3. Scope
-**In scope:**
-- Table/list hiển thị: STT, Tên mẫu, Template key, Tiêu đề, Nút "Chỉnh sửa" + "Xem trước".
-- Click row hoặc nút "Chỉnh sửa" → mở modal soạn thảo (re-use `HtmlEditor` + `Modal` component).
-- Giữ nút "Xem trước" trong modal (mở preview modal riêng).
-- Giữ nút "Lưu mẫu" trong modal.
-
-**Out of scope:**
-- Không đổi schema DB.
-- Không đổi cách `ComposeTemplateModal` dùng template.
-
-### 4. UI/UX
-- Bảng đơn giản: `# | Tên mẫu | Template key | Tiêu đề | Hành động`.
-- Modal chỉnh sửa: Tên mẫu, Template key (disabled), Tiêu đề, Nội dung (HtmlEditor đầy đủ), Preview, Lưu.
-
-### 5. Files cần sửa
-| File | Thay đổi |
-|------|----------|
-| `src/pages/EmailTemplatesPage.tsx` | Refactor UI: list table + modal editor thay vì card mở sẵn |
-
-### 6. Schema / SQL changes
-Không cần.
-
-### 7. Test Plan
-1. Load trang → hiển thị danh sách gọn, không có editor mở sẵn.
-2. Click "Chỉnh sửa" → modal mở với đúng nội dung mẫu.
-3. Sửa subject/body → bấm Lưu → toast success, list cập nhật.
-4. Bấm Xem trước trong list → modal preview hiển thị đúng rendered HTML.
-
-### 8. Notes
-- Dùng component `Modal.tsx` chung để đảm bảo consistency (portal, focus trap, Escape).
-- **2026-05-29**: Thêm placeholder `{{oldT1StaffId}}` và `{{tempT1StaffId}}` vào `defaultPlaceholders` + `previewData` (cập nhật sau khi FEAT-014/015 hoàn thành).
-
----
-
----
-
-## FEAT-015: Thêm mẫu email mới (popup trình soạn thảo)
-
-- **Đề xuất**: 2026-05-29
-- **Status**: `done`
-- **Priority**: `medium`
-- **Hoàn thành**: 2026-05-29
-
-### 1. Mô tả feature
-Thêm chức năng tạo mẫu email mới từ trang Quản lý mẫu email. Hiện tại chỉ có sửa mẫu đã có, chưa có tạo mới.
-
-### 2. Scope
-**In scope:**
-- Nút **"Thêm mẫu"** trên `EmailTemplatesPage`.
-- Modal form: Tên mẫu, Template key (auto-slug từ tên, có thể sửa tay), Tiêu đề, Nội dung (HtmlEditor).
-- Insert vào bảng `email_templates` (Supabase).
-- Validate: `template_key` unique, không để trống tên/tiêu đề.
-
-**Out of scope:**
-- Không cho phép xóa template.
-- Không hỗ trợ đổi `template_key` sau khi tạo.
-
-### 3. UI/UX
-- Nút "Thêm mẫu" màu primary, góc trên phải trang.
-- Modal giống modal sửa, thêm field **Tên mẫu** và **Template key**.
-- Template key tự động sinh từ tên (slug: lowercase, dấu `-`, bỏ dấu tiếng Việt). User có thể sửa lại.
-
-### 4. Files cần sửa
-| File | Thay đổi |
-|------|----------|
-| `src/pages/EmailTemplatesPage.tsx` | Thêm nút "Thêm mẫu", modal create với form + HtmlEditor, insert Supabase |
-
-### 5. Schema / SQL changes
-Không cần. Dùng bảng `email_templates` sẵn có.
-
-### 6. Test Plan
-1. Bấm "Thêm mẫu" → modal mở.
-2. Nhập Tên mẫu = `Thông báo test` → verify Template key auto-fill = `thong-bao-test`.
-3. Sửa Template key = `custom_key`.
-4. Nhập tiêu đề, soạn body bằng HtmlEditor.
-5. Bấm Tạo mẫu → toast success, mẫu xuất hiện trong list.
-6. Refresh trang → verify mẫu vẫn còn (đã lưu DB).
-7. Thử tạo `template_key` trùng → toast lỗi unique constraint.
-
-### 7. Notes
-- Template key sau khi tạo không cho sửa để tránh break `ComposeTemplateModal` đang query theo `template_key`.
-- `version` mặc định = 1 khi insert.
-
----
-
----
-
 ## FEAT-018: ComposeTemplateModal — Refactor email section (1 section, 4 emails, copy từng email)
 
 - **Đề xuất**: 2026-05-29
@@ -2078,308 +1136,6 @@ Refactor phần hiển thị email trong `ComposeTemplateModal`:
 ### 5. Notes
 - T1 tạm hiện tại lấy từ `t1Old` (referrer_id hoặc current_t1_id). Nếu sau này có field `temp_t1` riêng thì cập nhật.
 
-
----
-
-## FEAT-019: Mail Merge Generator (template + data → file Excel)
-
-- **Đề xuất**: 2026-06-02
-- **Status**: `done`
-- **Priority**: `medium`
-- **Hoàn thành**: 2026-06-03
-
-### 1. Mô tả feature
-Tính năng riêng biệt cho phép ngườii dùng:
-1. **Template gồm 2 file** (chỉ admin quản lý):
-   - **File export template**: File Excel mẫu sẽ xuất ra. User chỉ định **row header** — các ô trong row đó là tên các trường. Các ô trong template có thể chứa **expression động** như `(ddmmyy)`, `(R.num)`, `([dd-1]mmyy)`.
-   - **File import mẫu**: File Excel chứa các cột dữ liệu thô tương ứng. Cũng có row header để xác định tên cột.
-2. **Mapping khi tạo template** — sau khi upload cả 2 file, app hiển thị UI cho phép admin map từng **trường trong export template** vào **cột trong file import mẫu** hoặc nhập **giá trị cố định**. Mapping được **lưu vào DB**.
-3. **Expression parser** — hỗ trợ các biểu thức động trong cell của export template:
-   - `(ddmmyy)` → ngày hiện tại dạng `291225`
-   - `([dd-1]mmyy)` → ngày - 1 dạng `281225`
-   - `(R.num)` → số thứ tự dòng (2 chữ số): `01`, `02`, ...
-   - `([R.num-1])`, `([R.num+1])` → row ± 1
-   - Kết hợp: `(ddmmyy)(R.num)` → `29122503`
-4. **Generate** — user chọn template, upload file data. Nếu cột trong file data khớp với file import mẫu → **auto-apply mapping đã lưu**. Nếu không khớp → hiện mapping panel để adjust.
-5. **Preview trước** — hiển thị bảng preview ~10 dòng đầu tiên sau khi đã evaluate expression + apply mapping.
-6. **Lưu lịch sử** — file data gốc và file generate đều được lưu vào Storage + DB. Tên file generate: `{template_name}_{YY}{MM}{DD}_{HH}{MM}.xlsx`.
-7. **Download file import mẫu** — user có thể tải file import mẫu về để biết cấu trúc cột cần chuẩn bị.
-8. **Download** file kết quả về máy từ lịch sử hoặc ngay sau generate.
-
-### 2. Motivation / Why
-- Giảm thao tác thủ công: thay vì copy-paste từng dòng vào mẫu Excel, app sẽ tự động fill.
-- Dùng cho các báo cáo định kỳ, giấy tờ, hợp đồng có cấu trúc cố định nhưng data thay đổi.
-- Expression parser giúp tự động điền ngày tháng, số thứ tự dòng mà không cần có trong file data.
-- Tách biệt hoàn toàn với flow import agents — không ảnh hưởng đến DB agents.
-
-### 3. Scope
-
-**In scope:**
-- Quản lý template Excel (admin): upload **2 file** (export template + import mẫu), chỉ định row header cho mỗi file, mapping trường → cột data hoặc giá trị cố định, đặt tên, xóa.
-- Expression parser trong export template: `dd`, `mm`, `yy`, `yyyy`, `R.num` với phép tính `+n`/`-n`.
-- Trang generate (tất cả authenticated user): chọn template, tải file import mẫu, upload file data, nhập row header, auto-apply/adjust mapping, preview, generate, download.
-- Output: 1 file Excel với header row được replicate theo số dòng data, các row khác giữ nguyên.
-- Lưu lịch sử generate: file data gốc + file generate vào Storage, metadata vào DB.
-- Tên file generate: `{template_name}_{YY}{MM}{DD}_{HH}{MM}.xlsx`.
-
-**Out of scope:**
-- Không hỗ trợ expression trong tên sheet, header/footer, hay công thức Excel.
-- Không hỗ trợ nhiều sheet template (chỉ sheet đầu tiên).
-- Không integrate với agents DB hay gửi email.
-- Không chỉnh sửa file đã generate sau khi lưu (chỉ download lại).
-
-### 4. Technical Design
-
-#### 4.1 Storage
-- **Supabase Storage bucket `excel-templates`** để lưu cả 2 file template (export + import mẫu).
-- **Supabase Storage bucket `excel-generations`** để lưu file data gốc và file generate `.xlsx`.
-- **Bảng `excel_templates`** lưu metadata template:
-  - `id`, `name`, `description`, `storage_path` (export template), `import_template_path` (import mẫu), `template_header_row` (integer, 0-based), `import_header_row` (integer, 0-based), `fields` (JSONB — tên trường từ export template), `import_headers` (JSONB — headers từ import mẫu), `column_mapping` (JSONB: `{fieldName -> {type, value}}`), `created_by`, `created_at`, `updated_at`.
-- **Bảng `excel_generation_logs`** lưu lịch sử generate:
-  - `id`, `template_id` (FK → excel_templates, nullable), `original_file_name`, `original_storage_path`, `generated_file_name`, `generated_storage_path`, `row_count`, `matched_placeholders` (JSONB), `created_by`, `created_at`.
-- Khi upload template mới:
-  1. Upload **export template** lên Storage.
-  2. Upload **import mẫu** lên Storage.
-  3. Đọc export template, lấy tên trường từ row header.
-  4. Đọc import mẫu, lấy headers từ row header.
-  5. Admin chọn mapping trong UI (cột data hoặc giá trị cố định).
-  6. Lưu metadata + fields + import_headers + column_mapping vào DB.
-- Khi generate:
-  1. Upload file data lên Storage bucket `excel-generations/originals/{uuid}.xlsx`.
-  2. Sau khi generate xong, upload file kết quả lên Storage bucket `excel-generations/generated/{uuid}.xlsx`.
-  3. Insert row vào `excel_generation_logs` với metadata đầy đủ.
-
-#### 4.2 Generate Flow
-```
-User chọn template (đã có column_mapping lưu sẵn)
-  → Hiển thị: fields, mapping đã lưu, link "Tải file import mẫu"
-  → User upload file data (.xlsx/.csv)
-  → User nhập row header cho file data
-  → App đọc data file (SheetJS → headers[] + rows[])
-  → So sánh headers với import_headers đã lưu:
-     - Nếu khớp → auto-apply saved mapping → build preview luôn
-     - Nếu không khớp → hiện Mapping Panel để user adjust
-  → Hiển thị bảng preview + match status
-  → User xem preview đúng → bấm Generate
-  → Với toàn bộ row data (row i từ 1..N):
-      - Clone header row từ template
-      - Với mỗi cell trong header row:
-          1. Evaluate expression trong cell (dd/mm/yy/R.num...)
-          2. Apply mapping: nếu trường đã map → thay bằng giá trị data hoặc text cố định
-      - Insert vào workbook
-  → Các row khác trong template (trước/sau header row) giữ nguyên
-  → Tên file: {template_name}_{YY}{MM}{DD}_{HH}{MM}.xlsx
-  → Ghi workbook mới → upload lên Storage bucket excel-generations/generated
-  → Insert log vào excel_generation_logs
-  → Auto-download file kết quả
-```
-
-#### 4.3 Expression Rules
-- **Cú pháp:** Bọc trong dấu ngoặc đơn `( ... )`.
-- **Token date:** `dd` (ngày 01-31), `mm` (tháng 01-12), `yy` (năm 2 số), `yyyy` (năm 4 số).
-- **Token row:** `R.num` (số thứ tự dòng, 1-based, zero-padded 2 chữ số).
-- **Phép tính:** Có thể bọc trong `[]` với `+n` hoặc `-n`. Ví dụ: `[dd-1]`, `[R.num+1]`.
-- **Kết hợp:** Các token có thể viết liền nhau hoặc xen kẽ literal. Ví dụ: `(ddmmyy)`, `(dd/mm/yyyy)`, `(ddmmyy)(R.num)`.
-- **Xử lý ngày:** `dd±n` tự động xử lý chuyển tháng/năm (JavaScript Date).
-- **Evaluate order:** Tất cả date offsets trong cùng 1 expression được apply vào 1 working date trước, sau đó format từng token.
-
-#### 4.4 Mapping Rules
-- **Saved mapping:** Định nghĩa 1 lần khi admin tạo template, lưu trong `excel_templates.column_mapping`.
-- **Mapping value:** Mỗi trường có 2 loại:
-  - `type: 'column'` → `value` là tên cột trong file data.
-  - `type: 'fixed'` → `value` là text cố định, gán cho tất cả dòng.
-- **Auto-apply:** Khi user upload file data, nếu headers khớp với `import_headers` đã lưu → tự động áp dụng mapping.
-- **Manual adjust:** Nếu file data có cột khác với mẫu → hiện Mapping Panel cho user chọn lại hoặc nhập text cố định.
-- **Unmapped:** Trường không được map → giữ nguyên giá trị trong template sau khi evaluate expression.
-- Hiển thị match status: danh sách trường + mapping đã chọn (✅) / chưa map (⚠️).
-
-#### 4.5 Preview Table
-- Sau khi user xác nhận mapping, app build preview từ ~10 dòng data đầu tiên.
-- Hiển thị dạng bảng HTML với các trường từ template header row sau khi evaluate expression + apply mapping.
-- Nút "Generate" chỉ active sau khi preview đã render.
-- Trong preview table có link "Chỉnh sửa mapping" để quay lại mapping panel.
-
-#### 4.6 Tên file generate
-- Format: `{template_name}_{YY}{MM}{DD}_{HH}{MM}.xlsx`
-- Ví dụ: Template tên `bao_cao` → `bao_cao_260602_1453.xlsx`
-- `template_name`: sanitize (bỏ dấu, space → `_`, lowercase) từ `excel_templates.name`.
-- Thờigian lấy theo giờ hiện tại của client (GMT+7 / `Asia/Ho_Chi_Minh`).
-
-#### 4.7 Libraries
-- `xlsx` (SheetJS) — đã có trong project.
-- Không cần thêm dependency mới.
-
-### 5. UI/UX
-
-#### 5.1 Trang mới: `/excel-generator`
-- **Tab 1 — Generate:**
-  - Dropdown chọn template (load từ DB).
-  - Khi chọn template → hiển thị: tên, mô tả, fields, mapping đã lưu, link **"Tải file import mẫu"**.
-  - Dropzone upload file data (chỉ nhận .xlsx, .csv).
-  - Input nhập **row header** cho file data (tính từ 1).
-  - Sau upload:
-    - Nếu headers khớp mẫu → **auto-apply mapping** → hiện preview luôn.
-    - Nếu headers khác → **Mapping Panel:** dropdown chọn cột hoặc input text cố định cho từng trường. Nút **"Xác nhận mapping"**.
-  - Preview gồm:
-    - **Match status:** trường + mapping đã chọn (✅) / chưa map (⚠️).
-    - **Preview table:** ~10 dòng đầu sau evaluate + mapping. Có link **"Chỉnh sửa mapping"**.
-  - Nút **"Generate"** (disabled nếu chưa có preview).
-  - Sau generate → toast + auto-download.
-- **Tab 2 — Lịch sử Generate:**
-  - Bảng danh sách: Template, File gốc, File generate, Số dòng, Ngày tạo, Ngườii tạo, Hành động.
-  - Nút **"Download"** cho từng dòng lịch sử.
-  - Pagination nếu nhiều hơn 20 dòng.
-- **Tab 3 — Quản lý Template (chỉ admin):**
-  - Bảng danh sách template: Tên, Mô tả, Fields, Mapping status (x/x đã map), Ngày tạo, Hành động.
-  - Nút **"Thêm template"** → modal upload **2 file** + nhập row header + detect fields/headers + mapping panel + đặt tên + mô tả.
-  - Nút **"Tải file import mẫu"** → download file import mẫu.
-  - Nút **"Xóa"** → confirm xóa (xóa cả DB + cả 2 file trong Storage).
-
-#### 5.2 Navigation
-- Thêm menu item **"Excel Generator"** trong sidebar (dưới Upload, trên Emails).
-
-### 6. Files cần sửa / tạo
-
-| File | Thay đổi |
-|------|----------|
-| `webapp/supabase/migrations/017_excel_templates.sql` | **Mới** — Bảng `excel_templates` (có `import_template_path`, `template_header_row`, `import_header_row`, `fields`, `import_headers`, `column_mapping`) + `excel_generation_logs` (`template_id` nullable) + RLS policies |
-| `webapp/src/types/index.ts` | Thêm `ExcelTemplate` interface (có `import_template_path`, `template_header_row`, `import_header_row`, `fields`, `import_headers`, `column_mapping`) |
-| `webapp/src/pages/ExcelGeneratorPage.tsx` | **Mới** — Trang chính, parse các trường JSONB mới từ Supabase |
-| `webapp/src/components/excel-generator/GeneratePanel.tsx` | **Mới** — Tab generate: auto-apply saved mapping, adjust mapping, evaluate expression, download import mẫu |
-| `webapp/src/components/excel-generator/GenerationHistory.tsx` | **Mới** — Tab lịch sử generate |
-| `webapp/src/components/excel-generator/TemplateManager.tsx` | **Mới** — Tab quản lý: hiển thị mapping status, download import mẫu, xóa cả 2 files |
-| `webapp/src/components/excel-generator/TemplateUploadModal.tsx` | **Mới** — Modal upload **2 file** + row header + detect fields/headers + mapping panel |
-| `webapp/src/lib/excel-generator.ts` | **Mới** — Expression parser, `detectFields()`, `readDataFile()`, `generateWorkbook()`, `buildPreview()`, file name utils |
-| `webapp/src/components/Layout.tsx` | Thêm menu item "Excel Generator" trong sidebar |
-
-### 7. Schema / SQL changes
-
-```sql
--- Bảng metadata template
-CREATE TABLE IF NOT EXISTS public.excel_templates (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  name text NOT NULL,
-  description text,
-  storage_path text NOT NULL,                 -- file export template
-  import_template_path text,                  -- file import mẫu
-  template_header_row integer NOT NULL DEFAULT 0, -- row chứa tên trường trong export template (0-based)
-  import_header_row integer NOT NULL DEFAULT 0,   -- row chứa tên trường trong import mẫu (0-based)
-  fields jsonb DEFAULT '[]',                  -- tên trường từ export template header row
-  import_headers jsonb DEFAULT '[]',          -- headers đã detect từ file import mẫu
-  column_mapping jsonb DEFAULT '{}',          -- mapping: { fieldName -> {type, value} }
-  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_excel_templates_created_by ON public.excel_templates(created_by);
-CREATE INDEX IF NOT EXISTS idx_excel_templates_name ON public.excel_templates(name);
-
-ALTER TABLE public.excel_templates ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow all authenticated to read excel_templates" ON public.excel_templates;
-CREATE POLICY "Allow all authenticated to read excel_templates"
-  ON public.excel_templates FOR SELECT TO authenticated USING (true);
-
-DROP POLICY IF EXISTS "Allow admin to insert excel_templates" ON public.excel_templates;
-CREATE POLICY "Allow admin to insert excel_templates"
-  ON public.excel_templates FOR INSERT TO authenticated WITH CHECK (
-    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
-  );
-
-DROP POLICY IF EXISTS "Allow admin to delete excel_templates" ON public.excel_templates;
-CREATE POLICY "Allow admin to delete excel_templates"
-  ON public.excel_templates FOR DELETE TO authenticated USING (
-    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
-  );
-
--- Bảng lịch sử generate
-CREATE TABLE IF NOT EXISTS public.excel_generation_logs (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  template_id uuid REFERENCES public.excel_templates(id) ON DELETE SET NULL,
-  original_file_name text NOT NULL,
-  original_storage_path text NOT NULL,
-  generated_file_name text NOT NULL,
-  generated_storage_path text NOT NULL,
-  row_count integer NOT NULL DEFAULT 0,
-  matched_placeholders jsonb DEFAULT '[]',
-  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_excel_generation_logs_created_by ON public.excel_generation_logs(created_by);
-CREATE INDEX IF NOT EXISTS idx_excel_generation_logs_template ON public.excel_generation_logs(template_id);
-CREATE INDEX IF NOT EXISTS idx_excel_generation_logs_created_at ON public.excel_generation_logs(created_at DESC);
-
-ALTER TABLE public.excel_generation_logs ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow all authenticated to read own excel_generation_logs" ON public.excel_generation_logs;
-CREATE POLICY "Allow all authenticated to read own excel_generation_logs"
-  ON public.excel_generation_logs FOR SELECT TO authenticated USING (
-    created_by = auth.uid() OR
-    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
-  );
-
-DROP POLICY IF EXISTS "Allow all authenticated to insert excel_generation_logs" ON public.excel_generation_logs;
-CREATE POLICY "Allow all authenticated to insert excel_generation_logs"
-  ON public.excel_generation_logs FOR INSERT TO authenticated WITH CHECK (created_by = auth.uid());
-
-DROP POLICY IF EXISTS "Allow admin to delete excel_generation_logs" ON public.excel_generation_logs;
-CREATE POLICY "Allow admin to delete excel_generation_logs"
-  ON public.excel_generation_logs FOR DELETE TO authenticated USING (
-    EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
-  );
-```
-
-**Supabase Storage:**
-- Tạo bucket `excel-templates` — lưu file template.
-- Tạo bucket `excel-generations` — lưu file data gốc và file generate.
-- Policies bucket tương tự như trước.
-
-### 8. API / Integration changes
-- Không cần API mới ngoài Supabase Storage + DB.
-- Frontend đọc template trực tiếp từ Storage qua `supabase.storage.from('excel-templates').download(path)`.
-
-### 9. Test Plan
-1. **Upload template (admin):**
-   - Upload export template có row 3 chứa: `A`, `B`, `C`, `D`, `E`, `F`.
-   - Upload import mẫu có row 1 chứa: `1`, `2`, `3`.
-   - Mapping: A→1, B→2, C→3, D→2, E→1, F→"Công ty ERA".
-   - Verify DB lưu đúng metadata + fields + mapping.
-2. **Expression test:**
-   - Export template có cell chứa `(ddmmyy)(R.num)` ở row 3.
-   - Generate với 3 dòng data, ngày 29/12/2025.
-   - Verify kết quả: `29122501`, `29122502`, `29122503`.
-3. **Preview (user):**
-   - Chọn template, upload file data khớp headers.
-   - Verify auto-apply mapping, preview hiển thị đúng.
-4. **Missing column / adjust mapping:**
-   - Upload file data thiếu cột.
-   - Verify hiện Mapping Panel, user có thể chọn lại hoặc nhập text cố định.
-5. **Generate + Download:**
-   - Bấm Generate → verify toast + auto download.
-   - Verify tên file đúng format.
-   - Verify file generate có đúng số dòng data + expression evaluated đúng.
-6. **Xóa template:**
-   - Admin bấm xóa → verify row DB bị xóa + cả 2 file Storage bị xóa.
-
-### 10. Rollout Plan
-1. Chạy migration `017_excel_templates.sql` trên Supabase SQL Editor.
-2. Tạo bucket `excel-templates` trong Supabase Dashboard → Storage.
-3. Tạo bucket `excel-generations` trong Supabase Dashboard → Storage.
-4. Set Storage policies cho cả 2 bucket.
-5. Deploy code frontend.
-6. Test với template mẫu + data mẫu.
-
-### 11. Notes
-- **SheetJS (`xlsx`) đã có sẵn** trong project.
-- **File template nên đơn giản:** 1 sheet, expression trong cell values (không trong công thức).
-- **Performance:** File data < 5000 dòng nên xử lý ngay trong browser.
-- **Encoding:** Hỗ trợ UTF-8 để tiếng Việt không bị lỗi font.
-- **Expression và mapping:** Mapping có ưu tiên cao hơn expression. Nếu cell vừa có expression vừa nằm ở trường đã map → giá trị mapping sẽ ghi đè.
-
-
----
 
 ---
 
@@ -3043,3 +1799,94 @@ Xem chi tiết đầy đủ tại `Yuzi/docs/twenty-ui-ux-reference/`:
 - **Dependencies cần cài** (nếu chưa có):
   - `react-hook-form` + `@hookform/resolvers` + `zod` (Phase 5).
   - `react-window` (Phase 4, optional — chỉ cài nếu virtualized scrolling cần thiết sau test performance).
+
+---
+
+---
+
+## FEAT-025: Email Activities Table cho M1 Transition Tracking
+
+- **Đề xuất**: 2026-06-11
+- **Status**: `done`
+- **Priority**: `medium`
+
+#### 1. Mô tả feature
+Tạo bảng `email_activities` riêng để audit việc copy/gửi email trong M1 Transition. Thay thế logic cũ (tính khi Resend API thành công) bằng logic mới: tính khi user bấm "Copy nội dung" trong `ComposeTemplateModal`.
+
+#### 2. Motivation / Why
+- Hiện tại: `email_sent_count` chỉ tăng khi `SendEmailModal` gọi Resend Edge Function thành công.
+- Vấn đề: Chưa dùng Resend thật trong production. Operator thực tế copy nội dung rồi paste vào Gmail/Zalo/Outlook.
+- Giải pháp: Track mỗi lần copy vào bảng audit riêng (`email_activities`), có đầy đủ: ai copy, khi nào, nội dung gì.
+
+#### 3. Scope
+**In scope:**
+- Tạo bảng `email_activities` (migration SQL)
+- RLS policies
+- PostgreSQL trigger tự động cập nhật `email_sent_count` trong `m1_transition_tasks`
+- TypeScript interface `EmailActivity`
+- Insert record khi user bấm "Copy nội dung" trong `ComposeTemplateModal`
+- Xóa logic cũ trong `SendEmailModal`
+
+**Out of scope:**
+- Không track "Copy email"
+- Không thêm UI xem lịch sử chi tiết
+- Không thay đổi UI `M1TransitionList`
+
+#### 4. Technical Design
+- Bảng `email_activities` có FK đến `m1_transition_tasks(id)`
+- Trigger `trg_update_m1_email_count`: AFTER INSERT ON `email_activities` → UPDATE `m1_transition_tasks` (count++, last_sent=NOW())
+- Lý do dùng trigger: data consistency, frontend query đơn giản, project đã có nhiều trigger
+
+#### 5. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `supabase/migrations/018_email_activities.sql` | Tạo mới: bảng, index, RLS, trigger |
+| `src/types/index.ts` | Thêm `EmailActivity` interface |
+| `src/components/ComposeTemplateModal.tsx` | Insert `email_activities` khi copy, invalidate query |
+| `src/components/SendEmailModal.tsx` | Xóa logic update `email_sent_count` cũ, xóa prop `m1TaskId` |
+
+#### 6. Schema / SQL changes
+```sql
+CREATE TABLE IF NOT EXISTS public.email_activities (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  task_id UUID NOT NULL REFERENCES public.m1_transition_tasks(id) ON DELETE CASCADE,
+  action_type TEXT NOT NULL CHECK (action_type IN ('copy_content', 'send')),
+  content_preview TEXT,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_email_activities_task_id ON public.email_activities(task_id);
+
+-- Trigger cập nhật count
+CREATE OR REPLACE FUNCTION public.handle_email_activity_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.m1_transition_tasks
+  SET email_sent_count = COALESCE(email_sent_count, 0) + 1,
+      last_email_sent_at = NOW()
+  WHERE id = NEW.task_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER trg_update_m1_email_count
+AFTER INSERT ON public.email_activities
+FOR EACH ROW EXECUTE FUNCTION public.handle_email_activity_insert();
+```
+
+#### 7. Test Plan
+1. Tạo M1 task → mở ComposeTemplateModal → bấm "Copy nội dung"
+2. Verify `email_activities` có 1 record, `m1_transition_tasks.email_sent_count` = 1
+3. Bấm "Copy email" → không tạo record
+4. Bấm "Copy nội dung" lần 2 → count = 2
+
+#### 8. Rollout Plan
+- Chạy migration trong Supabase SQL Editor
+- Deploy code frontend
+- Không cần data migration
+
+#### 9. Notes
+- Các task cũ đã có `email_sent_count > 0` giữ nguyên (gap audit chấp nhận được)
+- `content_preview` strip HTML bằng regex, cắt 200 ký tự
+

@@ -265,6 +265,15 @@ export interface Notification {
 
 // FEAT-001: Email Logs
 
+export interface EmailActivity {
+  id: string
+  task_id: string
+  action_type: 'copy_content' | 'send'
+  content_preview: string | null
+  created_by: string | null
+  created_at: string
+}
+
 export interface EmailLog {
   id: string
   sent_at: string
@@ -332,4 +341,20 @@ export interface ExcelGenerationLog {
   matched_placeholders: string[]
   created_by: string | null
   created_at: string
+}
+
+// FEAT-023: Agent upline rank lookup
+
+export interface AgentUplineRankResult {
+  staff_id: string
+  t1_staff_id: string | null
+  t2_staff_id: string | null
+  t3_staff_id: string | null
+  referrer_staff_id: string | null
+  dd_agents: string | null
+  sdd_agents: string | null
+  gdd_agents: string | null
+  sgdd_agents: string | null
+  rgdd_agents: string | null
+  egdd_agents: string | null
 }

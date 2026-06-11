@@ -10,7 +10,7 @@ import TextInput from '../../ui/input/TextInput'
 
 const defaultPlaceholders = [
   '{{agentName}}', '{{staffId}}', '{{oldT1Name}}', '{{oldT1Email}}', '{{oldT1StaffId}}',
-  '{{newT1Name}}', '{{newT1Email}}', '{{newT1StaffId}}', '{{date}}', '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}', '{{tempT1StaffId}}',
+  '{{newT1Name}}', '{{newT1Email}}', '{{newT1StaffId}}', '{{date}}', '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}', '{{tempT1StaffId}}', '{{b3Deadline}}',
 ]
 
 const previewData: Record<string, string> = {
@@ -19,6 +19,7 @@ const previewData: Record<string, string> = {
   '{{newT1Name}}': 'Lê Thị D', '{{newT1Email}}': 'ltd@era.com', '{{newT1StaffId}}': 'TV22904',
   '{{date}}': '25/05/2026', '{{deadlineDate}}': '24/06/2026', '{{notifyDate}}': '25/05/2026',
   '{{tempT1Name}}': 'Nguyễn Văn E', '{{tempT1StaffId}}': 'TV99999',
+  '{{b3Deadline}}': '28/05/2026',
 }
 
 function slugify(str: string): string {

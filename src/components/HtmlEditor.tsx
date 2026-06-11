@@ -19,7 +19,7 @@ type Mode = 'visual' | 'code' | 'preview'
 const defaultPlaceholders = [
   '{{agentName}}', '{{staffId}}', '{{oldT1Name}}', '{{oldT1Email}}',
   '{{newT1Name}}', '{{newT1Email}}', '{{newT1StaffId}}', '{{date}}',
-  '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}',
+  '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}', '{{b3Deadline}}',
 ]
 
 function sanitizeHtml(dirty: string): string {

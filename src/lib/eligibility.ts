@@ -21,7 +21,7 @@ function daysSince(dateStr: string | null): number {
   return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-interface AgentLike {
+export interface AgentLike {
   id: string
   staff_id: string
   full_name: string
@@ -34,7 +34,7 @@ interface AgentLike {
   status: string | null
 }
 
-interface ChangeLike {
+export interface ChangeLike {
   agent_id: string
   new_t1_id: string | null
   change_date: string
@@ -171,17 +171,24 @@ export function isBusinessDay(dateStr: string, holidays: Set<string>): boolean {
   return !holidays.has(dateStr.slice(0, 10))
 }
 
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export function addBusinessDays(
   startDateStr: string,
   days: number,
   holidays: Set<string>
 ): Date {
-  const date = new Date(startDateStr)
-  date.setHours(0, 0, 0, 0)
+  const [y, m, d] = startDateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
   let remaining = days
   while (remaining > 0) {
     date.setDate(date.getDate() + 1)
-    const dStr = date.toISOString().slice(0, 10)
+    const dStr = formatLocalDate(date)
     if (isBusinessDay(dStr, holidays)) {
       remaining--
     }

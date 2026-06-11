@@ -138,7 +138,7 @@
 - Local repo nằm ở `track-t1-changes/webapp/.git` (không phải root `Main`).
 
 ### 5.2 Feature/Bug chưa có plan → không code
-- Dù là refactor nhỏ hay sửa UI, nếu chưa có plan trong `PLAN-feature-dev.md` hoặc `PLAN-bug-fixes.md` → phải hỏi user trước.
+- Dù là refactor nhỏ hay sửa UI, nếu chưa có plan trong `PLAN-feature-dev.md` hoặc `PLAN-bug-fixes.md` → phải hỏi user trước. (Các plan đã done/fixed lưu ở `PLAN-feature-archive.md` / `PLAN-bug-archive.md`)
 - Refactor nhỏ (< 3 files, không đổi behavior): có thể ghi vào `KNOWLEDGE.md` (coding guideline) rồi làm luôn khi có xác nhận.
 - Refactor lớn: phải có plan trong `PLAN-feature-dev.md` với prefix `REFACTOR-xxx`.
 
@@ -199,6 +199,12 @@
 - `formatDateToken()` trong expression parser — dùng `Intl.DateTimeFormat` với `timeZone: 'Asia/Ho_Chi_Minh'` để lấy `dd`, `mm`, `yy`, `yyyy`.
 - **Lưu ý đặc biệt:** SheetJS `cellDates: true` có known issue với timezone offset. Tính ngày từ serial + 1900 epoch là cách chính xác nhất.
 
+### 4.9 Vitest setup với React 19 + `@testing-library/jest-dom` (FEAT-024)
+- Dùng `import '@testing-library/jest-dom/vitest'` trong `src/test/setup.ts` — **KHÔNG DÙNG** `import '@testing-library/jest-dom'` (sẽ bị lỗi `expect is not defined`).
+- `vitest.config.ts` cần `test.environment: 'jsdom'` và `setupFiles: ['./src/test/setup.ts']`.
+- TypeScript strict mode (`verbatimModuleSyntax`, `noUnusedLocals`): không dùng `globals: true`, nên import `describe, it, expect` từ `vitest` trong từng test file.
+- Mock `Date.now()` bằng `vi.useFakeTimers()` + `vi.setSystemTime()` để test `daysSince()` không bị flaky theo ngày chạy.
+
 ---
 
 ## 6. Known Limitations (đang theo dõi)
@@ -214,3 +220,4 @@
 | ~~Excel Generator: Expression parser bị override khi map trùng tên~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-bug-fixes.md` BUG-015 |
 | ~~Excel Generator: Chưa hỗ trợ inline field reference `{{Field}}`~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-feature-dev.md` FEAT-020 |
 | ~~Excel Generator: Chưa hỗ trợ edit template đã lưu~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-feature-dev.md` FEAT-021 |
+| ~~`addBusinessDays()` bị lệch timezone do `toISOString()` dùng UTC~~ | **Đã fix (2026-06-10)** | Parse bằng `new Date(y, m-1, d)` + helper `formatLocalDate()` |

@@ -6,10 +6,11 @@ import { useToast } from '../components/Toast'
 import GeneratePanel from '../components/excel-generator/GeneratePanel'
 import GenerationHistory from '../components/excel-generator/GenerationHistory'
 import TemplateManager from '../components/excel-generator/TemplateManager'
+import UplineLookupPanel from '../components/excel-generator/UplineLookupPanel'
 import PageHeader from '../ui/layout/PageHeader'
 import type { ExcelTemplate, ExcelGenerationLog } from '../types'
 
-type TabKey = 'generate' | 'history' | 'templates'
+type TabKey = 'generate' | 'history' | 'templates' | 'upline'
 
 export default function ExcelGeneratorPage() {
   const { user } = useAuth()
@@ -84,6 +85,7 @@ export default function ExcelGeneratorPage() {
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'generate', label: 'Generate' },
     { key: 'history', label: 'Lịch sử' },
+    { key: 'upline', label: 'Tra cứu upline' },
   ]
   if (isAdmin) {
     tabs.push({ key: 'templates', label: 'Quản lý Template' })
@@ -136,6 +138,10 @@ export default function ExcelGeneratorPage() {
           loading={loadingTemplates}
           onChange={fetchTemplates}
         />
+      )}
+
+      {activeTab === 'upline' && (
+        <UplineLookupPanel />
       )}
     </div>
   )

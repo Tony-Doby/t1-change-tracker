@@ -5,7 +5,114 @@
 
 ---
 
+## 2026-06-11
+
+### 62. Thêm placeholder `{{b3Deadline}}` vào email template
+
+**Mô tả:** Bổ sung placeholder `{{b3Deadline}}` để hiển thị ngày hết hạn 3 ngày làm việc của B2 (ngày xác nhận B2 + 3 ngày làm việc, trừ T7/CN/ngày lễ) trong email template.
+
+**Files sửa:**
+- `webapp/src/components/email-templates/TemplateEditModal.tsx` — thêm `{{b3Deadline}}` vào danh sách placeholder + preview data (`28/05/2026`)
+- `webapp/src/components/email-templates/TemplatePreviewModal.tsx` — thêm preview data `{{b3Deadline}}`
+- `webapp/src/components/HtmlEditor.tsx` — thêm `{{b3Deadline}}` vào danh sách placeholder mặc định
+- `webapp/src/components/SendEmailModal.tsx` — thêm prop `b3Deadline`, thêm vào `previewData` và `defaultPlaceholders`
+- `webapp/src/components/ComposeTemplateModal.tsx` — load `step2_confirmed_at` từ `t1_requests`, tính B3 deadline bằng `addBusinessDays(step2_confirmed_at, 3, holidays)`, truyền xuống `SendEmailModal`
+
+**Logic:**
+- Nếu request đang active có `step2_confirmed_at`, `{{b3Deadline}}` = `addBusinessDays(step2_confirmed_at, 3, holidays)` → format `dd/mm/yyyy`
+- Nếu chưa có `step2_confirmed_at` (chưa qua B2), placeholder trả về chuỗi rỗng
+
+---
+
+## 2026-06-11
+
+### 63. Feature FEAT-025: Email Activities Table cho M1 Transition Tracking
+
+**Mô tả:** Tạo bảng `email_activities` riêng để audit việc copy email trong M1 Transition. Thay thế logic cũ (tính khi Resend thành công) bằng logic mới: tính khi user bấm "Copy nội dung" trong `ComposeTemplateModal`.
+
+**Files tạo:**
+- `webapp/supabase/migrations/018_email_activities.sql` — bảng `email_activities`, index, RLS policies, trigger `trg_update_m1_email_count`
+
+**Files sửa:**
+- `webapp/src/types/index.ts` — thêm `EmailActivity` interface
+- `webapp/src/components/ComposeTemplateModal.tsx` — `copyContent()` thành async, insert record vào `email_activities` + invalidate query M1 transitions
+- `webapp/src/components/SendEmailModal.tsx` — xóa logic update `email_sent_count` trực tiếp, xóa prop `m1TaskId`
+
+**Trigger:** `handle_email_activity_insert()` — AFTER INSERT ON `email_activities` → tự động tăng `email_sent_count` và cập nhật `last_email_sent_at` trong `m1_transition_tasks`
+
+**Kết quả:** Build pass. Logic đếm email giờ dựa trên hành vi copy thực tế, có audit trail đầy đủ.
+
+---
+
 ## 2026-06-10
+
+### 61. Feature FEAT-024: Testing Infrastructure — Smoke Test + Unit Test (Vitest)
+
+**Mô tả:** Triển khai 2 lớp bảo vệ regression: Smoke Test Checklist (thủ công) + Unit Test tự động (Vitest).
+
+**Technical Design:**
+- Script `npm run verify`: `tsc -b && vite build && eslint .` — type check + build + lint
+- Script `npm run test`: `vitest run` — unit test tự động
+- `vitest.config.ts`: environment `jsdom`, setup file `src/test/setup.ts`, include `src/**/*.test.ts`
+- `src/test/setup.ts`: import `@testing-library/jest-dom/vitest` để dùng matchers (toBe, toMatch, v.v.)
+
+**Files tạo:**
+- `webapp/vitest.config.ts`
+- `webapp/src/test/setup.ts`
+- `webapp/docs/SMOKE-TEST.md` — checklist 15 routes + 5 business logic luồng cốt lõi
+- `webapp/src/lib/date-utils.test.ts` — 8 tests (formatDate, formatDateTime, formatTime, timezone Asia/Ho_Chi_Minh)
+- `webapp/src/lib/eligibility.test.ts` — 26 tests (checkEligibility, getT1Capacity, isBusinessDay, addBusinessDays, checkCanChooseNewT1, getM1ImpactSummary)
+- `webapp/src/lib/excel-generator.test.ts` — 21 tests (evaluateExpression, replaceExpressionsInCell — ddmmyy, [dd-1], R.num, literal mix)
+
+**Files sửa:**
+- `webapp/package.json` — thêm scripts `verify`, `test`, `test:watch`, `test:coverage`; thêm devDependencies (`vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `@vitest/coverage-v8`)
+- `webapp/src/lib/eligibility.ts` — export thêm `AgentLike` và `ChangeLike` (để test import)
+
+**Kết quả:** 55 tests pass. Build pass. ESLint có lỗi legacy từ code cũ (không phải do feature này).
+
+**Fix bug phát hiện nhờ test:** `addBusinessDays()` trong `eligibility.ts` bị lệch timezone do `setHours(0,0,0,0)` dùng local time làm lùi UTC date, và `toISOString().slice(0,10)` dùng UTC trong khi `setDate()` dùng local time.
+- Fix: Parse `startDateStr` bằng `new Date(y, m-1, d)` (local timezone) thay vì `new Date(startDateStr)` (UTC). Thêm helper `formatLocalDate()` dùng local getters để tạo YYYY-MM-DD string.
+- Test cập nhật: dùng local getters (`getFullYear()`, `getMonth()`, `getDate()`) thay vì `toISOString()` để assert.
+
+---
+
+## 2026-06-10
+
+### Docs: Archive PLAN-feature-dev.md & PLAN-bug-fixes.md
+
+**Mô tả:** Tách các plan đã hoàn thành / đã fix sang file archive riêng để giảm dung lượng file active, dễ tra cứu.
+
+**Files tạo:**
+- `webapp/docs/PLAN-feature-archive.md` — chứa 10 feature plan đã `done` (FEAT-001, 003, 006, 007, 014, 015, 019, 020, 021, 023)
+- `webapp/docs/PLAN-bug-archive.md` — chứa 32 bug plan đã `fixed` (BUG-001 → BUG-030, 032, và các bug khác)
+
+**Files sửa:**
+- `webapp/docs/PLAN-feature-dev.md` — giữ lại 12 item active (backlog/planned/in_progress/partial/fixed)
+- `webapp/docs/PLAN-bug-fixes.md` — giữ lại 1 item active (BUG-021 planned)
+
+---
+
+## 2026-06-10
+
+### 60. Feature FEAT-023: Tra cứu upline theo rank trong Excel Generator
+
+**Mô tả:** Thêm tab "Tra cứu upline" trong trang Excel Generator. User upload file CSV/Excel chỉ chứa cột `staff_id`, hệ thống tra cứu và trả về T1, T2, T3, ngườii giới thiệu và danh sách agent tuyến trên có rank DD/SDD/GDD/SGDD/RGDD/EGDD (comma-separated nếu nhiều ngườii cùng rank). Hỗ trợ preview trên UI và tải xuống Excel.
+
+**Technical Design:**
+- Tạo PostgreSQL RPC `get_agent_upline_ranks(p_staff_ids TEXT[])` dùng self-join 3 lần để lấy T1/T2/T3 + referrer, sau đó aggregate bằng `STRING_AGG` + `CASE` để nhóm theo rank (case-insensitive qua `ILIKE`).
+- `UplineLookupPanel.tsx`: upload zone kéo thả, parse CSV/XLSX qua `readCsvFile`/`readDataFile`, validate cột `staff_id`, gọi RPC, preview table, export Excel qua SheetJS.
+- `ExcelGeneratorPage.tsx`: Thêm tab `upline` cạnh `generate`, `history`, `templates`.
+- `types/index.ts`: Thêm `AgentUplineRankResult`.
+
+**Files tạo:**
+- `webapp/supabase/migrations/016_agent_upline_ranks.sql`
+- `webapp/src/components/excel-generator/UplineLookupPanel.tsx`
+
+**Files sửa:**
+- `webapp/src/types/index.ts`
+- `webapp/src/pages/ExcelGeneratorPage.tsx`
+
+**Lưu ý:** `referrer_id` hiện tại được DB trigger đồng bộ với `current_t1_id`, nên cột "Ngườii giới thiệu" trong kết quả sẽ luôn bằng T1.
 
 ### 58. Fix BUG-032: Excel Generator — Ngày trong tab Generate bị giảm 1 ngày khi export
 

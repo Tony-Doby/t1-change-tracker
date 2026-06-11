@@ -13,14 +13,14 @@ interface Props {
   templateSubject: string
   templateBody: string
   templateKey: string
-  m1TaskId?: string
+  b3Deadline?: string
   onClose: () => void
 }
 
 const defaultPlaceholders = [
   '{{agentName}}', '{{staffId}}', '{{oldT1Name}}', '{{oldT1Email}}',
   '{{newT1Name}}', '{{newT1Email}}', '{{newT1StaffId}}', '{{date}}',
-  '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}',
+  '{{deadlineDate}}', '{{notifyDate}}', '{{tempT1Name}}', '{{b3Deadline}}',
 ]
 
 export default function SendEmailModal({
@@ -30,7 +30,7 @@ export default function SendEmailModal({
   templateSubject,
   templateBody,
   templateKey,
-  m1TaskId,
+  b3Deadline,
   onClose,
 }: Props) {
   const { show } = useToast()
@@ -51,7 +51,8 @@ export default function SendEmailModal({
     '{{deadlineDate}}': new Date(Date.now() + 30 * 86400000).toLocaleDateString('vi-VN'),
     '{{notifyDate}}': new Date().toLocaleDateString('vi-VN'),
     '{{tempT1Name}}': t1Old?.full_name ?? '',
-  }), [agent, t1Old, newT1])
+    '{{b3Deadline}}': b3Deadline ?? '',
+  }), [agent, t1Old, newT1, b3Deadline])
 
   const renderedSubject = useMemo(() => {
     let s = subject
@@ -104,30 +105,6 @@ export default function SendEmailModal({
         show('Gửi email thất bại: ' + (error?.message ?? data?.error ?? 'Unknown'), 'error')
       } else {
         show('Đã gửi email thành công', 'success')
-
-        if (m1TaskId) {
-          try {
-            const { data: taskData } = await supabase
-              .from('m1_transition_tasks')
-              .select('email_sent_count')
-              .eq('id', m1TaskId)
-              .single()
-
-            const currentCount = taskData?.email_sent_count ?? 0
-            const { error: updateErr } = await supabase
-              .from('m1_transition_tasks')
-              .update({
-                email_sent_count: currentCount + 1,
-                last_email_sent_at: new Date().toISOString(),
-              })
-              .eq('id', m1TaskId)
-
-            if (updateErr) console.error('Lỗi update email count:', updateErr)
-          } catch (err) {
-            console.error('Lỗi cập nhật email count:', err)
-          }
-        }
-
         onClose()
       }
     } catch (err: any) {
