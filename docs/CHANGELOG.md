@@ -7,6 +7,30 @@
 
 ## 2026-06-11
 
+### 69. Bug BUG-027: ComposeTemplateModal lấy nhầm request khi agent có nhiều request
+
+**Mô tả:** `ComposeTemplateModal` query `t1_requests` theo `agent_id` + `limit(1)` — nếu agent có nhiều request, có thể lấy nhầm request mới nhất (ví dụ: `pending` chưa có T1) thay vì request đang xử lý (`step2`).
+
+**Root Cause:** Modal chỉ nhận `agentId`, tự đoán request bằng cách lấy request active mới nhất.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`:
+  - Thêm prop `requestId?: string`
+  - Nếu có `requestId`, load request trực tiếp bằng `eq('id', requestId)`
+  - Giữ logic `m1TaskId` và fallback query request active
+- `webapp/src/components/dashboard/B2EligibleList.tsx`:
+  - Sửa `onEmail` signature: `(agentId: string, requestId: string)`
+  - Truyền `requestId` khi gọi `onEmail`
+- `webapp/src/pages/DashboardPage.tsx`:
+  - Sửa `emailModal` state lưu thêm `requestId`
+  - Truyền `requestId` xuống `ComposeTemplateModal`
+
+**Kết quả:** Build pass. 56/56 tests pass.
+
+---
+
+## 2026-06-11
+
 ### 68. Bug BUG-026: ComposeTemplateModal query `t1_requests` bị 400 Bad Request do cú pháp `.not('status', 'in', ...)` sai
 
 **Mô tả:** Khi mở `ComposeTemplateModal` từ B2 list, query `t1_requests` trả về `400 Bad Request` vì cú pháp filter status dùng dấu nháy đơn thay vì nháy kép.

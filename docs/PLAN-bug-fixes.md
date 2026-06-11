@@ -56,6 +56,7 @@
 | 024 | Placeholder `{{tempT1Name}}` bị trùng giá trị với `{{oldT1Name}}` | fixed | 2026-06-11 | 2026-06-11 |
 | 025 | ComposeTemplateModal load sai T1 cũ / Temp T1 / New T1 | fixed | 2026-06-11 | 2026-06-11 |
 | 026 | ComposeTemplateModal query `t1_requests` bị 400 Bad Request do cú pháp `.not('status', 'in', ...)` sai | fixed | 2026-06-11 | 2026-06-11 |
+| 027 | ComposeTemplateModal lấy nhầm request khi agent có nhiều request | fixed | 2026-06-11 | 2026-06-11 |
 
 ---
 
@@ -396,3 +397,51 @@ Không cần.
 
 ### 8. Notes
 - Rollback: Revert 1 dòng.
+
+---
+
+## BUG-027: ComposeTemplateModal lấy nhầm request khi agent có nhiều request
+
+- **Phát hiện**: 2026-06-11
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Khi mở `ComposeTemplateModal` từ B2 list, T1 cũ và T1 mới đều hiển thị "—". Root cause: agent có nhiều request, `ComposeTemplateModal` query theo `agent_id` + `limit(1)` lấy nhầm request mới nhất (chưa có `old_t1_id` / `proposed_new_t1_id`) thay vì request đang ở B2.
+
+### 2. Root Cause
+Modal chỉ nhận `agentId`, tự đoán request bằng cách lấy request active mới nhất. Không đảm bảo lấy đúng request mà user đang xem trong B2 list.
+
+### 3. SQL Verify
+```sql
+-- Kiểm tra agent có nhiều request
+SELECT agent_id, status, created_at, old_t1_id, proposed_new_t1_id
+FROM t1_requests
+WHERE agent_id = '<agent-id>'
+ORDER BY created_at DESC;
+```
+
+### 4. Solution
+Truyền `requestId` từ caller xuống modal:
+1. `ComposeTemplateModal`: thêm prop `requestId`, load request trực tiếp bằng `eq('id', requestId)`
+2. `B2EligibleList`: sửa `onEmail` truyền thêm `requestId`
+3. `DashboardPage`: lưu `requestId` trong state, truyền xuống modal
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/ComposeTemplateModal.tsx` | Thêm prop `requestId`, sửa `loadData()` |
+| `src/components/dashboard/B2EligibleList.tsx` | Sửa `onEmail` signature, truyền `requestId` |
+| `src/pages/DashboardPage.tsx` | Lưu `requestId` trong state, truyền xuống modal |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Tạo agent có 2 request: 1 pending (chưa có T1) + 1 step2 (có T1 cũ/mới).
+2. Mở B2 list, bấm "Tạo email mẫu".
+3. Verify: T1 cũ và T1 mới hiển thị đúng từ request step2.
+4. Build pass. 56/56 tests pass.
+
+### 8. Notes
+- Rollback: Revert 3 file.

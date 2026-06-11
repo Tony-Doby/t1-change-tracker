@@ -11,6 +11,7 @@ import SendEmailModal from './SendEmailModal'
 
 interface Props {
   agentId: string
+  requestId?: string
   m1TaskId?: string
   onClose: () => void
 }
@@ -53,7 +54,7 @@ Phòng Vận Hành ERA`,
   },
 ]
 
-export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Props) {
+export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onClose }: Props) {
   const { show } = useToast()
   const queryClient = useQueryClient()
   const [agent, setAgent] = useState<any>(null)
@@ -69,7 +70,7 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
   useEffect(() => {
     loadData()
     loadTemplates()
-  }, [agentId])
+  }, [agentId, requestId, m1TaskId])
 
   async function loadTemplates() {
     const { data, error } = await supabase.from('email_templates').select('*')
@@ -97,7 +98,40 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
 
     let b3Date = ''
 
-    if (m1TaskId) {
+    if (requestId) {
+      // Load directly from request ID
+      const { data: req } = await supabase
+        .from('t1_requests')
+        .select('id, old_t1_id, proposed_new_t1_id, temp_t1_id, step2_confirmed_at')
+        .eq('id', requestId)
+        .single()
+
+      if (req?.old_t1_id) {
+        const { data: t1 } = await supabase.from('agents').select('*').eq('id', req.old_t1_id).single()
+        setT1Old(t1)
+      } else {
+        setT1Old(null)
+      }
+
+      if (req?.proposed_new_t1_id) {
+        const { data: t1New } = await supabase.from('agents').select('*').eq('id', req.proposed_new_t1_id).single()
+        setNewT1(t1New)
+      } else {
+        setNewT1(null)
+      }
+
+      if (req?.temp_t1_id) {
+        const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', req.temp_t1_id).single()
+        setTempT1(t1Temp)
+      } else {
+        setTempT1(null)
+      }
+
+      if (req?.step2_confirmed_at) {
+        const d = addBusinessDays(req.step2_confirmed_at.slice(0, 10), 3, holidays)
+        b3Date = formatDate(d)
+      }
+    } else if (m1TaskId) {
       // Load from M1 transition task
       const { data: task } = await supabase
         .from('m1_transition_tasks')

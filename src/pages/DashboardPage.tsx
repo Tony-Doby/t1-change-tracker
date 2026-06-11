@@ -52,7 +52,7 @@ export default function DashboardPage() {
   const [processingT2, setProcessingT2] = useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; req: B2Request | null }>({ open: false, req: null })
   const [cancelModal, setCancelModal] = useState<{ open: boolean; req: B2Request | null; reason: string }>({ open: false, req: null, reason: '' })
-  const [emailModal, setEmailModal] = useState<{ agentId: string; taskId?: string } | null>(null)
+  const [emailModal, setEmailModal] = useState<{ agentId: string; requestId?: string; taskId?: string } | null>(null)
   const [requestModalAgentId, setRequestModalAgentId] = useState<string | null>(null)
   const [confirmT2Task, setConfirmT2Task] = useState<TransitionTask | null>(null)
 
@@ -147,7 +147,7 @@ export default function DashboardPage() {
         items={b2Eligible}
         onConfirm={(req) => setConfirmModal({ open: true, req })}
         onCancel={(req) => setCancelModal({ open: true, req, reason: '' })}
-        onEmail={(agentId) => setEmailModal({ agentId })}
+        onEmail={(agentId, requestId) => setEmailModal({ agentId, requestId })}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -183,7 +183,7 @@ export default function DashboardPage() {
         </div>
       </CountdownConfirmModal>
 
-      {emailModal && <ComposeTemplateModal agentId={emailModal.agentId} m1TaskId={emailModal.taskId ?? undefined} onClose={() => setEmailModal(null)} />}
+      {emailModal && <ComposeTemplateModal agentId={emailModal.agentId} requestId={emailModal.requestId ?? undefined} m1TaskId={emailModal.taskId ?? undefined} onClose={() => setEmailModal(null)} />}
       {requestModalAgentId && <CreateRequestModal agentId={requestModalAgentId} onClose={() => setRequestModalAgentId(null)} />}
       {confirmT2Task && (
         <CountdownConfirmModal open={true} title="Xác nhận ở lại với T1 tạm" confirmText="Xác nhận"

@@ -8,7 +8,7 @@ interface Props {
   items: B2Request[]
   onConfirm: (req: B2Request) => void
   onCancel: (req: B2Request) => void
-  onEmail: (agentId: string) => void
+  onEmail: (agentId: string, requestId: string) => void
 }
 
 export default function B2EligibleList({ items, onConfirm, onCancel, onEmail }: Props) {
@@ -59,7 +59,7 @@ export default function B2EligibleList({ items, onConfirm, onCancel, onEmail }: 
               <p className="text-xs text-neutral-500">Ngày xác nhận: {formatDate(r.step2_confirmed_at)} • Đã chờ đủ 4 ngày làm việc</p>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
-              <button onClick={() => onEmail(r.agent_id)} className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100 whitespace-nowrap">Tạo email mẫu</button>
+              <button onClick={() => onEmail(r.agent_id, r.id)} className="text-xs bg-white border border-neutral-300 text-neutral-700 px-2 py-1 rounded hover:bg-neutral-100 whitespace-nowrap">Tạo email mẫu</button>
               <button onClick={() => onConfirm(r)} className="text-xs bg-success text-white px-2 py-1 rounded hover:opacity-90">Xác nhận thay đổi</button>
               <button onClick={() => onCancel(r)} className="text-xs bg-white border border-danger text-danger px-2 py-1 rounded hover:bg-danger-light">Hủy đề xuất</button>
             </div>
