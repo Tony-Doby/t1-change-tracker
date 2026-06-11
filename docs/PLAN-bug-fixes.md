@@ -54,6 +54,7 @@
 | 022 | B2PendingAlert không hiển thị do addBusinessDays parse ISO datetime sai | fixed | 2026-06-11 | 2026-06-11 |
 | 023 | Dropdown placeholder trong HtmlEditor bị cắt và không scroll được | fixed | 2026-06-11 | 2026-06-11 |
 | 024 | Placeholder `{{tempT1Name}}` bị trùng giá trị với `{{oldT1Name}}` | fixed | 2026-06-11 | 2026-06-11 |
+| 025 | ComposeTemplateModal load sai T1 cũ / Temp T1 / New T1 | fixed | 2026-06-11 | 2026-06-11 |
 
 ---
 
@@ -293,3 +294,60 @@ Không cần.
 
 ### 8. Notes
 - Rollback: Revert 4 file.
+
+---
+
+## BUG-025: ComposeTemplateModal load sai T1 cũ / Temp T1 / New T1
+
+- **Phát hiện**: 2026-06-11
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Khi mở `ComposeTemplateModal` từ Dashboard M1 Transition:
+- `{{oldT1Name}}` hiển thị tên của Temp T1 thay vì T1 cũ
+- `{{newT1Name}}` không hiển thị giá trị
+- `{{tempT1Name}}` không hiển thị giá trị
+
+### 2. Root Cause
+1. `t1Old` load từ `agent.current_t1_id` — sai khi agent đã bị cập nhật T1 trong DB (có thể thành tempT1 hoặc newT1).
+2. `tempT1` load từ `request.temp_t1_id` — sai khi M1 Transition chứa `temp_t1_id` riêng trong `m1_transition_tasks`, request có thể không có hoặc khác.
+3. `newT1` query `t1_requests` với `.not('status', 'in', "('completed','cancelled')")` — nên không tìm thấy request khi đã hoàn tất.
+
+### 3. SQL Verify
+```sql
+-- Kiểm tra M1 transition task có temp_t1_id và departed_agent_id
+SELECT id, m1_agent_id, temp_t1_id, departed_agent_id, parent_request_id
+FROM m1_transition_tasks
+WHERE status IN ('pending', 'expired')
+LIMIT 5;
+```
+
+### 4. Solution
+Refactor `loadData()` thành 2 nhánh:
+- **Có `m1TaskId`:** load trực tiếp từ `m1_transition_tasks`:
+  - `t1Old` ← `task.departed_agent_id`
+  - `tempT1` ← `task.temp_t1_id`
+  - `newT1` ← `task.parent_request_id → proposed_new_t1_id`
+- **Không có `m1TaskId`:** load từ `t1_requests` active:
+  - `t1Old` ← `request.old_t1_id` (sửa từ `agent.current_t1_id`)
+  - `newT1` ← `request.proposed_new_t1_id`
+  - `tempT1` ← `request.temp_t1_id`
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/ComposeTemplateModal.tsx` | Refactor `loadData()` thành 2 nhánh: M1 task vs request active |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Mở Dashboard M1 Transition, bấm gửi email cho 1 task.
+2. Verify: T1 cũ, T1 tạm, T1 mới hiển thị đúng tên trong template.
+3. Verify: Email liên quan hiển thị đúng email của 3 ngườii.
+4. Mở từ AgentsPage, verify vẫn hoạt động đúng.
+5. Build pass. 56/56 tests pass.
+
+### 8. Notes
+- Rollback: Revert `ComposeTemplateModal.tsx`.

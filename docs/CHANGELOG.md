@@ -7,6 +7,30 @@
 
 ## 2026-06-11
 
+### 67. Bug BUG-025: ComposeTemplateModal load sai T1 cũ / Temp T1 / New T1
+
+**Mô tả:** Khi mở `ComposeTemplateModal` từ Dashboard M1 Transition, placeholder `{{oldT1Name}}`, `{{newT1Name}}`, `{{tempT1Name}}` render sai giá trị:
+- Old T1 hiển thị giá trị của Temp T1 (vì load từ `agent.current_t1_id` thay vì `task.departed_agent_id`)
+- New T1 không hiển thị (vì query loại trừ `completed`)
+- Temp T1 không hiển thị (vì load từ `request.temp_t1_id` thay vì `task.temp_t1_id`)
+
+**Root Cause:**
+1. `t1Old` load từ `agent.current_t1_id` — sai khi agent đã bị đổi T1 trong DB.
+2. `tempT1` load từ `request.temp_t1_id` — sai khi M1 Transition chứa `temp_t1_id` riêng trong `m1_transition_tasks`.
+3. `newT1` query `t1_requests` loại trừ `completed` — nên không tìm thấy request khi đã hoàn tất.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`:
+  - Refactor `loadData()` thành 2 nhánh:
+    - **Có `m1TaskId`:** load `t1Old` từ `task.departed_agent_id`, `tempT1` từ `task.temp_t1_id`, `newT1` từ `task.parent_request_id → proposed_new_t1_id`
+    - **Không có `m1TaskId`:** load `t1Old` từ `request.old_t1_id` (sửa từ `agent.current_t1_id`), `newT1` từ `request.proposed_new_t1_id`, `tempT1` từ `request.temp_t1_id`
+
+**Kết quả:** Build pass. 56/56 tests pass.
+
+---
+
+## 2026-06-11
+
 ### 66. Bug BUG-024: Placeholder `{{tempT1Name}}` bị trùng giá trị với `{{oldT1Name}}`
 
 **Mô tả:** Placeholder `{{tempT1Name}}` và `{{tempT1StaffId}}` trong email template đang render cùng giá trị với `{{oldT1Name}}` / `{{oldT1StaffId}}`, vì code chưa load `temp_t1` từ database mà hardcode map tới `t1Old`.

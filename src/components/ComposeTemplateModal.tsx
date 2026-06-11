@@ -95,24 +95,68 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
     const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
     setAgent(a)
 
-    const t1Id = a?.current_t1_id ?? null
-    if (t1Id) {
-      const { data: t1 } = await supabase.from('agents').select('*').eq('id', t1Id).single()
-      setT1Old(t1)
-    } else {
-      setT1Old(null)
-    }
-
     let b3Date = ''
-    if (a?.id) {
+
+    if (m1TaskId) {
+      // Load from M1 transition task
+      const { data: task } = await supabase
+        .from('m1_transition_tasks')
+        .select('temp_t1_id, departed_agent_id, parent_request_id')
+        .eq('id', m1TaskId)
+        .single()
+
+      if (task?.departed_agent_id) {
+        const { data: t1 } = await supabase.from('agents').select('*').eq('id', task.departed_agent_id).single()
+        setT1Old(t1)
+      } else {
+        setT1Old(null)
+      }
+
+      if (task?.temp_t1_id) {
+        const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', task.temp_t1_id).single()
+        setTempT1(t1Temp)
+      } else {
+        setTempT1(null)
+      }
+
+      if (task?.parent_request_id) {
+        const { data: req } = await supabase
+          .from('t1_requests')
+          .select('proposed_new_t1_id, step2_confirmed_at')
+          .eq('id', task.parent_request_id)
+          .single()
+
+        if (req?.proposed_new_t1_id) {
+          const { data: t1New } = await supabase.from('agents').select('*').eq('id', req.proposed_new_t1_id).single()
+          setNewT1(t1New)
+        } else {
+          setNewT1(null)
+        }
+
+        if (req?.step2_confirmed_at) {
+          const d = addBusinessDays(req.step2_confirmed_at.slice(0, 10), 3, holidays)
+          b3Date = formatDate(d)
+        }
+      } else {
+        setNewT1(null)
+      }
+    } else if (a?.id) {
+      // Load from active request
       const { data: req } = await supabase
         .from('t1_requests')
-        .select('id, proposed_new_t1_id, temp_t1_id, step2_confirmed_at')
+        .select('id, old_t1_id, proposed_new_t1_id, temp_t1_id, step2_confirmed_at')
         .eq('agent_id', a.id)
         .not('status', 'in', "('completed','cancelled')")
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
+
+      if (req?.old_t1_id) {
+        const { data: t1 } = await supabase.from('agents').select('*').eq('id', req.old_t1_id).single()
+        setT1Old(t1)
+      } else {
+        setT1Old(null)
+      }
 
       if (req?.proposed_new_t1_id) {
         const { data: t1New } = await supabase.from('agents').select('*').eq('id', req.proposed_new_t1_id).single()
@@ -133,8 +177,8 @@ export default function ComposeTemplateModal({ agentId, m1TaskId, onClose }: Pro
         b3Date = formatDate(d)
       }
     }
-    setB3Deadline(b3Date)
 
+    setB3Deadline(b3Date)
     setLoading(false)
   }
 
