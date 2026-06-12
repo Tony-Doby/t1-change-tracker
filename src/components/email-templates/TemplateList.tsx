@@ -1,5 +1,6 @@
-import { Eye, Pencil } from 'lucide-react'
+import { Eye, Pencil, Trash2 } from 'lucide-react'
 import type { Template } from '../../hooks/queries/useEmailTemplates'
+import { useAuth } from '../../hooks/useAuth'
 import Table from '../../ui/layout/Table'
 import TableHeader from '../../ui/layout/TableHeader'
 import { TableHeaderCell } from '../../ui/layout/TableHeader'
@@ -11,9 +12,12 @@ interface Props {
   templates: Template[]
   onPreview: (id: string) => void
   onEdit: (template: Template) => void
+  onDelete?: (template: Template) => void
 }
 
-export default function TemplateList({ templates, onPreview, onEdit }: Props) {
+export default function TemplateList({ templates, onPreview, onEdit, onDelete }: Props) {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   if (templates.length === 0) {
     return (
       <EmptyState
@@ -54,6 +58,14 @@ export default function TemplateList({ templates, onPreview, onEdit }: Props) {
                 >
                   <Pencil className="w-3.5 h-3.5" aria-hidden="true" /> Chỉnh sửa
                 </button>
+                {isAdmin && onDelete && (
+                  <button
+                    onClick={() => onDelete(template)}
+                    className="inline-flex items-center gap-1 px-2.5 h-8 border border-danger text-danger rounded-sm text-xs hover:bg-danger-subtle transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> Xóa
+                  </button>
+                )}
               </div>
             </TableCell>
           </TableRow>

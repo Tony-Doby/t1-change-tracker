@@ -75,6 +75,7 @@
 | REFACTOR-005 | Twenty UI/UX Full Adoption (Tailwind v4 Preserve) | in_progress | 2026-06-04 | — |
 | 024 | Testing Infrastructure — Smoke Test + Unit Test (Vitest) | done | 2026-06-10 | 2026-06-10 |
 | 025 | Email Activities Table cho M1 Transition Tracking | done | 2026-06-11 | 2026-06-11 |
+| 026 | Delete Email Template | done | 2026-06-12 | 2026-06-12 |
 
 ---
 
@@ -1889,4 +1890,120 @@ FOR EACH ROW EXECUTE FUNCTION public.handle_email_activity_insert();
 #### 9. Notes
 - Các task cũ đã có `email_sent_count > 0` giữ nguyên (gap audit chấp nhận được)
 - `content_preview` strip HTML bằng regex, cắt 200 ký tự
+
+---
+
+---
+
+## FEAT-026: Delete Email Template
+
+- **Đề xuất**: 2026-06-12
+- **Status**: `planned`
+- **Priority**: `medium`
+
+#### 1. Mô tả feature
+Thêm chức năng **xóa mẫu email** trong trang **Quản lý mẫu email** (`EmailTemplatesPage`). Admin bấm nút "Xóa" trên từng row → hiện modal xác nhận → hard delete mẫu khỏi bảng `email_templates`.
+
+#### 2. Motivation / Why
+- Hiện tại trang Email Templates chỉ cho phép Thêm / Sửa / Xem trước.
+- Khi có mẫu thử nghiệm, mẫu nháp hoặc mẫu không còn dùng, admin không có cách nào dọn dẹp trong UI.
+- Giảm clutter và giữ danh sách mẫu email gọn gàng.
+
+#### 3. Scope
+
+**In scope:**
+- Thêm nút "Xóa" vào mỗi row trong `TemplateList`.
+- Modal xác nhận xóa hiển thị tên mẫu.
+- Mutation `useDeleteEmailTemplateMutation` trong `useEmailTemplates.ts`.
+- Hard delete row trong `email_templates` theo `id`.
+- Invalidate cache `['email_templates']` sau khi xóa thành công.
+- Toast thông báo thành công / lỗi.
+- Chỉ admin thấy nút xóa (UI dựa trên role + RLS bảo vệ phía sau).
+
+**Out of scope:**
+- Soft delete / Thùng rác cho email templates.
+- Bulk delete nhiều mẫu cùng lúc.
+- Khôi phục mẫu đã xóa.
+- Gửi email thông báo khi xóa mẫu.
+
+#### 4. Technical Design
+
+**Backend:**
+- Dùng `supabase.from('email_templates').delete().eq('id', id)`.
+- RLS hiện tại đã có policy `email_templates_admin` với `FOR ALL` cho admin, nên DELETE được phép. Không cần thay đổi SQL.
+- Không có bảng nào FK đến `email_templates` nên hard delete an toàn, không lo cascade.
+
+**Frontend:**
+- `useEmailTemplates.ts`: thêm `useDeleteEmailTemplateMutation()` dùng `useMutation`.
+  - `mutationFn`: gọi delete theo `id`.
+  - `onSuccess`: `qc.invalidateQueries({ queryKey: ['email_templates'] })`.
+- `TemplateList.tsx`:
+  - Thêm prop `onDelete: (template: Template) => void`.
+  - Thêm nút "Xóa" màu đỏ (secondary style, border-red) bên cạnh nút "Chỉnh sửa", dùng icon `Trash2` từ `lucide-react`.
+  - Chỉ hiển thị nút xóa khi `currentUserRole === 'admin'`.
+- `EmailTemplatesPage.tsx`:
+  - State `deletingTemplate: Template | null` để mở confirm modal.
+  - Dùng `ConfirmationModal` sẵn có (hoặc `Modal` primitive + actions) để hiển thị: "Bạn có chắc muốn xóa mẫu **{name}**? Hành động này không thể hoàn tác."
+  - Gọi `deleteMut.mutateAsync(deletingTemplate.id)` khi confirm.
+  - Toast success/error qua `useToast`.
+  - Đóng modal sau khi xong (thành công hoặc lỗi).
+
+#### 5. UI/UX
+- Nút "Xóa" style secondary danger: `border-red-400 text-red-600 hover:bg-red-50` (hoặc tương đương token `text-danger` / `border-danger`).
+- Confirm modal: tiêu đề "Xóa mẫu email", nội dung hiển thị tên mẫu và template key, 2 nút "Hủy" / "Xóa".
+- Nút "Xóa" trong modal primary danger.
+- Loading state: disable nút "Xóa" trong modal khi mutation đang chạy.
+
+#### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `src/hooks/queries/useEmailTemplates.ts` | Thêm `useDeleteEmailTemplateMutation()` |
+| `src/components/email-templates/TemplateList.tsx` | Thêm prop `onDelete`, nút "Xóa", role guard |
+| `src/pages/EmailTemplatesPage.tsx` | Thêm state confirm modal, gọi mutation, toast, render `ConfirmationModal` |
+
+#### 7. Schema / SQL changes
+Không cần. RLS policy `email_templates_admin` (FOR ALL) đã cho phép admin DELETE.
+
+#### 8. API / Integration changes
+Không cần.
+
+#### 9. Test Plan
+1. Đăng nhập với role admin → vào `/email-templates`.
+2. Verify mỗi row có nút "Xóa".
+3. Bấm "Xóa" trên 1 mẫu → confirm modal hiện đúng tên mẫu + template key.
+4. Bấm "Hủy" → modal đóng, mẫu vẫn còn.
+5. Bấm "Xóa" lại → confirm → mẫu biến mất khỏi danh sách, toast "Đã xóa mẫu email".
+6. Refresh trang → mẫu không còn trong DB.
+7. Đăng nhập với role operator → vào `/email-templates` → không thấy nút "Xóa".
+8. Thử xóa mẫu default (nếu còn) → vẫn xóa được vì không có FK ràng buộc.
+9. Chạy `npm run verify` → pass.
+10. Chạy `npm run test` → pass.
+
+#### 10. Rollout Plan
+1. Sửa 3 files frontend theo plan.
+2. Chạy `npm run verify`.
+3. Test local với admin + operator.
+4. Cập nhật `CHANGELOG.md`.
+5. Deploy khi được yêu cầu (không tự deploy).
+
+#### 11. Notes
+
+- **Ưu điểm:**
+  - Đơn giản, chỉ sửa 3 files frontend.
+  - Không thay đổi schema, không cần migration.
+  - Tận dụng RLS và TanStack Query sẵn có.
+
+- **Nhược điểm:**
+  - Hard delete không thể khôi phục.
+  - Không có audit log riêng cho việc xóa mẫu.
+
+- **Rủi ro & Mitigation:**
+
+  | Rủi ro | Mitigation |
+  |--------|------------|
+  | Xóa nhầm mẫu đang dùng | Confirm modal hiển thị rõ tên + template key; nút Xóa chỉ ở admin |
+  | Operator vẫn xóa được qua API | RLS policy `email_templates_admin` chặn DELETE non-admin ở DB level |
+  | Mutation lỗi nhưng UI không cập nhật | Bắt lỗi `.catch()` và toast error; giữ modal mở để user biết |
+  | UI chưa cập nhật sau xóa | `invalidateQueries(['email_templates'])` force refetch list |
 

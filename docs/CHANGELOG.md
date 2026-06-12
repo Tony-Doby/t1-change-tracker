@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-06-12
+
+### 70. Feature FEAT-026: Delete Email Template
+
+**Mô tả:** Thêm chức năng xóa mẫu email trong trang Quản lý mẫu email. Admin bấm nút "Xóa" → confirm modal → hard delete mẫu khỏi DB.
+
+**Files sửa:**
+- `webapp/src/hooks/queries/useEmailTemplates.ts`:
+  - Thêm `useDeleteEmailTemplateMutation()` dùng `supabase.from('email_templates').delete().eq('id', id)`
+  - Invalidate query `['email_templates']` sau khi xóa thành công
+- `webapp/src/components/email-templates/TemplateList.tsx`:
+  - Thêm prop `onDelete?: (template: Template) => void`
+  - Thêm nút "Xóa" màu danger (border + text danger, hover bg-danger-subtle) dùng icon `Trash2`
+  - Role guard: chỉ hiển thị nút xóa khi `user?.role === 'admin'`
+- `webapp/src/pages/EmailTemplatesPage.tsx`:
+  - Thêm `useDeleteEmailTemplateMutation`
+  - State `deletingTemplate` để mở confirm modal
+  - `handleDelete()` gọi mutation, toast success/error
+  - Render `ConfirmationModal` với title "Xóa mẫu email", description hiển thị tên + template key, confirm type danger, loading từ `deleteMut.isPending`
+
+**Kết quả:**
+- Build pass (`tsc -b && vite build`).
+- 56/56 tests pass.
+- ESLint vẫn còn lỗi legacy từ code cũ (không phải do feature này).
+
+---
+
 ## 2026-06-11
 
 ### 69. Bug BUG-027: ComposeTemplateModal lấy nhầm request khi agent có nhiều request

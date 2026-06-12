@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react'
 import { Plus } from 'lucide-react'
 import { useToast } from '../components/Toast'
-import { useEmailTemplatesQuery, useSaveEmailTemplateMutation } from '../hooks/queries/useEmailTemplates'
+import { useEmailTemplatesQuery, useSaveEmailTemplateMutation, useDeleteEmailTemplateMutation } from '../hooks/queries/useEmailTemplates'
 import type { Template } from '../hooks/queries/useEmailTemplates'
 import PageHeader from '../ui/layout/PageHeader'
 import TableSkeletonLoader from '../ui/feedback/TableSkeletonLoader'
+import ConfirmationModal from '../ui/feedback/ConfirmationModal'
 import TemplateList from '../components/email-templates/TemplateList'
 import TemplateEditModal from '../components/email-templates/TemplateEditModal'
 import TemplatePreviewModal from '../components/email-templates/TemplatePreviewModal'
@@ -13,10 +14,12 @@ export default function EmailTemplatesPage() {
   const { show } = useToast()
   const { data: templates = [], isLoading } = useEmailTemplatesQuery()
   const saveMut = useSaveEmailTemplateMutation()
+  const deleteMut = useDeleteEmailTemplateMutation()
 
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [modalMode, setModalMode] = useState<'edit' | 'create' | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [deletingTemplate, setDeletingTemplate] = useState<Template | null>(null)
   const [saving, setSaving] = useState(false)
 
   const openCreate = useCallback(() => {
@@ -33,6 +36,17 @@ export default function EmailTemplatesPage() {
     setModalMode(null)
     setEditingId(null)
   }, [])
+
+  const handleDelete = async () => {
+    if (!deletingTemplate) return
+    try {
+      await deleteMut.mutateAsync(deletingTemplate.id)
+      show('Đã xóa mẫu email', 'success')
+      setDeletingTemplate(null)
+    } catch (e: any) {
+      show('Lỗi xóa mẫu: ' + e.message, 'error')
+    }
+  }
 
   const handleSave = async (payload: { id?: string; name: string; template_key: string; subject: string; body: string }) => {
     setSaving(true)
@@ -77,7 +91,7 @@ export default function EmailTemplatesPage() {
       {isLoading ? (
         <TableSkeletonLoader rows={5} cols={5} />
       ) : (
-        <TemplateList templates={templates} onPreview={setPreviewId} onEdit={openEdit} />
+        <TemplateList templates={templates} onPreview={setPreviewId} onEdit={openEdit} onDelete={setDeletingTemplate} />
       )}
 
       {modalMode && (
@@ -93,6 +107,21 @@ export default function EmailTemplatesPage() {
       {previewTemplate && (
         <TemplatePreviewModal template={previewTemplate} onClose={() => setPreviewId(null)} />
       )}
+
+      <ConfirmationModal
+        open={!!deletingTemplate}
+        onClose={() => setDeletingTemplate(null)}
+        onConfirm={handleDelete}
+        title="Xóa mẫu email"
+        description={
+          deletingTemplate
+            ? `Bạn có chắc muốn xóa mẫu "${deletingTemplate.name}" (${deletingTemplate.template_key})? Hành động này không thể hoàn tác.`
+            : ''
+        }
+        confirmText="Xóa"
+        confirmType="danger"
+        loading={deleteMut.isPending}
+      />
     </div>
   )
 }
