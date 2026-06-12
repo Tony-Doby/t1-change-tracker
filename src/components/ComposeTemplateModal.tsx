@@ -6,6 +6,7 @@ import { useToast } from './Toast'
 import { formatDate } from '../lib/date-utils'
 import { addBusinessDays } from '../lib/eligibility'
 import Modal from './Modal'
+import Select from '../ui/input/Select'
 import type { EmailTemplate } from '../types'
 import SendEmailModal from './SendEmailModal'
 
@@ -73,18 +74,30 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
   }, [agentId, requestId, m1TaskId])
 
   async function loadTemplates() {
-    const { data, error } = await supabase.from('email_templates').select('*')
-    if (error || !data || data.length === 0) return
-    const dbMap = new Map((data as EmailTemplate[]).map((t) => [t.template_key, t]))
-    setTemplates((prev) =>
-      prev.map((pt) => {
-        const db = dbMap.get(pt.key)
-        if (db) {
-          return { ...pt, subject: db.subject, body: db.body }
-        }
-        return pt
-      })
-    )
+    const { data, error } = await supabase.from('email_templates').select('*').order('created_at', { ascending: true })
+    if (error) {
+      console.error('Lỗi load templates:', error)
+      return
+    }
+
+    if (data && data.length > 0) {
+      const dbTemplates = (data as EmailTemplate[]).map((t) => ({
+        key: t.template_key,
+        name: t.name,
+        subject: t.subject,
+        body: t.body,
+      }))
+      setTemplates(dbTemplates)
+      // Đảm bảo selectedKey hợp lệ với danh sách từ DB
+      if (!dbTemplates.some((t) => t.key === selectedKey)) {
+        setSelectedKey(dbTemplates[0].key)
+      }
+    } else {
+      setTemplates(defaultTemplates)
+      if (!defaultTemplates.some((t) => t.key === selectedKey)) {
+        setSelectedKey(defaultTemplates[0].key)
+      }
+    }
   }
 
   async function loadData() {
@@ -234,7 +247,7 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
     setLoading(false)
   }
 
-  const template = templates.find((t) => t.key === selectedKey)!
+  const template = templates.find((t) => t.key === selectedKey) ?? templates[0]
 
   const rendered = useMemo(() => {
     return template.body
@@ -303,11 +316,14 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
           <div className="text-sm"><span className="text-neutral-500">Agent:</span>{' '}<span className="font-medium text-neutral-900">{agent.full_name} ({agent.staff_id})</span></div>
 
           <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1.5">Chọn loại mẫu <span className="text-danger">*</span></label>
-            <select value={selectedKey} onChange={(e) => setSelectedKey(e.target.value)}
-              className="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light bg-white">
-              {templates.map((t) => (<option key={t.key} value={t.key}>{t.name}</option>))}
-            </select>
+            <Select
+              label="Chọn loại mẫu"
+              required
+              value={selectedKey}
+              onChange={(e) => setSelectedKey(e.target.value)}
+              options={templates.map((t) => ({ value: t.key, label: t.name }))}
+              placeholder="Chọn mẫu email..."
+            />
           </div>
 
           <div>

@@ -7,6 +7,30 @@
 
 ## 2026-06-12
 
+### 71. Fix BUG-028 + BUG-029: ComposeTemplateModal dropdown + template list sync
+
+**Mô tả:**
+- **BUG-028:** Trong AgentsPage, chọn agent → "Soạn mẫu" → dropdown "Chọn loại mẫu" dùng native `<select>`, khi chọn option modal tự đóng (do click-outside nhầm trên backdrop).
+- **BUG-029:** `ComposeTemplateModal.loadTemplates()` hardcode 3 default templates và chỉ override subject/body nếu key trùng. Mẫu email mới (key khác) không hiển thị; mẫu đã xóa vẫn còn trong dropdown.
+
+**Files sửa:**
+- `webapp/src/components/ComposeTemplateModal.tsx`:
+  - Thay native `<select>` bằng custom `<Select>` từ `src/ui/input/Select.tsx`
+  - Viết lại `loadTemplates()`:
+    - Ưu tiên dữ liệu từ DB (`email_templates`)
+    - Nếu DB rỗng → fallback về 3 default templates
+    - Tự động reset `selectedKey` về template đầu tiên nếu key hiện tại không còn hợp lệ
+  - Đảm bảo `template` luôn có giá trị (`?? templates[0]`) để tránh crash
+
+**Kết quả:**
+- Build pass (`tsc -b && vite build`).
+- 56/56 tests pass.
+- ESLint vẫn còn lỗi legacy từ code cũ (không phải do fix này).
+
+---
+
+## 2026-06-12
+
 ### 70. Feature FEAT-026: Delete Email Template
 
 **Mô tả:** Thêm chức năng xóa mẫu email trong trang Quản lý mẫu email. Admin bấm nút "Xóa" → confirm modal → hard delete mẫu khỏi DB.

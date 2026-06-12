@@ -57,6 +57,8 @@
 | 025 | ComposeTemplateModal load sai T1 cũ / Temp T1 / New T1 | fixed | 2026-06-11 | 2026-06-11 |
 | 026 | ComposeTemplateModal query `t1_requests` bị 400 Bad Request do cú pháp `.not('status', 'in', ...)` sai | fixed | 2026-06-11 | 2026-06-11 |
 | 027 | ComposeTemplateModal lấy nhầm request khi agent có nhiều request | fixed | 2026-06-11 | 2026-06-11 |
+| 028 | ComposeTemplateModal dropdown chọn loại mẫu tự đóng modal | fixed | 2026-06-12 | 2026-06-12 |
+| 029 | ComposeTemplateModal không hiển thị mẫu email mới / vẫn hiển thị mẫu đã xóa | fixed | 2026-06-12 | 2026-06-12 |
 
 ---
 
@@ -353,6 +355,137 @@ Không cần.
 
 ### 8. Notes
 - Rollback: Revert `ComposeTemplateModal.tsx`.
+
+---
+
+---
+
+## BUG-028: ComposeTemplateModal dropdown chọn loại mẫu tự đóng modal
+
+- **Phát hiện**: 2026-06-12
+- **Status**: `planned`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Trong trang **Agents**, chọn 1 agent → bấm **"Soạn mẫu"** → modal **"Soạn mẫu thông báo"** mở. Khi bấm vào dropdown **"Chọn loại mẫu"** để chọn loại mẫu khác, dropdown mở ra nhưng không chọn được option, đồng thờii modal tự động đóng lại.
+
+### 2. Root Cause
+- `ComposeTemplateModal` đang dùng native HTML `<select>` (dòng 307-310).
+- Native `<select>` dropdown được vẽ bởi browser ở layer riêng, nhưng khi click option trong một modal portal với backdrop `onClick={onClose}`, sự kiện click có thể bị nhận diện thành click ra ngoài modal panel → backdrop trigger `onClose`.
+- Ngoài ra native select dễ bị clip bởi `overflow-y-auto` của modal content (`max-h-[92vh] overflow-y-auto`).
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Thay native `<select>` bằng custom `Select` component (`src/ui/input/Select.tsx`) đã có trong project:
+- Custom Select render dropdown bằng DOM element nằm trong cùng modal tree, click option không bị nhầm thành click backdrop.
+- Truyền `options` là mảng `{ value: t.key, label: t.name }` từ `templates` state.
+- Giữ `value={selectedKey}` và `onChange={(e) => setSelectedKey(e.target.value)}`.
+- Có thể cần wrapper `div` với `className="relative z-10"` để dropdown không bị clip (tùy test).
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/ComposeTemplateModal.tsx` | Thay `<select>` native bằng `<Select>` từ `src/ui/input/Select.tsx` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Vào Agents → chọn 1 agent → bấm "Soạn mẫu".
+2. Bấm dropdown "Chọn loại mẫu" → dropdown mở, modal không tự tắt.
+3. Chọn 1 option khác → dropdown đóng, nội dung đã soạn cập nhật theo mẫu mới.
+4. Bấm ra ngoài dropdown (trên backdrop) → modal mới đóng.
+5. Test trên Chrome/Firefox/Edge.
+
+### 8. Notes
+- **Ưu điểm:** Giải quyết triệt để vấn đề click-outside của native select trong portal modal; UI đồng nhất với design system.
+- **Nhược điểm:** Cần import thêm component, style có thể khác native select một chút.
+- **Rủi ro:** Custom Select dropdown vẫn có thể bị clip nếu modal ancestor có `overflow-hidden`. Mitigation: dùng `z-50` (đã có sẵn trong Select) hoặc điều chỉnh modal content nếu cần.
+
+---
+
+---
+
+## BUG-029: ComposeTemplateModal không hiển thị mẫu email mới / vẫn hiển thị mẫu đã xóa
+
+- **Phát hiện**: 2026-06-12
+- **Status**: `planned`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+- User xóa mẫu email cũ trong trang **Quản lý mẫu email**.
+- Sau đó tạo mẫu email mới với `template_key` khác (ví dụ `c_a_t1`).
+- Quay lại modal **"Soạn mẫu thông báo"** trong Agents, dropdown "Chọn loại mẫu" vẫn hiển thị các mẫu default cũ, không có mẫu mới.
+
+### 2. Root Cause
+Hàm `loadTemplates()` trong `ComposeTemplateModal.tsx` (dòng 75-88) có logic sai:
+```ts
+setTemplates((prev) =>
+  prev.map((pt) => {
+    const db = dbMap.get(pt.key)
+    if (db) return { ...pt, subject: db.subject, body: db.body }
+    return pt
+  })
+)
+```
+- `prev` là `defaultTemplates` (3 mẫu hardcode).
+- Code chỉ override subject/body nếu DB có template với cùng `template_key`.
+- Mẫu mới có key khác không bao giờ được thêm vào danh sách.
+- Mẫu default đã xóa vẫn còn trong UI vì `prev.map` không remove.
+
+### 3. SQL Verify
+```sql
+-- Kiểm tra templates hiện có trong DB
+SELECT id, template_key, name, subject FROM public.email_templates;
+```
+
+### 4. Solution
+Viết lại `loadTemplates` để ưu tiên dữ liệu DB:
+```ts
+async function loadTemplates() {
+  const { data, error } = await supabase.from('email_templates').select('*').order('created_at', { ascending: true })
+  if (error) {
+    console.error('Lỗi load templates:', error)
+    return
+  }
+  if (data && data.length > 0) {
+    setTemplates(
+      (data as EmailTemplate[]).map((t) => ({
+        key: t.template_key,
+        name: t.name,
+        subject: t.subject,
+        body: t.body,
+      }))
+    )
+  } else {
+    setTemplates(defaultTemplates)
+  }
+}
+```
+- Nếu DB có templates → dùng DB.
+- Nếu DB rỗng → fallback về `defaultTemplates`.
+- Không còn hardcode merge.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/ComposeTemplateModal.tsx` | Sửa `loadTemplates()` ưu tiên DB, fallback default |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Xóa hết templates trong DB → mở ComposeTemplateModal → dropdown hiển thị 3 default templates.
+2. Tạo mẫu mới `c_a_t1` → mở ComposeTemplateModal → dropdown hiển thị mẫu mới.
+3. Xóa 1 trong 3 default templates → mở ComposeTemplateModal → template đã xóa không còn trong dropdown.
+4. Chọn mẫu mới → nội dung đã soạn render đúng subject/body từ DB.
+
+### 8. Notes
+- **Ưu điểm:** Dữ liệu trong modal luôn đồng bộ với DB; user tự quản lý templates qua EmailTemplatesPage.
+- **Nhược điểm:** Nếu DB rỗng, vẫn cần giữ 3 default templates để app không bị trống.
+- **Rủi ro:** Nếu có code khác phụ thuộc vào 3 key default (`transfer_complete`, `30_days_notice`, `temp_t1_assigned`) thì vẫn an toàn vì DB có thể chứa các key này hoặc fallback. Mitigation: đảm bảo default templates vẫn được insert khi migration chạy (đã có trong `001_initial_schema.sql`).
 
 ---
 
