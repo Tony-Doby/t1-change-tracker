@@ -7,6 +7,54 @@
 
 ## 2026-06-12
 
+### 73. UI: Ẩn BulkActionsBar trong AgentsPage
+
+**Mô tả:** Theo yêu cầu, ẩn thanh bulk actions (hiển thị "1 đã chọn", "Soạn mẫu", "Chấm dứt") khi chọn agent trong trang Agents.
+
+**Files sửa:**
+- `webapp/src/pages/AgentsPage.tsx`:
+  - Xóa import `BulkActionsBar`
+  - Xóa `bulkBarRef` và loại bỏ khỏi `useTableSelection` excludeRefs
+  - Xóa block render `<BulkActionsBar>`
+  - Xóa `clear` khỏi destructuring của `useTableSelection` vì không còn dùng
+
+**Kết quả:**
+- Build pass (`tsc -b && vite build`).
+- 56/56 tests pass.
+- ESLint vẫn còn lỗi legacy từ code cũ.
+
+---
+
+## 2026-06-12
+
+### 72. Fix BUG-030: ComposeTemplateModal tự đóng khi chọn loại mẫu do AgentsPage dựa vào selection
+
+**Mô tả:** Sau khi thay native `<select>` bằng custom `Select` (BUG-028), modal "Soạn mẫu thông báo" vẫn tự đóng khi chọn loại mẫu.
+
+**Root Cause:**
+- `useTableSelection` trong `AgentsPage` clear selection khi click outside table.
+- Mọi tương tác trong modal (dropdown option, copy button...) đều nằm ngoài `tableRef` → selection bị clear.
+- `useEffect` thấy `selected.length !== 1` → gọi `setShowCompose(false)`.
+- Modal render condition `{showCompose && selected.length === 1 && (...)}` phụ thuộc vào selection.
+
+**Files sửa:**
+- `webapp/src/pages/AgentsPage.tsx`:
+  - Thêm state `composeAgentId: string | null`
+  - Thêm `openCompose(agentId)` lưu agentId và mở modal
+  - Thêm `closeCompose()` đóng modal và reset agentId
+  - Sửa 2 nút "Soạn mẫu" (header + BulkActionsBar) gọi `openCompose(selected[0])`
+  - Render modal: `{showCompose && composeAgentId && <ComposeTemplateModal agentId={composeAgentId} onClose={closeCompose} />}`
+  - Bỏ `useEffect` tự động đóng modal
+
+**Kết quả:**
+- Build pass (`tsc -b && vite build`).
+- 56/56 tests pass.
+- ESLint vẫn còn lỗi legacy từ code cũ.
+
+---
+
+## 2026-06-12
+
 ### 71. Fix BUG-028 + BUG-029: ComposeTemplateModal dropdown + template list sync
 
 **Mô tả:**

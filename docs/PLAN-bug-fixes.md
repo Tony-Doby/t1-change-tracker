@@ -59,6 +59,7 @@
 | 027 | ComposeTemplateModal lấy nhầm request khi agent có nhiều request | fixed | 2026-06-11 | 2026-06-11 |
 | 028 | ComposeTemplateModal dropdown chọn loại mẫu tự đóng modal | fixed | 2026-06-12 | 2026-06-12 |
 | 029 | ComposeTemplateModal không hiển thị mẫu email mới / vẫn hiển thị mẫu đã xóa | fixed | 2026-06-12 | 2026-06-12 |
+| 030 | ComposeTemplateModal tự đóng khi chọn loại mẫu do AgentsPage dựa vào selection | fixed | 2026-06-12 | 2026-06-12 |
 
 ---
 
@@ -355,6 +356,59 @@ Không cần.
 
 ### 8. Notes
 - Rollback: Revert `ComposeTemplateModal.tsx`.
+
+---
+
+---
+
+## BUG-030: ComposeTemplateModal tự đóng khi chọn loại mẫu do AgentsPage dựa vào selection
+
+- **Phát hiện**: 2026-06-12
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Sau khi thay native `<select>` bằng custom `Select` (BUG-028), lỗi modal tự đóng khi chọn loại mẫu vẫn còn.
+
+### 2. Root Cause
+Vấn đề nằm ở `AgentsPage.tsx`, không phải trong `ComposeTemplateModal`:
+1. `useTableSelection` lắng nghe click outside table để clear selection.
+2. Khi modal mở, bất kỳ click nào trong modal (dropdown option, copy button, v.v.) đều nằm ngoài `tableRef` → selection bị clear.
+3. `useEffect` ở dòng 94-98 thấy `selected.length !== 1` → gọi `setShowCompose(false)` → modal đóng.
+4. Modal render condition `{showCompose && selected.length === 1 && (...)}` cũng phụ thuộc vào selection.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Tách trạng thái modal khỏi selection:
+1. Thêm state `composeAgentId: string | null`.
+2. Tạo `openCompose(agentId)` lưu agentId và mở modal.
+3. Tạo `closeCompose()` đóng modal và reset agentId.
+4. Sửa 2 nút "Soạn mẫu" (header + BulkActionsBar) gọi `openCompose(selected[0])`.
+5. Render modal: `{showCompose && composeAgentId && <ComposeTemplateModal agentId={composeAgentId} onClose={closeCompose} />}`.
+6. Bỏ `useEffect` tự động đóng modal.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/pages/AgentsPage.tsx` | Thêm `composeAgentId`, `openCompose`, `closeCompose`, bỏ useEffect, sửa render condition và 2 nút "Soạn mẫu" |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Vào Agents → chọn 1 agent → bấm "Soạn mẫu".
+2. Modal mở → bấm dropdown "Chọn loại mẫu" → chọn option.
+3. Verify modal không tự đóng, nội dung cập nhật đúng.
+4. Bấm "Copy nội dung" / "Copy email" → modal vẫn không đóng.
+5. Bấm X hoặc backdrop → modal đóng.
+6. Chọn 2 agents → verify nút "Soạn mẫu" bị disable.
+
+### 8. Notes
+- **Ưu điểm:** Modal hoạt động độc lập với selection, không bị ảnh hưởng bởi click-outside của table.
+- **Nhược điểm:** Cần thêm 1 state, nhưng logic rõ ràng hơn.
+- **Rủi ro:** Nếu có chỗ khác cũng dùng `showCompose` thì cần cập nhật. Mitigation: chỉ sửa trong `AgentsPage`.
 
 ---
 

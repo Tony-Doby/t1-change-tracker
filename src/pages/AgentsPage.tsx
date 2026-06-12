@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Search, Filter, Download, Mail, Star } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -24,7 +24,6 @@ import TextInput from '../ui/input/TextInput'
 import FilterChips from '../ui/input/FilterChips'
 import Badge from '../ui/display/Badge'
 import EmptyState from '../ui/display/EmptyState'
-import BulkActionsBar from '../ui/feedback/BulkActionsBar'
 import { useTableSelection } from '../hooks/useTableSelection'
 import { useColumnResize } from '../hooks/useColumnResize'
 import { Power, PowerOff } from 'lucide-react'
@@ -53,6 +52,7 @@ export default function AgentsPage() {
   const [page, setPage] = useState(1)
   const [showExport, setShowExport] = useState(false)
   const [showCompose, setShowCompose] = useState(false)
+  const [composeAgentId, setComposeAgentId] = useState<string | null>(null)
   const [deactivateAgentId, setDeactivateAgentId] = useState<string | null>(null)
   const [restoreAgentId, setRestoreAgentId] = useState<string | null>(null)
 
@@ -86,16 +86,19 @@ export default function AgentsPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
-  const bulkBarRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
-  const { selected, isSelected, toggle, selectAll, allSelected, someSelected, clear, tableRef } =
-    useTableSelection({ totalIds: agents.map((a) => a.id), excludeRefs: [bulkBarRef, headerRef] })
+  const { selected, isSelected, toggle, selectAll, allSelected, someSelected, tableRef } =
+    useTableSelection({ totalIds: agents.map((a) => a.id), excludeRefs: [headerRef] })
 
-  useEffect(() => {
-    if (selected.length !== 1) {
-      setShowCompose(false)
-    }
-  }, [selected])
+  const openCompose = useCallback((agentId: string) => {
+    setComposeAgentId(agentId)
+    setShowCompose(true)
+  }, [])
+
+  const closeCompose = useCallback(() => {
+    setShowCompose(false)
+    setComposeAgentId(null)
+  }, [])
 
   const { widths, startResize } = useColumnResize([
     40, 40, 100, 200, 120, 120, 200, 140, 100, 40,
@@ -201,7 +204,7 @@ export default function AgentsPage() {
           )}
           {role !== 'viewer' && (
             <button
-              onClick={() => selected.length === 1 && setShowCompose(true)}
+              onClick={() => selected.length === 1 && openCompose(selected[0])}
               disabled={selected.length !== 1}
               className="flex items-center gap-1.5 px-3 h-9 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
@@ -381,39 +384,6 @@ export default function AgentsPage() {
         />
       )}
 
-      {selected.length > 0 && (
-        <div ref={bulkBarRef}>
-          <BulkActionsBar
-            count={selected.length}
-            onClear={clear}
-            actions={
-              <>
-                {role !== 'viewer' && selected.length === 1 && (
-                  <button
-                    onClick={() => setShowCompose(true)}
-                    className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
-                  >
-                    Soạn mẫu
-                  </button>
-                )}
-                {role === 'admin' && (
-                  <button
-                    onClick={() => {
-                      // Bulk deactivate — open first selected for now
-                      const first = selected[0]
-                      if (first) setDeactivateAgentId(first)
-                    }}
-                    className="px-3 h-8 border border-danger text-danger rounded-sm text-sm hover:bg-danger-subtle transition-colors"
-                  >
-                    Chấm dứt
-                  </button>
-                )}
-              </>
-            }
-          />
-        </div>
-      )}
-
       {showExport && (
         <ExportModal
           title="Xuất danh sách Agent"
@@ -439,8 +409,8 @@ export default function AgentsPage() {
           fetchData={fetchExportData}
         />
       )}
-      {showCompose && selected.length === 1 && (
-        <ComposeTemplateModal agentId={selected[0]} onClose={() => setShowCompose(false)} />
+      {showCompose && composeAgentId && (
+        <ComposeTemplateModal agentId={composeAgentId} onClose={closeCompose} />
       )}
       {deactivateAgentId && (
         <DeactivateAgentModal agentId={deactivateAgentId} onClose={handleDeactivateClose} />
