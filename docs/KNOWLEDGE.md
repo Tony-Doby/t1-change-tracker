@@ -211,7 +211,7 @@
 
 | Vấn đề | Trạng thái | Plan xử lý |
 |--------|-----------|------------|
-| Email chỉ copy, chưa gửi thật | Chưa làm | `PLAN-feature-dev.md` FEAT-001 |
+| Email chỉ copy, chưa gửi thật | Planned | `PLAN-feature-dev.md` FEAT-027 (Google Apps Script) |
 | ~~Chưa có In-app Notifications (real)~~ | **Đã hoàn thành (2026-05-29)** | `PLAN-feature-dev.md` FEAT-003 |
 | Chưa dùng Supabase Realtime | Chưa làm | `PLAN-feature-dev.md` FEAT-002 |
 | TanStack Query chưa được dùng | Chưa làm | `PLAN-feature-dev.md` FEAT-004 |

@@ -5,6 +5,74 @@
 
 ---
 
+## 2026-06-15
+
+### 75. Feature FEAT-029: Dashboard Full-Viewport Layout — M1 Transition Fill Remaining Height
+
+**Mô tả:** Chuyển Dashboard sang layout cố định 1 viewport (`100dvh`), M1 Transition tự động chiếm toàn bộ chiều cao còn lại, cách cạnh dưới browser 24px.
+
+**Files sửa:**
+- `webapp/src/pages/DashboardPage.tsx`:
+  - Wrapper chuyển sang `h-[100dvh] overflow-hidden flex flex-col gap-6 p-6`
+  - PageHeader, DashboardStats, B2PendingAlert, B2EligibleList wrap trong `div flex-shrink-0`
+  - M1 Transition wrapper thêm `flex-1 min-h-0 pb-6`
+  - Cập nhật loading skeleton theo layout mới
+- `webapp/src/components/dashboard/M1TransitionList.tsx`:
+  - Card thêm `h-full flex flex-col`
+  - Header + filter tabs thêm `flex-shrink-0`
+  - List area thay `max-h-[400px]` bằng `flex-1 overflow-y-auto min-h-0`
+
+**Kết quả:**
+- Build pass (`tsc -b && vite build`).
+- 56/56 tests pass.
+- ESLint pass cho 2 files đã sửa.
+
+---
+
+### 75b. UI Polish: Thu hẹp spacing Dashboard
+
+**Mô tả:** Giảm khoảng cách giữa PageHeader, DashboardStats và M1 Transition để giao diện gọn gàng hơn.
+
+**Files sửa:**
+- `webapp/src/pages/DashboardPage.tsx`:
+  - Giảm `gap-6 p-6` → `gap-3 p-4`
+  - Giảm `pb-6` → `pb-4` cho M1 wrapper
+- `webapp/src/components/dashboard/M1TransitionList.tsx`:
+  - Giảm card padding `p-5` → `p-4`
+  - Giảm header margin `mb-4` → `mb-3`, gap `gap-3` → `gap-2`
+  - Giảm filter tabs margin `mb-4` → `mb-3`
+
+**Kết quả:**
+- Build pass (`tsc -b && vite build`).
+- 56/56 tests pass.
+
+---
+
+### 74. Feature FEAT-028: Dashboard M1 Transition Enhancement
+
+**Mô tả:** Cải tiến Dashboard: ẩn card "Trạng thái đề xuất" và "Agent đang theo dõi", mở rộng M1 Transition ra full width, thêm filter tabs (Tất cả / Đủ điều kiện / Không đủ điều kiện / Đã gửi email), highlight email count badge.
+
+**Files sửa:**
+- `webapp/src/pages/DashboardPage.tsx`:
+  - Bỏ import `StatusChart`, `BookmarkedAgentsCard`, `useStatusCountsQuery`, `useBookmarkedAgentsQuery`, `Card`
+  - Bỏ grid layout `lg:grid-cols-3`, render `M1TransitionList` ở full width
+  - Bỏ render `<BookmarkedAgentsCard />` và `<StatusChart />`
+  - Cập nhật loading skeleton
+  - Sửa type `canCreateRequest` dùng `Partial<Agent>` và `Pick<T1Change, ...>`
+  - Sửa `catch (e: any)` thành type-safe
+- `webapp/src/components/dashboard/M1TransitionList.tsx`:
+  - Thêm filter state và tabs UI
+  - Kết hợp search text + filter tab qua `useMemo`
+  - Highlight badge "Đã gửi X lần" bằng màu blue
+  - Sửa prop type `canCreateRequest` dùng `Partial<Agent>`
+
+**Kết quả:**
+- Build pass (`tsc -b && vite build`).
+- 56/56 tests pass.
+- ESLint pass cho 2 files đã sửa (ESLint vẫn còn lỗi legacy từ code cũ).
+
+---
+
 ## 2026-06-12
 
 ### 73. UI: Ẩn BulkActionsBar trong AgentsPage

@@ -1,24 +1,38 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertTriangle, Search, X, Mail, Inbox } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { formatDate } from '../../lib/date-utils'
 import EmptyState from '../EmptyState'
 import type { TransitionTask } from '../../hooks/queries/useM1Transitions'
+import type { Agent } from '../../types'
 
 interface Props {
   tasks: TransitionTask[]
   processingId: string | null
-  canCreateRequest: (agent: any) => boolean
+  canCreateRequest: (agent: Partial<Agent> | null | undefined) => boolean
   onEmail: (agentId: string, taskId?: string) => void
   onCreateRequest: (agentId: string) => void
   onApplyT2: (task: TransitionTask) => void
 }
 
+type M1Filter = 'all' | 'eligible' | 'not-eligible' | 'emailed'
+
+const FILTERS: { key: M1Filter; label: string }[] = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'eligible', label: 'Đủ điều kiện' },
+  { key: 'not-eligible', label: 'Không đủ điều kiện' },
+  { key: 'emailed', label: 'Đã gửi email' },
+]
+
 export default function M1TransitionList({ tasks, processingId, canCreateRequest, onEmail, onCreateRequest, onApplyT2 }: Props) {
   const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<M1Filter>('all')
   const q = search.trim().toLowerCase()
-  const filtered = q
-    ? tasks.filter((t) =>
+
+  const filtered = useMemo(() => {
+    let result = tasks
+    if (q) {
+      result = result.filter((t) =>
         t.m1_agent?.full_name?.toLowerCase().includes(q) ||
         t.m1_agent?.staff_id?.toLowerCase().includes(q) ||
         t.temp_t1?.full_name?.toLowerCase().includes(q) ||
@@ -26,15 +40,31 @@ export default function M1TransitionList({ tasks, processingId, canCreateRequest
         t.departed_agent?.full_name?.toLowerCase().includes(q) ||
         t.departed_agent?.staff_id?.toLowerCase().includes(q)
       )
-    : tasks
+    }
+    switch (filter) {
+      case 'eligible':
+        result = result.filter((t) => canCreateRequest(t.m1_agent))
+        break
+      case 'not-eligible':
+        result = result.filter((t) => !canCreateRequest(t.m1_agent))
+        break
+      case 'emailed':
+        result = result.filter((t) => t.email_sent_count > 0)
+        break
+      case 'all':
+      default:
+        break
+    }
+    return result
+  }, [tasks, q, filter, canCreateRequest])
 
   return (
-    <div className="bg-white rounded-lg p-5 shadow-card">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white rounded-lg p-4 shadow-card h-full flex flex-col">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 flex-shrink-0">
         <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-warning" /> M1 Transition ({filtered.length})
         </h2>
-        <div className="relative w-48 sm:w-56">
+        <div className="relative w-full sm:w-56">
           <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm agent..."
             className="w-full h-9 pl-9 pr-8 border border-neutral-300 rounded-md text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" />
@@ -43,7 +73,22 @@ export default function M1TransitionList({ tasks, processingId, canCreateRequest
           )}
         </div>
       </div>
-      <div className="space-y-3 max-h-[400px] overflow-y-auto">
+      <div className="flex flex-wrap items-center gap-2 mb-3 flex-shrink-0">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              filter === f.key
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-neutral-600 border-neutral-300 hover:bg-neutral-50'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
         {filtered.length === 0 && (
           <EmptyState icon={<Inbox className="w-12 h-12" />} title="Không có M1 nào đang trong giai đoạn transition"
             subtitle={search ? 'Không tìm thấy kết quả phù hợp' : 'Tất cả M1 đã được xử lý hoặc chưa có request hoàn tất'} />
@@ -66,7 +111,7 @@ export default function M1TransitionList({ tasks, processingId, canCreateRequest
                   {t.parent_request_id ? 'T1 cũ thay đổi' : 'Deactivate agent'}
                 </span>
                 {t.email_sent_count > 0 ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-neutral-500" title={`Gửi lần cuối: ${formatDate(t.last_email_sent_at)}`}>
+                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-100 text-blue-700" title={`Gửi lần cuối: ${formatDate(t.last_email_sent_at)}`}>
                     <Mail className="w-3 h-3" /> Đã gửi {t.email_sent_count} lần
                   </span>
                 ) : (

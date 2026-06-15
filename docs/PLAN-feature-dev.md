@@ -76,6 +76,9 @@
 | 024 | Testing Infrastructure — Smoke Test + Unit Test (Vitest) | done | 2026-06-10 | 2026-06-10 |
 | 025 | Email Activities Table cho M1 Transition Tracking | done | 2026-06-11 | 2026-06-11 |
 | 026 | Delete Email Template | done | 2026-06-12 | 2026-06-12 |
+| 027 | Gửi email qua Google Apps Script | planned | 2026-06-12 | — |
+| 028 | Dashboard M1 Transition Enhancement | done | 2026-06-15 | 2026-06-15 |
+| 029 | Dashboard Full-Viewport Layout — M1 Transition Fill Remaining Height | done | 2026-06-15 | 2026-06-15 |
 
 ---
 
@@ -1895,6 +1898,224 @@ FOR EACH ROW EXECUTE FUNCTION public.handle_email_activity_insert();
 
 ---
 
+## FEAT-027: Gửi email qua Google Apps Script
+
+- **Đề xuất**: 2026-06-12
+- **Status**: `planned`
+- **Priority**: `high`
+
+#### 1. Mô tả feature
+Tích hợp gửi email thật từ app qua **Google Apps Script Web App** thay vì Resend. Khi user bấm **"Gửi email"** trong `ComposeTemplateModal`, hệ thống sẽ gọi Supabase Edge Function → Edge Function gọi Google Apps Script → Apps Script dùng `GmailApp.sendEmail()` để gửi email từ tài khoản Google của tổ chức.
+
+#### 2. Motivation / Why
+- Resend yêu cầu verify domain (`myera.com.vn`) qua DNS records SPF/DKIM/DMARC — hiện tại chưa thể dùng.
+- Tổ chức đã có sẵn Gmail/Google Workspace và muốn dùng automation của Google.
+- Google Apps Script đơn giản, không cần maintain server riêng, chi phí thấp.
+
+#### 3. Scope
+
+**In scope:**
+- Tạo Google Apps Script với endpoint `doPost(e)` để nhận request gửi email.
+- Deploy Apps Script dạng Web App (exec as user hoặc as me).
+- Tạo Supabase Edge Function `send-email-gapps` để gọi Apps Script URL một cách bảo mật.
+- Lưu Apps Script Web App URL vào Supabase secrets (không để lộ ở frontend).
+- Bật lại nút **"Gửi email"** trong `ComposeTemplateModal`.
+- Cập nhật `SendEmailModal` để gọi Edge Function mới.
+- Lưu log gửi email vào bảng `email_logs` (đã có từ FEAT-001).
+- Cập nhật `email_activities` để track số lần gửi cho M1 Transition (nếu gửi từ M1 task).
+
+**Out of scope:**
+- Không tự động gửi email khi request chuyển status (chỉ gửi thủ công từ UI).
+- Không thay đổi cấu trúc bảng `email_templates`.
+- Không gửi email qua SMTP trực tiếp.
+- Không tích hợp Google Calendar/Sheet khác.
+
+#### 4. Technical Design
+
+**4.1 Google Apps Script (standalone script)**
+Tạo script mới tại [script.google.com](https://script.google.com):
+
+```javascript
+function doPost(e) {
+  const data = JSON.parse(e.postData.contents || '{}')
+  const { to, cc, bcc, subject, htmlBody, fromName } = data
+
+  if (!to || !subject || !htmlBody) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Thiếu to/subject/body' }))
+      .setMimeType(ContentService.MimeType.JSON)
+  }
+
+  try {
+    GmailApp.sendEmail(to, subject, '', {
+      htmlBody: htmlBody,
+      cc: cc || undefined,
+      bcc: bcc || undefined,
+      name: fromName || 'Phòng Vận Hành ERA',
+    })
+    return ContentService.createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON)
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON)
+  }
+}
+
+function doGet() {
+  return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+    .setMimeType(ContentService.MimeType.JSON)
+}
+```
+
+Deploy → **Web App**:
+- Execute as: `Me` (hoặc tài khoản service chung)
+- Who has access: `Anyone` (hoặc `Anyone within [domain]` nếu có Google Workspace)
+- Copy **Web App URL**.
+
+**4.2 Supabase Edge Function `send-email-gapps`**
+File: `supabase/functions/send-email-gapps/index.ts`
+
+```typescript
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+serve(async (req) => {
+  const supabaseClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+  const authHeader = req.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+  const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+  if (authError || !user) {
+    return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401 })
+  }
+
+  const body = await req.json().catch(() => ({}))
+  const { to, cc, bcc, subject, html, template_key, agent_id, task_id } = body
+
+  if (!to || !subject || !html) {
+    return new Response(JSON.stringify({ success: false, error: 'Missing fields' }), { status: 400 })
+  }
+
+  const gappsUrl = Deno.env.get('GAPPS_WEBAPP_URL')
+  if (!gappsUrl) {
+    return new Response(JSON.stringify({ success: false, error: 'GAPPS_WEBAPP_URL not configured' }), { status: 500 })
+  }
+
+  const gappsRes = await fetch(gappsUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to,
+      cc,
+      bcc,
+      subject,
+      htmlBody: html,
+      fromName: 'Phòng Vận Hành ERA',
+    }),
+  })
+  const gappsData = await gappsRes.json().catch(() => ({ success: false, error: 'Invalid response from Apps Script' }))
+
+  await supabaseClient.from('email_logs').insert({
+    sent_by: user.id,
+    recipient_agent_id: agent_id,
+    template_key,
+    subject,
+    body: html,
+    status: gappsData.success ? 'sent' : 'failed',
+    error_message: gappsData.success ? null : gappsData.error,
+  })
+
+  if (task_id && gappsData.success) {
+    await supabaseClient.from('email_activities').insert({
+      task_id,
+      action_type: 'send',
+      content_preview: html.replace(/<[^>]*>/g, '').slice(0, 200),
+      created_by: user.id,
+    })
+  }
+
+  return new Response(JSON.stringify(gappsData), {
+    headers: { 'Content-Type': 'application/json' },
+  })
+})
+```
+
+**4.3 Secrets cần set trong Supabase Dashboard**
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (đã có sẵn)
+- `GAPPS_WEBAPP_URL`: URL từ Apps Script Web App
+
+**4.4 Frontend**
+- `ComposeTemplateModal.tsx`: Bật lại nút **"Gửi email"** (hiện đang bị comment/ẩn theo CHANGELOG #19).
+- `SendEmailModal.tsx`: Thay `supabase.functions.invoke('send-email', ...)` thành `supabase.functions.invoke('send-email-gapps', ...)`.
+- Không cần trường `from` vì sender được quản lý bởi Apps Script.
+
+#### 5. UI/UX
+- Giữ nguyên giao diện `SendEmailModal` hiện tại.
+- Nút "Gửi email" trong `ComposeTemplateModal` hiển thị cạnh "Copy nội dung" và "Copy email".
+- Toast: "Đã gửi email thành công" / "Gửi email thất bại: ...".
+
+#### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `supabase/functions/send-email-gapps/index.ts` | **Mới** — Edge Function gọi Apps Script + lưu log |
+| `src/components/ComposeTemplateModal.tsx` | Bật lại nút "Gửi email" mở `SendEmailModal` |
+| `src/components/SendEmailModal.tsx` | Đổi invoke sang `send-email-gapps`, bỏ trường `from` |
+
+#### 7. Schema / SQL changes
+Không cần thay đổi schema. Bảng `email_logs` (migration `014_email_logs.sql`) và `email_activities` (`018_email_activities.sql`) đã tồn tại.
+
+#### 8. API / Integration changes
+- **Google Apps Script Web App:** Endpoint POST nhận JSON, gửi email qua `GmailApp`.
+- **Supabase Edge Function:** `send-email-gapps` — xác thực JWT, validate input, call Apps Script, audit log.
+- **Frontend:** Gọi Edge Function thay vì Resend.
+
+#### 9. Test Plan
+1. Tạo Google Apps Script, deploy Web App, lấy URL.
+2. Set `GAPPS_WEBAPP_URL` trong Supabase Edge Function secrets.
+3. Chạy `supabase functions serve` local → test endpoint bằng cURL/Postman.
+4. Mở app → Agents → chọn 1 agent → "Soạn mẫu" → "Gửi email".
+5. Nhập To + CC → bấm "Gửi email" → verify email đến hộp thư.
+6. Kiểm tra `email_logs` có record mới với `status = 'sent'`.
+7. Nếu gửi từ M1 Transition row → verify `email_activities` có record `action_type = 'send'`.
+8. Test case lỗi: sai URL Apps Script → toast lỗi, `email_logs.status = 'failed'`.
+
+#### 10. Rollout Plan
+1. Tạo Apps Script + deploy Web App.
+2. Viết Edge Function `send-email-gapps`.
+3. Set secrets trong Supabase Dashboard.
+4. Sửa `SendEmailModal` và `ComposeTemplateModal`.
+5. Test local với Apps Script URL.
+6. Deploy Edge Function: `supabase functions deploy send-email-gapps`.
+7. Deploy frontend khi được yêu cầu.
+8. Cập nhật `CHANGELOG.md`.
+
+#### 11. Notes
+
+- **Ưu điểm:**
+  - Không cần verify domain như Resend.
+  - Dùng sẵn Gmail/Google Workspace.
+  - Triển khai nhanh, không cần server riêng.
+  - Chi phí thấp (Apps Script miễn phí trong quota).
+
+- **Nhược điểm:**
+  - Phụ thuộc vào tài khoản Google cá nhân/tổ chức.
+  - Giới hạn quota Apps Script (20,000 email/ngày).
+  - Web App URL cần giữ bí mật (do đó phải gọi qua Edge Function).
+  - Khó debug hơn Resend vì không có dashboard riêng.
+
+- **Rủi ro & Mitigation:**
+
+  | Rủi ro | Mitigation |
+  |--------|------------|
+  | Web App URL bị lộ trên frontend | Không bao giờ gọi trực tiếp từ frontend; luôn qua Supabase Edge Function |
+  | Apps Script bị spam nếu token bị lộ | Edge Function verify JWT, chỉ authenticated user mới gọi được |
+  | Email vào spam | Dùng Google Workspace + domain chính thức; cấu hình DKIM/SPF trên Google Workspace |
+  | Apps Script quota vượt giới hạn | Theo dõi `email_logs`; nếu cần scale, chuyển sang Gmail API Service Account sau |
+  | Lỗi CORS khi gọi Apps Script | Apps Script `doPost` trả về `ContentService` JSON; Edge Function gọi server-side nên không bị CORS |
+
+---
+
+---
+
 ## FEAT-026: Delete Email Template
 
 - **Đề xuất**: 2026-06-12
@@ -2006,4 +2227,269 @@ Không cần.
   | Operator vẫn xóa được qua API | RLS policy `email_templates_admin` chặn DELETE non-admin ở DB level |
   | Mutation lỗi nhưng UI không cập nhật | Bắt lỗi `.catch()` và toast error; giữ modal mở để user biết |
   | UI chưa cập nhật sau xóa | `invalidateQueries(['email_templates'])` force refetch list |
+
+---
+
+---
+
+## FEAT-029: Dashboard Full-Viewport Layout — M1 Transition Fill Remaining Height
+
+- **Đề xuất**: 2026-06-15
+- **Status**: `done`
+- **Priority**: `medium`
+
+#### 1. Mô tả feature
+Chuyển Dashboard sang chế độ **cố định 1 viewport** (`100dvh`), các section phía trên tự co lại theo content, còn **M1 Transition** sẽ tự động chiếm toàn bộ chiều cao còn lại của trang, cách cạnh dưới browser một khoảng padding nhỏ.
+
+#### 2. Motivation / Why
+- Sau FEAT-028, M1 Transition đã chiếm full width nhưng vẫn bị giới hạn `max-h-[400px]`.
+- Danh sách M1 có thể dài, user phải scroll bên trong một khung nhỏ hoặc scroll cả trang.
+- Mục tiêu: M1 list luôn hiển thị gần full màn hình, giảm thao tác scroll, tận dụng tối đa không gian.
+
+#### 3. Scope
+
+**In scope:**
+- `DashboardPage.tsx`: chuyển wrapper sang `h-[100dvh] overflow-hidden flex flex-col`.
+- `DashboardPage.tsx`: các section phía trên (`PageHeader`, `DashboardStats`, `B2PendingAlert`, `B2EligibleList`) thêm `flex-shrink-0`.
+- `DashboardPage.tsx`: M1 Transition wrapper thêm `flex-1 min-h-0` để chiếm chiều cao còn lại.
+- `M1TransitionList.tsx`: card `h-full flex flex-col`.
+- `M1TransitionList.tsx`: header + filter `flex-shrink-0`.
+- `M1TransitionList.tsx`: list area thay `max-h-[400px]` bằng `flex-1 overflow-y-auto`.
+- Cập nhật loading skeleton cho phù hợp layout mới.
+
+**Out of scope:**
+- Không thay đổi behavior của B2EligibleList / B2PendingAlert (chúng đã có `max-h-[320px]` sẵn).
+- Không thay đổi filter logic, eligibility, buttons trong M1 Transition.
+- Không thay đổi DashboardStats behavior.
+
+#### 4. Technical Design
+
+**Layout tổng thể DashboardPage:**
+```tsx
+<div className="h-[100dvh] overflow-hidden flex flex-col gap-6 p-6">
+  <PageHeader title="Dashboard" className="flex-shrink-0" />
+  <DashboardStats ... className="flex-shrink-0" />
+  <B2PendingAlert ... className="flex-shrink-0" />
+  <B2EligibleList ... className="flex-shrink-0" />
+  <div className="flex-1 min-h-0 pb-6">
+    <M1TransitionList ... />
+  </div>
+</div>
+```
+
+> Nếu muốn giữ khoảng cách dưới cùng, thêm `pb-6` vào wrapper hoặc margin-bottom vào M1 wrapper.
+
+**M1TransitionList internal layout:**
+```tsx
+<div className="bg-white rounded-lg p-5 shadow-card h-full flex flex-col">
+  {/* header + search: flex-shrink-0 */}
+  <div className="flex ... mb-4 flex-shrink-0">...</div>
+  {/* filter tabs: flex-shrink-0 */}
+  <div className="flex flex-wrap ... mb-4 flex-shrink-0">...</div>
+  {/* list: chiếm phần còn lại, scroll bên trong */}
+  <div className="flex-1 overflow-y-auto space-y-3">
+    ...
+  </div>
+</div>
+```
+
+**Xử lý mobile / dynamic viewport:**
+- Dùng `h-[100dvh]` thay vì `h-screen` để tránh bị address bar của mobile browser che khuất.
+- Fallback: nếu browser không hỗ trợ `dvh`, Tailwind v4 vẫn compile `100dvh` là valid CSS, browser sẽ tự fallback về auto nếu không hiểu. Nếu muốn an toàn hơn có thể dùng `h-screen h-[100dvh]`.
+
+**Loading skeleton:**
+- Thay vì skeleton dạng `space-y-3`, dùng layout flex tương tự để tránh nhấp nháy khi data load xong.
+
+#### 5. UI/UX
+- Dashboard không còn scroll ngoài, chỉ có scroll bên trong M1 list (và B2 sections nếu quá dài).
+- M1 list luôn kéo dài gần đến cạnh dưới browser.
+- Khoảng cách dưới cùng ~24px (`pb-6`) để không bị dính sát mép.
+
+#### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `src/pages/DashboardPage.tsx` | Chuyển wrapper sang flex column full viewport; thêm `flex-shrink-0` cho các section trên; M1 wrapper `flex-1 min-h-0`; cập nhật skeleton |
+| `src/components/dashboard/M1TransitionList.tsx` | Card `h-full flex flex-col`; header/filter `flex-shrink-0`; list area `flex-1 overflow-y-auto` |
+
+#### 7. Schema / SQL changes
+Không cần.
+
+#### 8. API / Integration changes
+Không cần.
+
+#### 9. Test Plan
+1. Mở Dashboard ở desktop → M1 Transition card kéo dài gần đến cạnh dưới browser, cách ~24px.
+2. Thu nhỏ/nâng cao cửa sổ browser → M1 list tự điều chỉnh chiều cao theo viewport.
+3. Mở trên mobile → layout không bị address bar che (dùng `100dvh`).
+4. Scroll trong M1 list hoạt động mượt, không scroll cả trang.
+5. B2EligibleList/B2PendingAlert vẫn hiển thị đúng, scroll riêng nếu quá dài.
+6. Filter tabs + search trong M1 vẫn hoạt động.
+7. Chạy `npm run build` → pass.
+8. Chạy `npm run test` → 56/56 tests pass.
+
+#### 10. Rollout Plan
+1. Sửa `DashboardPage.tsx`.
+2. Sửa `M1TransitionList.tsx`.
+3. Chạy `npm run build` + `npm run test`.
+4. Cập nhật `CHANGELOG.md`.
+5. Cập nhật `PLAN-feature-dev.md` status FEAT-029 → `done`.
+6. Deploy khi được yêu cầu.
+
+#### 11. Notes
+
+- **Ưu điểm:**
+  - Tận dụng tối đa không gian màn hình cho M1 Transition.
+  - Giảm thao tác scroll, tập trung vào section quan trọng nhất.
+  - Layout dễ dự đoán, không phụ thuộc vào tổng chiều cao content phía trên.
+
+- **Nhược điểm:**
+  - Nếu viewport quá thấp (laptop 768px), các section phía trên có thể chiếm quá nhiều chỗ, M1 list bị ép nhỏ.
+  - `100dvh` có thể không hoạt động hoàn hảo trên một số older browsers (IE11, old Safari).
+
+- **Rủi ro & Mitigation:**
+
+  | Rủi ro | Mitigation |
+  |--------|------------|
+  | M1 list bị ép quá nhỏ trên màn hình thấp | Đảm bảo B2EligibleList/B2PendingAlert đã có `max-h-[320px]`; nếu vẫn nhỏ, cân nhắc thêm `min-h-[200px]` cho M1 list |
+  | Address bar mobile làm viewport nhảy | Dùng `100dvh` thay vì `100vh` |
+  | Skeleton bị nhấp nháy khi layout thay đổi | Cập nhật skeleton cho giống layout mới |
+  | CSS `dvh` không được hỗ trợ | Thêm fallback `h-screen` trước `h-[100dvh]` |
+
+---
+
+---
+
+## FEAT-028: Dashboard M1 Transition Enhancement
+
+- **Đề xuất**: 2026-06-15
+- **Status**: `done`
+- **Priority**: `medium`
+
+#### 1. Mô tả feature
+Cải tiến layout Dashboard và tăng khả năng lọc/thao tác trên card **M1 Transition**:
+1. Ẩn card **"Trạng thái đề xuất"** (`StatusChart`) khỏi Dashboard.
+2. Ẩn card **"Agent đang theo dõi"** (`BookmarkedAgentsCard`) khỏi Dashboard.
+3. Mở rộng section **M1 Transition** ra toàn bộ chiều rộng (full width).
+4. Thêm các bộ lọc trong M1 Transition:
+   - **Tất cả**: hiển thị toàn bộ M1 đang transition.
+   - **Đủ điều kiện**: các Agent đủ điều kiện chọn T1 mới.
+   - **Không đủ điều kiện**: các Agent không đủ điều kiện chọn T1 mới.
+   - **Đã gửi email**: các task đã phát sinh gửi email (`email_sent_count > 0`).
+5. Highlight badge trạng thái gửi email để dễ nhìn.
+
+#### 2. Motivation / Why
+- Dashboard hiện tại có nhiều section, M1 Transition bị giới hạn 2/3 chiều rộng trong khi danh sách có thể dài.
+- User cần lọc nhanh các M1 đã gửi email hoặc đủ/không đủ điều kiện để xử lý tập trung.
+- Highlight email count giúp nhận biết nhanh task nào đã/chưa được nhắc.
+
+#### 3. Scope
+
+**In scope:**
+- Ẩn `StatusChart` và `BookmarkedAgentsCard` trong `DashboardPage.tsx`.
+- Chuyển layout M1 Transition từ `lg:col-span-2` sang full width.
+- Thêm filter tabs trong `M1TransitionList.tsx`.
+- Kết hợp search text + filter tab.
+- Highlight badge email count (dùng màu info/primary thay vì neutral).
+
+**Out of scope:**
+- Không thay đổi logic eligibility (vẫn dùng `canCreateRequest` hiện tại).
+- Không thêm API/RPC mới.
+- Không thay đổi behavior của các nút "Tạo đề xuất", "Gửi email", "Ở lại với T2".
+- Không hiển thị lý do cụ thể agent không đủ điều kiện (chỉ filter).
+
+#### 4. Technical Design
+
+**Filter state:**
+```ts
+type M1Filter = 'all' | 'eligible' | 'not-eligible' | 'emailed'
+const [filter, setFilter] = useState<M1Filter>('all')
+```
+
+**Eligibility cho từng task:**
+- Trong `DashboardPage.tsx`, tiền tính `eligibleMap: Map<string, boolean>` hoặc truyền xuống `M1TransitionList` hàm `canCreateRequest` đã có.
+- Trong `M1TransitionList.tsx`, gọi `canCreateRequest(t.m1_agent)` để xác định đủ/không đủ điều kiện.
+
+**Filter logic:**
+```ts
+const filtered = useMemo(() => {
+  let result = q ? tasks.filter(...) : tasks
+  switch (filter) {
+    case 'eligible': result = result.filter(t => canCreateRequest(t.m1_agent)); break
+    case 'not-eligible': result = result.filter(t => !canCreateRequest(t.m1_agent)); break
+    case 'emailed': result = result.filter(t => t.email_sent_count > 0); break
+    case 'all':
+    default: break
+  }
+  return result
+}, [tasks, q, filter, canCreateRequest])
+```
+
+**Layout DashboardPage:**
+- Bỏ grid `lg:grid-cols-3` chứa M1 + Bookmarked.
+- Render `<M1TransitionList ... />` ở full width dưới B2EligibleList.
+- Bỏ `<BookmarkedAgentsCard />` và `<StatusChart />`.
+
+**Highlight email count:**
+- Thay badge "Đã gửi X lần" từ `text-neutral-500` sang `bg-info-light text-info` hoặc `bg-primary-light text-primary`.
+- Giữ badge "Chưa gửi email" ở neutral.
+
+#### 5. UI/UX
+- Filter tabs nằm ngay dưới header M1 Transition, bên trái search box hoặc trên một hàng riêng trên mobile.
+- Tab active: background primary, text white.
+- Tab inactive: background white, border neutral, hover neutral-50.
+- Badge count trên title M1 Transition hiển thị số task sau filter.
+- Email count badge nổi bật hơn.
+
+#### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `src/pages/DashboardPage.tsx` | Ẩn `StatusChart`, `BookmarkedAgentsCard`; mở rộng M1 Transition full width |
+| `src/components/dashboard/M1TransitionList.tsx` | Thêm filter tabs, combine search + filter, highlight email badge |
+
+#### 7. Schema / SQL changes
+Không cần.
+
+#### 8. API / Integration changes
+Không cần.
+
+#### 9. Test Plan
+1. Vào Dashboard → verify không còn card "Trạng thái đề xuất" và "Agent đang theo dõi".
+2. Verify M1 Transition chiếm toàn bộ chiều rộng.
+3. Tab "Tất cả" hiển thị đúng số lượng M1 transition.
+4. Tab "Đủ điều kiện" chỉ hiển thị agent có nút "Tạo đề xuất" enabled.
+5. Tab "Không đủ điều kiện" chỉ hiển thị agent có nút "Tạo đề xuất" disabled.
+6. Tab "Đã gửi email" chỉ hiển thị task có `email_sent_count > 0`.
+7. Search box vẫn hoạt động kết hợp với filter tab.
+8. Badge "Đã gửi X lần" có màu nổi bật.
+9. Chạy `npm run verify` → pass.
+10. Chạy `npm run test` → pass.
+
+#### 10. Rollout Plan
+1. Sửa `DashboardPage.tsx`.
+2. Sửa `M1TransitionList.tsx`.
+3. Chạy `npm run verify` + `npm run test`.
+4. Cập nhật `CHANGELOG.md`.
+5. Deploy khi được yêu cầu.
+
+#### 11. Notes
+
+- **Ưu điểm:**
+  - Chỉ sửa 2 files frontend.
+  - Không thay đổi schema hay API.
+  - Tận dụng logic `canCreateRequest` sẵn có.
+
+- **Nhược điểm:**
+  - Filter eligibility chạy client-side, phụ thuộc vào `t1Changes` đã load.
+  - `canCreateRequest` đang dùng `any` type, cần cẩn thận khi refactor.
+
+- **Rủi ro & Mitigation:**
+
+  | Rủi ro | Mitigation |
+  |--------|------------|
+  | `canCreateRequest` bị gọi lặp cho mỗi task khi filter | Dùng `useMemo` cache kết quả filter; số lượng task thường nhỏ |
+  | `agent.rank_name` null nhưng `rank_id` có giá trị | Hàm `canCreateRequest` đã fallback về `rankMap` |
+  | Filter "Đã gửi email" không cập nhật sau khi copy email | `email_sent_count` được cập nhật qua trigger DB + invalidate query |
+  | Layout bị vỡ trên mobile | Test responsive, filter tabs wrap xuống dòng |
 

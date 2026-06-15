@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { SkeletonCard, SkeletonText } from '../components/Skeleton'
 import PageHeader from '../ui/layout/PageHeader'
-import Card from '../ui/layout/Card'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { completeRequestAction } from '../lib/request-actions'
@@ -12,28 +11,25 @@ import CountdownConfirmModal from '../components/CountdownConfirmModal'
 import ComposeTemplateModal from '../components/ComposeTemplateModal'
 import CreateRequestModal from '../components/CreateRequestModal'
 import { useDashboardStatsQuery } from '../hooks/queries/useDashboardStats'
-import { useStatusCountsQuery } from '../hooks/queries/useStatusCounts'
 import { useB2RequestsQuery } from '../hooks/queries/useB2Requests'
 import { useM1TransitionsQuery } from '../hooks/queries/useM1Transitions'
-import { useBookmarkedAgentsQuery } from '../hooks/queries/useBookmarkedAgents'
 import { useT1ChangesQuery } from '../hooks/queries/useT1Changes'
 import { useRanksMapQuery } from '../hooks/queries/useRanks'
 import type { B2Request } from '../hooks/queries/useB2Requests'
 import type { TransitionTask } from '../hooks/queries/useM1Transitions'
+import type { Agent, T1Change } from '../types'
 import DashboardStats from '../components/dashboard/DashboardStats'
 import B2PendingAlert from '../components/dashboard/B2PendingAlert'
 import B2EligibleList from '../components/dashboard/B2EligibleList'
 import M1TransitionList from '../components/dashboard/M1TransitionList'
-import BookmarkedAgentsCard from '../components/dashboard/BookmarkedAgentsCard'
-import StatusChart from '../components/dashboard/StatusChart'
 
-function canCreateRequest(agent: any, allChanges: any[], rMap?: Map<string, string>): boolean {
+function canCreateRequest(agent: Partial<Agent> | null | undefined, allChanges: Pick<T1Change, 'agent_id' | 'change_date' | 'is_counted_for_quota' | 'deleted_at'>[], rMap?: Map<string, string>): boolean {
   if (!agent?.contract_signing_date) return false
   const days = Math.floor((Date.now() - new Date(agent.contract_signing_date).getTime()) / (1000 * 60 * 60 * 24))
-  const changes = allChanges.filter((c: any) => c.agent_id === agent.id && c.is_counted_for_quota && !c.deleted_at)
+  const changes = allChanges.filter((c) => c.agent_id === agent.id && c.is_counted_for_quota && !c.deleted_at)
   if (days <= 90) return changes.length < 1
   if (changes.length >= 3) return false
-  const lastChange = changes.sort((a: any, b: any) => new Date(b.change_date).getTime() - new Date(a.change_date).getTime())[0]
+  const lastChange = changes.sort((a, b) => new Date(b.change_date).getTime() - new Date(a.change_date).getTime())[0]
   if (lastChange) {
     const daysSinceLast = Math.floor((Date.now() - new Date(lastChange.change_date).getTime()) / (1000 * 60 * 60 * 24))
     if (daysSinceLast < 180) return false
@@ -57,10 +53,8 @@ export default function DashboardPage() {
   const [confirmT2Task, setConfirmT2Task] = useState<TransitionTask | null>(null)
 
   const { data: stats, isLoading: statsLoading, error: statsError } = useDashboardStatsQuery()
-  const { data: statusCounts = {}, isLoading: countsLoading } = useStatusCountsQuery()
   const { data: b2Requests = [], isLoading: b2Loading } = useB2RequestsQuery()
   const { data: transitions = [], isLoading: transitionsLoading, error: transitionsError } = useM1TransitionsQuery()
-  const { data: bookmarkedAgents = [], isLoading: bookmarksLoading } = useBookmarkedAgentsQuery()
   const { data: t1Changes = [] } = useT1ChangesQuery()
   const { data: rankNamesMap = {} } = useRanksMapQuery()
 
@@ -71,7 +65,7 @@ export default function DashboardPage() {
     show('Lỗi tải M1 Transition: ' + (transitionsError as Error).message, 'error')
   }
 
-  const isLoading = statsLoading || countsLoading || b2Loading || transitionsLoading || bookmarksLoading
+  const isLoading = statsLoading || b2Loading || transitionsLoading
 
   const applyT2 = async (task: TransitionTask) => {
     setProcessingT2(task.id)
@@ -99,7 +93,7 @@ export default function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'statusCounts'] })
       setConfirmModal({ open: false, req: null })
       show('Đã xác nhận thay đổi T1', 'success')
-    } catch (e: any) { show('Lỗi: ' + e.message, 'error') }
+    } catch (e) { show('Lỗi: ' + (e instanceof Error ? e.message : String(e)), 'error') }
   }
 
   const handleCancelRequest = async () => {
@@ -124,13 +118,11 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 animate-fade-in">
-        <PageHeader title="Dashboard" />
-        <div className="page-grid-cards"><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 space-y-3"><SkeletonText lines={4} /></Card>
-          <Card className="space-y-3"><SkeletonText lines={3} /></Card>
-        </div>
+      <div className="h-[100dvh] overflow-hidden flex flex-col gap-3 p-4 animate-fade-in">
+        <div className="flex-shrink-0"><PageHeader title="Dashboard" className="mb-0" /></div>
+        <div className="page-grid-cards flex-shrink-0"><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
+        <div className="space-y-3 flex-shrink-0"><SkeletonText lines={4} /></div>
+        <div className="flex-1 min-h-0 pb-4"><SkeletonText lines={8} /></div>
       </div>
     )
   }
@@ -138,33 +130,30 @@ export default function DashboardPage() {
   const rankMap = new Map(Object.entries(rankNamesMap))
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Dashboard" />
+    <div className="h-[100dvh] overflow-hidden flex flex-col gap-3 p-4">
+      <div className="flex-shrink-0"><PageHeader title="Dashboard" className="mb-0" /></div>
 
-      <DashboardStats stats={stats} onNavigate={navigate} />
-      <B2PendingAlert b2Pending={b2Pending} b2Alert={b2Alert} />
-      <B2EligibleList
-        items={b2Eligible}
-        onConfirm={(req) => setConfirmModal({ open: true, req })}
-        onCancel={(req) => setCancelModal({ open: true, req, reason: '' })}
-        onEmail={(agentId, requestId) => setEmailModal({ agentId, requestId })}
-      />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <M1TransitionList
-            tasks={transitions}
-            processingId={processingT2}
-            canCreateRequest={(agent) => canCreateRequest(agent, t1Changes, rankMap)}
-            onEmail={(agentId, taskId) => setEmailModal({ agentId, taskId })}
-            onCreateRequest={(agentId) => setRequestModalAgentId(agentId)}
-            onApplyT2={(task) => setConfirmT2Task(task)}
-          />
-        </div>
-        <BookmarkedAgentsCard agents={bookmarkedAgents} />
+      <div className="flex-shrink-0"><DashboardStats stats={stats} onNavigate={navigate} /></div>
+      <div className="flex-shrink-0"><B2PendingAlert b2Pending={b2Pending} b2Alert={b2Alert} /></div>
+      <div className="flex-shrink-0">
+        <B2EligibleList
+          items={b2Eligible}
+          onConfirm={(req) => setConfirmModal({ open: true, req })}
+          onCancel={(req) => setCancelModal({ open: true, req, reason: '' })}
+          onEmail={(agentId, requestId) => setEmailModal({ agentId, requestId })}
+        />
       </div>
 
-      <StatusChart counts={statusCounts} />
+      <div className="flex-1 min-h-0 pb-4">
+        <M1TransitionList
+          tasks={transitions}
+          processingId={processingT2}
+          canCreateRequest={(agent) => canCreateRequest(agent, t1Changes, rankMap)}
+          onEmail={(agentId, taskId) => setEmailModal({ agentId, taskId })}
+          onCreateRequest={(agentId) => setRequestModalAgentId(agentId)}
+          onApplyT2={(task) => setConfirmT2Task(task)}
+        />
+      </div>
 
       <CountdownConfirmModal open={confirmModal.open} title="Xác nhận thay đổi T1" confirmText="Xác nhận thay đổi" confirmVariant="primary"
         onConfirm={handleConfirmChange} onCancel={() => setConfirmModal({ open: false, req: null })}>
