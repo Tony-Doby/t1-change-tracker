@@ -60,6 +60,140 @@
 | 028 | ComposeTemplateModal dropdown chọn loại mẫu tự đóng modal | fixed | 2026-06-12 | 2026-06-12 |
 | 029 | ComposeTemplateModal không hiển thị mẫu email mới / vẫn hiển thị mẫu đã xóa | fixed | 2026-06-12 | 2026-06-12 |
 | 030 | ComposeTemplateModal tự đóng khi chọn loại mẫu do AgentsPage dựa vào selection | fixed | 2026-06-12 | 2026-06-12 |
+| 033 | Agent Detail lưu thông tin không tự refresh, phải F5 mới thấy mới | fixed | 2026-06-19 | 2026-06-19 |
+| 035 | RequestsPage không tự cập nhật khi tạo / thay đổi request | fixed | 2026-06-19 | 2026-06-19 |
+| 036 | Dashboard B2 chờ phản hồi chấp thuận không cập nhật khi active B2 | fixed | 2026-06-19 | 2026-06-19 |
+
+---
+
+## BUG-036: Dashboard B2 chờ phản hồi chấp thuận không cập nhật khi active B2
+
+- **Phát hiện**: 2026-06-19
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Từ Request Detail, chuyển request sang B2 (nhập ngày xác nhận). Sau khi thành công, quay về Dashboard, phần **"B2 chờ phản hồi chấp thuận"** không hiển thị request vừa chuyển. Phải F5 mới thấy.
+
+### 2. Root Cause
+`RequestDetailPage.tsx` sau action `confirmStep2Date` chỉ invalidate `['request', 'detail', id]` và `['requests']`, không invalidate `['dashboard', 'b2Requests']` — query dùng cho `B2PendingAlert` / `B2EligibleList` trong `DashboardPage.tsx`.
+
+Tương tự, các action `handleConfirmChange` và `handleCancelRequest` trong RequestDetailPage cũng cần invalidate dashboard queries để Dashboard stats và B2 list đồng bộ.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Trong `RequestDetailPage.tsx`, sau 3 action thay đổi status (`confirmStep2Date`, `handleConfirmChange`, `handleCancelRequest`), bổ sung invalidate:
+- `['dashboard', 'b2Requests']`
+- `['dashboard', 'stats']`
+- `['dashboard', 'statusCounts']`
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/pages/RequestDetailPage.tsx` | Sau mỗi action thay đổi status, invalidate dashboard queries |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Từ Request Detail của request B1, bấm "Chuyển sang B2" → nhập ngày xác nhận → Lưu.
+2. Quay về Dashboard → verify request xuất hiện trong "B2 chờ phản hồi chấp thuận", không cần F5.
+3. Từ Request Detail, hoàn tất hoặc hủy 1 request B2 → quay về Dashboard → verify request biến mất khỏi B2 pending/alert và stats cập nhật.
+4. Build pass, tests pass.
+
+### 8. Notes
+- Không cần chờ Realtime; invalidate ngay sau mutation đảm bảo Dashboard đồng bộ.
+- Rollback: Revert các dòng invalidate thêm.
+
+---
+
+## BUG-035: RequestsPage không tự cập nhật khi tạo / thay đổi request
+
+- **Phát hiện**: 2026-06-19
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Sau khi tạo request mới từ `CreateRequestModal`, badge "Requests" trên sidebar tự động cập nhật (do FEAT-002 Realtime), nhưng khi navigate sang trang Requests, request mới không xuất hiện trong danh sách. Phải nhấn F5 mới thấy.
+
+Tương tự, khi thay đổi status request trong `RequestDetailPage` (chuyển B2, hoàn tất, hủy), quay lại RequestsPage cũng có thể thấy status cũ.
+
+### 2. Root Cause
+1. `CreateRequestModal.tsx` sau khi insert request thành công chỉ gọi `onClose()`, không invalidate query `['requests']`.
+2. `RequestDetailPage.tsx` sau các action thay đổi status chỉ invalidate `['request', 'detail', id]`, không invalidate `['requests']`.
+3. `RequestsPage.tsx` subscribe Realtime chỉ khi đang mở. Khi user tạo/thay đổi request từ trang khác, subscription không active nên cache cũ vẫn còn.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+- Trong `CreateRequestModal.tsx`: sau insert thành công, invalidate `['requests']` và `['layout', 'requestCount']`.
+- Trong `RequestDetailPage.tsx`: sau các action `confirmStep2Date`, `handleConfirmChange`, `handleCancelRequest`, invalidate thêm `['requests']`.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/CreateRequestModal.tsx` | Import `useQueryClient`, invalidate `['requests']` và `['layout', 'requestCount']` sau tạo request thành công |
+| `src/pages/RequestDetailPage.tsx` | Sau các action thay đổi status, invalidate thêm `['requests']` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Từ Agent Detail, tạo request mới → modal đóng → navigate sang RequestsPage → verify request mới hiện ngay, không cần F5.
+2. Từ RequestsPage, mở 1 request đang B1 → chuyển sang B2 → quay lại RequestsPage → verify status cập nhật.
+3. Hoàn tất / hủy 1 request trong RequestDetailPage → quay lại RequestsPage → verify status cập nhật.
+4. Badge sidebar vẫn tự động cập nhật.
+5. Build pass, tests pass.
+
+### 8. Notes
+- Không cần chờ Realtime event; invalidate ngay sau mutation đảm bảo UI đồng bộ.
+- Rollback: Revert các dòng invalidate thêm.
+
+---
+
+## BUG-033: Agent Detail lưu thông tin không tự refresh, phải F5 mới thấy mới
+
+- **Phát hiện**: 2026-06-19
+- **Status**: `fixed`
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+Trang Agent Detail → tab "Thông tin Agent" → bấm "Sửa" → đổi cấp bậc (rank) → bấm "Lưu". UI chuyển về chế độ xem nhưng vẫn hiển thị rank cũ. Phải nhấn F5 refresh toàn bộ trang thì rank mới mới được hiển thị.
+
+### 2. Root Cause
+`AgentInfoTab.tsx` sau khi gọi `supabase.from('agents').update(...)` thành công chỉ gọi `setIsEditing(false)` để chuyển về view mode, nhưng **không invalidate cache** của query `['agent', 'detail', agentId]` đang được dùng ở `AgentDetailPage.tsx`. Vì `useAgentDetailQuery` có `staleTime` 5 phút, dữ liệu cũ vẫn được giữ lại. F5 mới buộc refetch.
+
+Lưu ý: logic update `rank_name` đồng bộ theo `rank_id` (dòng 119-123) vẫn đúng — DB đã lưu giá trị mới.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Dùng `useQueryClient` trong `AgentInfoTab.tsx`. Sau khi update DB thành công, invalidate:
+- `['agent', 'detail', agent.id]` — buộc `AgentDetailPage` refetch và hiển thị rank mới ngay.
+- `['agents']` — đảm bảo danh sách ở `AgentsPage` cũng cập nhật rank mới.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/agent-detail/AgentInfoTab.tsx` | Import `useQueryClient`, gọi `invalidateQueries` sau khi update thành công |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Vào Agent Detail của 1 agent có rank ASC.
+2. Bấm Sửa → đổi rank sang CS → Lưu.
+3. Verify: UI hiển thị rank "CS" ngay lập tức, không cần F5.
+4. Quay lại AgentsPage → verify cột "Cấp bậc" của agent đó cũng hiển thị "CS".
+5. Build pass. Tests pass.
+
+### 8. Notes
+- Rollback: Revert import `useQueryClient` và 2 dòng `invalidateQueries`.
+- Có thể cân nhắc dùng `setQueryData` để optimistic update, nhưng `invalidateQueries` đơn giản và an toàn hơn.
 
 ---
 

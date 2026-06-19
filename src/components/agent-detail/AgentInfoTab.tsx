@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQueryClient } from '@tanstack/react-query'
 import { Pencil, Check, X, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../Toast'
@@ -19,6 +20,7 @@ interface Props {
 
 export default function AgentInfoTab({ agent, relatedMap, rankNamesMap, divisionMap }: Props) {
   const { show } = useToast()
+  const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
   const [ranks, setRanks] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -127,6 +129,8 @@ export default function AgentInfoTab({ agent, relatedMap, rankNamesMap, division
       show('Lỗi lưu: ' + error.message, 'error')
       return
     }
+    queryClient.invalidateQueries({ queryKey: ['agent', 'detail', agent.id] })
+    queryClient.invalidateQueries({ queryKey: ['agents'] })
     show('Đã cập nhật thông tin agent', 'success')
     setIsEditing(false)
   }

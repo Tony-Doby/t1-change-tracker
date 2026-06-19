@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../hooks/useAuth'
+import { useRealtime } from '../hooks/useRealtime'
+import { useRequestCountQuery } from '../hooks/queries/useRequestCount'
 import {
   LayoutDashboard,
   Users,
@@ -19,7 +22,6 @@ import {
   PanelLeft,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import type { UserRole } from '../types'
 import CommandPalette from './CommandPalette'
 import NotificationDropdown from './NotificationDropdown'
@@ -37,22 +39,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [requestCount, setRequestCount] = useState(0)
 
-  useEffect(() => {
-    async function fetchRequestCount() {
-      const { count, error } = await supabase
-        .from('t1_requests')
-        .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .not('status', 'in', '("completed","cancelled")')
-      if (!error) setRequestCount(count ?? 0)
-    }
-    fetchRequestCount()
-  }, [])
+  const { data: requestCount = 0 } = useRequestCountQuery()
+
+  useRealtime({
+    table: 't1_requests',
+    onChange: () => queryClient.invalidateQueries({ queryKey: ['layout', 'requestCount'] }),
+  })
 
   const role = user?.role ?? 'viewer'
 

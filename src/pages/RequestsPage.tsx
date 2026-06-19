@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Search, Filter, Plus, Download } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { formatDate } from '../lib/date-utils'
 import { useDebounce } from '../hooks/useDebounce'
+import { useRealtime } from '../hooks/useRealtime'
 import { useRequestsQuery } from '../hooks/queries/useRequests'
 import ExportModal from '../components/ExportModal'
 import { SkeletonTable } from '../components/Skeleton'
@@ -35,6 +37,7 @@ const statusBadgeVariant: Record<string, 'primary' | 'warning' | 'success' | 'da
 }
 
 export default function RequestsPage() {
+  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
@@ -46,6 +49,11 @@ export default function RequestsPage() {
     return []
   })
   const [showExport, setShowExport] = useState(false)
+
+  useRealtime({
+    table: 't1_requests',
+    onChange: () => queryClient.invalidateQueries({ queryKey: ['requests'] }),
+  })
 
   const { data, isLoading } = useRequestsQuery({ statusFilter })
 

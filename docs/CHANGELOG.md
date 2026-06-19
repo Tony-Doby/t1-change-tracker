@@ -5,6 +5,88 @@
 
 ---
 
+## 2026-06-19
+
+### 79. Fix BUG-036: Dashboard B2 chờ phản hồi chấp thuận không cập nhật khi active B2
+
+**Mô tả:** Từ Request Detail, chuyển request sang B2. Sau khi thành công, quay về Dashboard, phần "B2 chờ phản hồi chấp thuận" không hiển thị request vừa chuyển cho đến khi F5.
+
+**Root Cause:** `RequestDetailPage.tsx` sau các action thay đổi status chỉ invalidate `['request', 'detail', id]` và `['requests']`, không invalidate dashboard queries (`['dashboard', 'b2Requests']`, `['dashboard', 'stats']`, `['dashboard', 'statusCounts']`).
+
+**Files sửa:**
+- `webapp/src/pages/RequestDetailPage.tsx`:
+  - Sau `confirmStep2Date`, `handleConfirmChange`, `handleCancelRequest`, bổ sung invalidate `['dashboard', 'b2Requests']`, `['dashboard', 'stats']`, `['dashboard', 'statusCounts']`.
+
+**Kết quả:**
+- Chuyển request sang B2 → Dashboard B2 pending hiển thị ngay, không cần F5.
+- Hoàn tất / hủy request B2 → Dashboard B2 pending/alert và stats cập nhật ngay.
+
+### 78. Fix BUG-035: RequestsPage không tự cập nhật khi tạo / thay đổi request
+
+**Mô tả:** Sau khi tạo request mới từ Agent Detail, badge "Requests" trên sidebar cập nhật tự động nhưng request mới không hiện trong RequestsPage cho đến khi F5. Tương tự khi chuyển bước / hoàn tất / hủy request trong RequestDetailPage.
+
+**Root Cause:** `CreateRequestModal.tsx` và `RequestDetailPage.tsx` sau khi mutation thành công chỉ invalidate query detail, không invalidate query list `['requests']`. RequestsPage subscribe Realtime chỉ khi đang mở, nên khi user tạo/thay đổi request từ trang khác, list cache vẫn cũ.
+
+**Files sửa:**
+- `webapp/src/components/CreateRequestModal.tsx`:
+  - Import `useQueryClient`.
+  - Sau insert request thành công, invalidate `['requests']` và `['layout', 'requestCount']`.
+- `webapp/src/pages/RequestDetailPage.tsx`:
+  - Sau `confirmStep2Date`, `handleConfirmChange`, `handleCancelRequest`, invalidate thêm `['requests']` cùng với `['request', 'detail', id]`.
+
+**Kết quả:**
+- Tạo request mới → navigate sang RequestsPage → request hiện ngay, không cần F5.
+- Chuyển bước / hoàn tất / hủy request trong RequestDetailPage → quay lại RequestsPage → status đã cập nhật.
+- Sidebar badge vẫn đồng bộ.
+
+### 77. Feature FEAT-002: Supabase Realtime updates (comments, status, sidebar badge)
+
+**Mô tả:** Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đổi trong database, bao gồm badge số đếm "Requests" trên sidebar.
+
+**Files tạo:**
+- `webapp/src/hooks/useRealtime.ts`: Hook reusable để subscribe Supabase Realtime `postgres_changes` events.
+- `webapp/src/hooks/queries/useRequestCount.ts`: Hook query cho request count trên sidebar, dùng TanStack Query key `['layout', 'requestCount']`.
+
+**Files sửa:**
+- `webapp/src/components/Layout.tsx`:
+  - Thay thế local state `requestCount` + `useEffect` fetch một lần bằng `useRequestCountQuery`.
+  - Thêm `useRealtime` subscribe `t1_requests` để invalidate query `['layout', 'requestCount']` khi có INSERT/UPDATE/DELETE.
+- `webapp/src/pages/RequestsPage.tsx`:
+  - Thêm `useRealtime` subscribe `t1_requests`.
+  - Khi có thay đổi, invalidate query `['requests']` để kanban/card tự động cập nhật.
+- `webapp/src/pages/RequestDetailPage.tsx`:
+  - Thêm `useRealtime` subscribe `t1_requests` với filter `id=eq.${id}`.
+  - Thêm `useRealtime` subscribe `request_comments` với filter `request_id=eq.${id}`.
+  - Khi có thay đổi, invalidate query `['request', 'detail', id]`.
+- `webapp/src/pages/ActivityLogPage.tsx`:
+  - Thêm `useRealtime` subscribe `activity_logs`.
+  - Khi có thay đổi, invalidate query `['activity_logs']`.
+
+**Kết quả:**
+- Badge "Requests" trên sidebar tự động tăng/giảm khi có request mới hoặc request hoàn tất/hủy.
+- RequestsPage tự động cập nhật danh sách và status counts.
+- RequestDetailPage tự động cập nhật thông tin đề xuất và comments.
+- ActivityLogPage tự động cập nhật timeline.
+
+**Lưu ý:** Cần bật Realtime replication cho các bảng `t1_requests`, `request_comments`, `activity_logs` trong Supabase Dashboard → Database → Replication để subscription hoạt động.
+
+### 76. Fix BUG-033: Agent Detail lưu thông tin không tự refresh, phải F5 mới thấy mới
+
+**Mô tả:** Khi sửa thông tin agent (đặc biệt là rank) trong Agent Detail và bấm Lưu, UI chuyển về chế độ xem nhưng vẫn hiển thị dữ liệu cũ. Phải F5 mới thấy thông tin mới.
+
+**Root Cause:** `AgentInfoTab.tsx` sau khi update DB thành công chỉ gọi `setIsEditing(false)` mà không invalidate cache của query `['agent', 'detail', agentId]`. `useAgentDetailQuery` có `staleTime` 5 phút nên giữ dữ liệu cũ.
+
+**Files sửa:**
+- `webapp/src/components/agent-detail/AgentInfoTab.tsx`:
+  - Import `useQueryClient` từ `@tanstack/react-query`
+  - Sau khi update DB thành công, gọi `queryClient.invalidateQueries({ queryKey: ['agent', 'detail', agent.id] })` và `queryClient.invalidateQueries({ queryKey: ['agents'] })`
+
+**Kết quả:**
+- Sau khi Lưu, Agent Detail tự động refetch và hiển thị thông tin mới (rank mới) ngay lập tức, không cần F5.
+- AgentsPage cũng refetch để cột "Cấp bậc" đồng bộ.
+
+---
+
 ## 2026-06-15
 
 ### 75. Feature FEAT-029: Dashboard Full-Viewport Layout — M1 Transition Fill Remaining Height
@@ -45,6 +127,20 @@
 **Kết quả:**
 - Build pass (`tsc -b && vite build`).
 - 56/56 tests pass.
+
+---
+
+### 76. Docs sync: Cập nhật trạng thái FEAT-009 → FEAT-018 trong PLAN-feature-dev.md
+
+**Mô tả:** Đối chiếu codebase xác nhận các feature FEAT-009 đến FEAT-018 đã được triển khai trong code. Cập nhật `PLAN-feature-dev.md`:
+- Feature Registry: đổi status từ `planned` → `done`, thêm ngày hoàn thành 2026-06-15.
+- Phần chi tiết từng feature: thêm dòng `Hoàn thành: 2026-06-15`.
+
+**Files sửa:**
+- `webapp/docs/PLAN-feature-dev.md`
+
+**Kết quả:**
+- Plan file đồng bộ với codebase.
 
 ---
 

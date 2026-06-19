@@ -62,17 +62,18 @@
 
 | ID | Tiêu đề | Status | Đề xuất | Hoàn thành |
 |----|---------|--------|---------|------------|
-| 002 | Supabase Realtime updates (comments, status) | backlog | 2026-05-28 | — |
+| 002 | Supabase Realtime updates (comments, status, sidebar badge) | done | 2026-05-28 | 2026-06-19 |
 | 004 | Refactor pages sang TanStack Query | partial | 2026-05-28 | — |
 | 005 | Search/Filter server-side cho presets phức tạp | backlog | 2026-05-28 | — |
 | 008 | Division Safety Net — Force Recompute & getAgentDivision RPC | fixed | 2026-05-29 | 2026-05-29 |
-| 009 | Dashboard stat cards navigation (→ Agents / Requests / Filter) | planned | 2026-05-29 | — |
-| 010 | Requests multi-choice status filter (toggle on/off) | planned | 2026-05-29 | — |
-| 011 | Ranks modal CRUD (popup Thêm/Sửa, bỏ footer form) | planned | 2026-05-29 | — |
-| 012 | Divisions modal CRUD + table height (popup Thêm/Sửa, bỏ max-h) | planned | 2026-05-29 | — |
-| 013 | M1 Transition — Search, T1 cũ + Lý do, Email Tracking | planned | 2026-05-29 | — |
-| 018 | ComposeTemplateModal — Refactor email section (1 section, 4 emails, copy từng email) | planned | 2026-05-29 | — |
+| 009 | Dashboard stat cards navigation (→ Agents / Requests / Filter) | done | 2026-05-29 | 2026-06-15 |
+| 010 | Requests multi-choice status filter (toggle on/off) | done | 2026-05-29 | 2026-06-15 |
+| 011 | Ranks modal CRUD (popup Thêm/Sửa, bỏ footer form) | done | 2026-05-29 | 2026-06-15 |
+| 012 | Divisions modal CRUD + table height (popup Thêm/Sửa, bỏ max-h) | done | 2026-05-29 | 2026-06-15 |
+| 013 | M1 Transition — Search, T1 cũ + Lý do, Email Tracking | done | 2026-05-29 | 2026-06-15 |
+| 018 | ComposeTemplateModal — Refactor email section (1 section, 4 emails, copy từng email) | done | 2026-05-29 | 2026-06-15 |
 | REFACTOR-005 | Twenty UI/UX Full Adoption (Tailwind v4 Preserve) | in_progress | 2026-06-04 | — |
+| REFACTOR-006 | ESLint Cleanup — Fix 172 lint errors across codebase | planned | 2026-06-19 | — |
 | 024 | Testing Infrastructure — Smoke Test + Unit Test (Vitest) | done | 2026-06-10 | 2026-06-10 |
 | 025 | Email Activities Table cho M1 Transition Tracking | done | 2026-06-11 | 2026-06-11 |
 | 026 | Delete Email Template | done | 2026-06-12 | 2026-06-12 |
@@ -254,18 +255,20 @@ Không cần.
 
 ---
 
-## FEAT-002: Supabase Realtime updates (comments, status)
+## FEAT-002: Supabase Realtime updates (comments, status, sidebar badge)
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `backlog`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-06-19
 
 ### 1. Mô tả feature
-Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đổi trong database: comments mới, status request thay đổi, activity log mới.
+Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đổi trong database: comments mới, status request thay đổi, activity log mới, và badge số đếm "Requests" trên sidebar.
 
 ### 2. Motivation / Why
 - Hiện tại ngườii dùng phải refresh trang để thấy dữ liệu mới.
 - Realtime giúp collaborate tốt hơn khi nhiều ngườii dùng cùng xem 1 request.
+- Badge "Requests" trên sidebar hiện chỉ fetch một lần khi load app, nên không phản ánh số request đang xử lý khi có request mới hoặc request hoàn tất/hủy.
 
 ### 3. Scope
 
@@ -273,6 +276,7 @@ Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đ
 - Subscribe `t1_requests` table để cập nhật status/kanban realtime.
 - Subscribe `request_comments` để hiển thị comment mới ngay lập tức.
 - Subscribe `activity_logs` để cập nhật timeline.
+- Subscribe `t1_requests` trong `Layout.tsx` để cập nhật badge số đếm "Requests" trên sidebar realtime.
 
 **Out of scope:**
 - Realtime cho toàn bộ bảng `agents` (quá nhiều data).
@@ -284,18 +288,22 @@ Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đ
 - Trong `RequestDetailPage`: subscribe `request_comments` với filter `request_id = :id`.
 - Trong `RequestsPage`: subscribe `t1_requests` để cập nhật kanban/card khi status đổi.
 - Trong `ActivityLogPage`: subscribe `activity_logs` để prepend event mới.
+- Trong `Layout.tsx`: dùng `useRequestCountQuery` + subscribe `t1_requests` để refetch request count khi có INSERT/UPDATE/DELETE.
 
 ### 5. UI/UX
 - Comment mới từ ngườii khác: hiển thị ngay trong thread, có hiệu ứng nhẹ (ví dụ: border-left màu xanh trong 2 giây).
 - Status đổi: card trong kanban tự động chuyển cột.
+- Badge "Requests" trên sidebar: tự động tăng/giảm khi có request mới hoặc request hoàn tất/hủy, không cần refresh trang.
 
 ### 6. Files cần sửa / tạo
 | File | Thay đổi |
 |------|----------|
 | `src/hooks/useRealtime.ts` | Hook mới để subscribe Supabase Realtime |
+| `src/hooks/queries/useRequestCount.ts` | Hook query cho request count trên sidebar |
 | `src/pages/RequestDetailPage.tsx` | Subscribe comments + request changes |
 | `src/pages/RequestsPage.tsx` | Subscribe request status changes |
 | `src/pages/ActivityLogPage.tsx` | Subscribe activity logs |
+| `src/components/Layout.tsx` | Dùng `useRequestCountQuery` + `useRealtime` để cập nhật badge "Requests" trên sidebar |
 
 ### 7. Schema / SQL changes
 - Bật Realtime cho các bảng trong Supabase Dashboard → Database → Replication:
@@ -307,10 +315,11 @@ Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đ
 - Không cần API mới. Dùng Supabase Realtime client sẵn có.
 
 ### 9. Test Plan
-1. Mở Request Detail trên tab A (Chrome).
-2. Mở cùng request trên tab B (Firefox/Incognito).
-3. Tab B thêm comment → verify tab A hiển thị comment mới trong 1-2 giây.
-4. Tab B đổi status request → verify tab A cập nhật status.
+1. **Sidebar badge:** Tạo request mới từ Agent Detail → verify badge "Requests" trên sidebar tự động tăng trong 1-2 giây. Hoàn tất/hủy 1 request → verify badge tự động giảm.
+2. Mở Request Detail trên tab A (Chrome).
+3. Mở cùng request trên tab B (Firefox/Incognito).
+4. Tab B thêm comment → verify tab A hiển thị comment mới trong 1-2 giây.
+5. Tab B đổi status request → verify tab A cập nhật status.
 
 ### 10. Rollout Plan
 1. Bật Realtime replication cho các bảng trong Supabase Dashboard.
@@ -321,6 +330,119 @@ Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đ
 - Supabase free tier: 200 concurrent connections, 100 channels/connection.
 - Nên `unsubscribe` khi component unmount để tránh leak.
 - Có thể cần filter `schema: 'public', table: '...', filter: 'id=eq....'` để giảm traffic.
+
+---
+
+---
+
+## REFACTOR-006: ESLint Cleanup — Fix 172 lint errors across codebase
+
+- **Đề xuất**: 2026-06-19
+- **Status**: `planned`
+- **Priority**: `low`
+
+### 1. Mô tả feature
+Dọn dẹp toàn bộ lỗi ESLint hiện tại trong codebase (172 lỗi trên 51 files) để `npm run verify` pass hoàn toàn, giảm technical debt và tránh regression do type safety / React hooks rules.
+
+### 2. Motivation / Why
+- Hiện tại `npm run verify` luôn fail ở bước `eslint .` vì lỗi legacy.
+- Nhiều lỗi liên quan đến React hooks (`exhaustive-deps`, `set-state-in-effect`, `static-components`, `refs`) có thể gây bug khó phát hiện.
+- `any` type lan rộng làm giảm giá trị của TypeScript.
+
+### 3. Scope
+
+**In scope:**
+- Fix 172 lỗi ESLint hiện có trên 51 files.
+- Không thay đổi behavior / business logic — chỉ refactor để thỏa mãn lint rules.
+- Chia thành 5 phase nhỏ để dễ review và giảm rủi ro regression.
+
+**Out of scope:**
+- Không thay đổi rules ESLint (`.eslintrc`).
+- Không thêm tính năng mới.
+- Không refactor kiến trúc lớn (ví dụ: không chuyển toàn bộ pages sang TanStack Query — đó là FEAT-004).
+
+### 4. Technical Design
+
+**Phân loại lỗi hiện tại:**
+
+| Rule | Số lượng ước tính | Cách fix |
+|------|------------------|----------|
+| `@typescript-eslint/no-explicit-any` | ~90 | Thay `any` bằng `unknown` + type guard, hoặc định nghĩa interface phù hợp. Ưu tiên query hooks và shared components. |
+| `react-hooks/static-components` | ~35 | Di chuyển component con (`InfoRow` trong `AgentInfoTab`) ra ngoài render function. |
+| `react-hooks/set-state-in-effect` | ~5 | Refactor effect gọi `setState` trực tiếp thành dùng event handler hoặc query hook. |
+| `react-hooks/exhaustive-deps` | ~10 | Thêm dependency đúng hoặc dùng ref nếu cần. |
+| `react-hooks/refs` | ~2 | Không đọc/ghi ref trong render; chuyển vào event handler / effect. |
+| `@typescript-eslint/no-unused-vars` | ~5 | Xóa biến/import không dùng. |
+| Khác | ~25 | Tùy từng lỗi cụ thể. |
+
+**Phased approach:**
+
+**Phase 1 — Query hooks (`src/hooks/queries/*`):**
+- Các file có nhiều `any`: `useAgentDetail.ts` (8), `useRequestDetail.ts` (4), `useRequests.ts` (2), `useB2Requests.ts` (2), `useM1Transitions.ts` (2), `useTrash.ts` (2), v.v.
+- Định nghĩa type chính xác cho dữ liệu trả về từ Supabase, thay `any` bằng type từ `src/types/index.ts`.
+
+**Phase 2 — Agent detail cleanup (`AgentInfoTab.tsx`):**
+- Di chuyển `InfoRow` component ra ngoài render.
+- Fix các `any` còn lại trong file (35 lỗi).
+
+**Phase 3 — Modals (`ComposeTemplateModal.tsx`, `CreateRequestModal.tsx`, `HtmlEditor.tsx`, `DeactivateAgentModal.tsx`, `RestoreAgentModal.tsx`):**
+- Fix `any` types.
+- Fix hooks issues (`set-state-in-effect`, `exhaustive-deps`, `refs`).
+
+**Phase 4 — Pages (`AgentsPage.tsx`, `DivisionsPage.tsx`, `RanksPage.tsx`, `TrashPage.tsx`, `UploadPage.tsx`, v.v.):**
+- Fix `any` và hooks deps.
+
+**Phase 5 — Misc / leftover:**
+- `CommandPalette.tsx`, `NotificationDropdown.tsx`, `useAuth.tsx`, UI components, Excel Generator, Supabase function.
+- Chạy `eslint .` cuối cùng để verify 0 lỗi.
+
+### 5. UI/UX
+Không thay đổi UI.
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/hooks/queries/*.ts` | Thay `any` bằng đúng type |
+| `src/components/agent-detail/AgentInfoTab.tsx` | Move `InfoRow` ra ngoài render, fix `any` |
+| `src/components/ComposeTemplateModal.tsx` | Fix `any` + hooks issues |
+| `src/components/CreateRequestModal.tsx` | Fix `any` + hooks issues |
+| `src/components/HtmlEditor.tsx` | Fix `any` + hooks issues |
+| `src/components/DeactivateAgentModal.tsx` | Fix `any` + hooks issues |
+| `src/components/RestoreAgentModal.tsx` | Fix `any` + hooks issues |
+| `src/pages/AgentsPage.tsx` | Fix `any` + hooks issues |
+| `src/pages/DivisionsPage.tsx` | Fix `any` + hooks issues |
+| `src/pages/RanksPage.tsx` | Fix `any` + hooks issues |
+| `src/pages/TrashPage.tsx` | Fix `any` + hooks issues |
+| `src/pages/UploadPage.tsx` | Fix `any` + hooks issues |
+| `src/pages/RequestDetailPage.tsx` | Fix `catch (e: any)` |
+| `src/pages/RequestsPage.tsx` | Fix `(r.agent as any)` |
+| `src/components/CommandPalette.tsx` | Fix `set-state-in-effect` + `any` |
+| `src/components/NotificationDropdown.tsx` | Fix hooks issues + `any` |
+| `src/hooks/useAuth.tsx` | Fix `any` |
+| Các file còn lại trong danh sách 51 files | Theo phân loại từng lỗi |
+
+### 7. Schema / SQL changes
+Không cần.
+
+### 8. API / Integration changes
+Không cần.
+
+### 9. Test Plan
+1. Sau mỗi phase, chạy `npx eslint .` để confirm lỗi giảm đúng hướng.
+2. Sau mỗi phase, chạy `npm run test` — 56/56 tests phải vẫn pass.
+3. Sau mỗi phase, chạy `npm run build` — phải pass.
+4. Cuối cùng: `npm run verify` phải pass hoàn toàn (tsc + build + eslint).
+5. Smoke test 5 luồng chính: tạo request, chuyển bước, hoàn tất, tạo agent, deactivate agent.
+
+### 10. Rollout Plan
+1. Thực hiện từng phase, mỗi phase 1 commit riêng.
+2. Không deploy cho đến khi tất cả 5 phases hoàn thành và verify pass.
+
+### 11. Notes
+- **Rủi ro cao nhất:** `AgentInfoTab.tsx` (35 lỗi) và `DivisionsPage.tsx` (11 lỗi). Cần test kỹ UI sau khi sửa.
+- **Không được thay đổi behavior:** Chỉ refactor cho đúng type / hooks rules, không đổi logic.
+- **Rollback:** Revert từng phase nếu phát hiện regression.
+- **Dependencies:** Nên làm sau khi các feature đang active đã ổn định, tránh conflict với code đang dev.
 
 ---
 
@@ -658,8 +780,9 @@ CREATE OR REPLACE FUNCTION public.recompute_all_divisions() RETURNS INTEGER ...
 ## FEAT-009: Dashboard stat cards navigation (→ Agents / Requests / Filter)
 
 - **Đề xuất**: 2026-05-29
-- **Status**: `planned`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-06-15
 
 ### 1. Mô tả feature
 Trên Dashboard, các stat cards và chart "Trạng thái đề xuất" hiện chỉ là UI tĩnh. Feature này cho phép bấm vào để navigate sang trang tương ứng với filter phù hợp.
@@ -727,8 +850,9 @@ Không cần.
 ## FEAT-010: Requests multi-choice status filter (toggle on/off)
 
 - **Đề xuất**: 2026-05-29
-- **Status**: `planned`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-06-15
 
 ### 1. Mô tả feature
 Hiện tại `RequestsPage` chỉ cho phép chọn 1 status filter hoặc "Tất cả". Feature này cho phép chọn nhiều status cùng lúc (multi-choice), bấm lại lần nữa để bỏ chọn 1 status.
@@ -803,8 +927,9 @@ Không cần.
 ## FEAT-011: Ranks modal CRUD (popup Thêm/Sửa, bỏ footer form)
 
 - **Đề xuất**: 2026-05-29
-- **Status**: `planned`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-06-15
 
 ### 1. Mô tả feature
 Hiện tại `RanksPage` có form thêm/sửa nằm inline dưới bảng (footer). Feature này chuyển form sang popup modal, bỏ footer form.
@@ -875,8 +1000,9 @@ Không cần.
 ## FEAT-012: Divisions modal CRUD + table height (popup Thêm/Sửa, bỏ max-h)
 
 - **Đề xuất**: 2026-05-29
-- **Status**: `planned`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-06-15
 
 ### 1. Mô tả feature
 1. Chuyển form thêm/sửa Division sang popup modal (tương tự FEAT-011).
@@ -944,8 +1070,9 @@ Không cần.
 ## FEAT-013: M1 Transition — Search, T1 cũ + Lý do, Email Tracking
 
 - **Đề xuất**: 2026-05-29
-- **Status**: `planned`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-06-15
 
 ### 1. Mô tả feature
 Cải tiến card **M1 Transition** trên Dashboard với 3 tính năng:
@@ -1102,8 +1229,9 @@ CREATE INDEX IF NOT EXISTS idx_m1_tasks_email_count
 ## FEAT-018: ComposeTemplateModal — Refactor email section (1 section, 4 emails, copy từng email)
 
 - **Đề xuất**: 2026-05-29
-- **Status**: `planned`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-06-15
 
 ### 1. Mô tả feature
 Refactor phần hiển thị email trong `ComposeTemplateModal`:

@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Filter, Search, Inbox } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { formatDate, formatTime } from '../lib/date-utils'
 import { useDebounce } from '../hooks/useDebounce'
+import { useRealtime } from '../hooks/useRealtime'
 import { useActivityLogsQuery } from '../hooks/queries/useActivityLogs'
 import PageHeader from '../ui/layout/PageHeader'
 import Card from '../ui/layout/Card'
@@ -21,11 +23,17 @@ const actionTypeLabels: Record<string, { label: string; variant: 'primary' | 'su
 }
 
 export default function ActivityLogPage() {
+  const queryClient = useQueryClient()
   const { data: logs = [], isLoading } = useActivityLogsQuery()
   const [filterType, setFilterType] = useState('all')
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
   const [showFilter, setShowFilter] = useState(false)
+
+  useRealtime({
+    table: 'activity_logs',
+    onChange: () => queryClient.invalidateQueries({ queryKey: ['activity_logs'] }),
+  })
 
   const allTypes = useMemo(() => {
     const types = new Set(logs.map((l) => l.action_type))

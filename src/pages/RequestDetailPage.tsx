@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import { useRealtime } from '../hooks/useRealtime'
 
 import { addBusinessDays } from '../lib/eligibility'
 import { completeRequestAction } from '../lib/request-actions'
@@ -39,6 +40,24 @@ export default function RequestDetailPage() {
   const comments = data?.comments ?? []
   const stepHistory = data?.stepHistory ?? []
   const holidays = data?.holidays ?? new Set<string>()
+
+  useRealtime({
+    table: 't1_requests',
+    filter: `id=eq.${id}`,
+    enabled: !!id,
+    onChange: () => {
+      if (id) queryClient.invalidateQueries({ queryKey: ['request', 'detail', id] })
+    },
+  })
+
+  useRealtime({
+    table: 'request_comments',
+    filter: `request_id=eq.${id}`,
+    enabled: !!id,
+    onChange: () => {
+      if (id) queryClient.invalidateQueries({ queryKey: ['request', 'detail', id] })
+    },
+  })
 
   const calculatedB3 = (() => {
     if (request?.step2_confirmed_at) {
@@ -96,7 +115,13 @@ export default function RequestDetailPage() {
     await supabase.from('activity_logs').insert({ request_id: request.id, action_type: 'request_step_changed', description: 'Chuyển sang B2', created_by: user?.id })
     setShowStep2Date(false)
     show('Đã chuyển sang B2', 'success')
-    if (id) queryClient.invalidateQueries({ queryKey: ['request', 'detail', id] })
+    if (id) {
+      queryClient.invalidateQueries({ queryKey: ['request', 'detail', id] })
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'b2Requests'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'statusCounts'] })
+    }
   }
 
   const handleConfirmChange = async () => {
@@ -104,7 +129,10 @@ export default function RequestDetailPage() {
       await completeRequestAction({ id: request.id, agent_id: request.agent_id, old_t1_id: request.old_t1_id, proposed_new_t1_id: request.proposed_new_t1_id }, user?.id)
       setConfirmModal({ open: false })
       show('Đã đồng ý thay đổi T1', 'success')
-      if (id) queryClient.invalidateQueries({ queryKey: ['request', 'detail', id] })
+      if (id) {
+        queryClient.invalidateQueries({ queryKey: ['request', 'detail', id] })
+        queryClient.invalidateQueries({ queryKey: ['requests'] })
+      }
     } catch (e: any) { show('Lỗi: ' + e.message, 'error') }
   }
 
@@ -116,7 +144,13 @@ export default function RequestDetailPage() {
     setCancelModal({ open: false, reason: '' })
     show('Đã hủy đề xuất', 'warning')
     createNotificationsForAdmins([{ type: 'request_cancelled', title: 'Đề xuất đã bị hủy', message: `Đề xuất #${request.id?.slice(0, 8)} đã bị hủy`, link: `/requests/${request.id}` }])
-    if (id) queryClient.invalidateQueries({ queryKey: ['request', 'detail', id] })
+    if (id) {
+      queryClient.invalidateQueries({ queryKey: ['request', 'detail', id] })
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'b2Requests'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'statusCounts'] })
+    }
   }
 
   const submitComment = async () => {

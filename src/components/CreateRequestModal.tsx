@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Search, AlertTriangle } from 'lucide-react'
@@ -20,6 +21,7 @@ interface Props {
 export default function CreateRequestModal({ agentId, onClose }: Props) {
   const { show } = useToast()
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const [agents, setAgents] = useState<any[]>([])
   const [agent, setAgent] = useState<any>(null)
   const [t1Changes, setT1Changes] = useState<any[]>([])
@@ -159,6 +161,8 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
       return
     }
     show('Đã tạo đề xuất đổi T1', 'success')
+    queryClient.invalidateQueries({ queryKey: ['requests'] })
+    queryClient.invalidateQueries({ queryKey: ['layout', 'requestCount'] })
     createNotificationsForAdmins([{
       type: 'request_new',
       title: 'Đề xuất đổi T1 mới',
