@@ -23,7 +23,7 @@ export function useB2RequestsQuery() {
         .from('holidays')
         .select('holiday_date')
       const holidays = new Set<string>(
-        (holidaysData ?? []).map((h: any) => h.holiday_date.slice(0, 10))
+        (holidaysData ?? []).map((h: { holiday_date: string }) => h.holiday_date.slice(0, 10))
       )
 
       const { data: step2Data } = await supabase
@@ -37,7 +37,8 @@ export function useB2RequestsQuery() {
         .eq('status', 'step2')
         .is('deleted_at', null)
 
-      const mapped: B2Request[] = (step2Data ?? []).map((r: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mapped: B2Request[] = ((step2Data as unknown[]) ?? []).map((r: any) => {
         const confirmed = r.step2_confirmed_at ?? r.created_at
         return {
           id: r.id,

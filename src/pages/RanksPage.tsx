@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
+
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useToast } from '../components/Toast'
 import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../ui/display/EmptyState'
-import { useRanksListQuery, useSaveRankMutation, useDeleteRankMutation } from '../hooks/queries/useRanks'
+import { useRanksListQuery, useSaveRankMutation, useDeleteRankMutation, type Rank as ApiRank } from '../hooks/queries/useRanks'
 import { supabase } from '../lib/supabase'
 import { Shield } from 'lucide-react'
 import PageHeader from '../ui/layout/PageHeader'
@@ -24,9 +25,9 @@ export default function RanksPage() {
   const saveMut = useSaveRankMutation()
   const deleteMut = useDeleteRankMutation()
 
-  const [editing, setEditing] = useState<any | null>(null)
+  const [editing, setEditing] = useState<Partial<ApiRank> | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [deleting, setDeleting] = useState<any | null>(null)
+  const [deleting, setDeleting] = useState<Partial<ApiRank> | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
 
   const { widths, startResize } = useColumnResize([240, 160, 120, 100])
@@ -65,12 +66,12 @@ export default function RanksPage() {
       await saveMut.mutateAsync({ id: editing?.id, payload })
       show(editing ? 'Đã cập nhật cấp bậc' : 'Đã thêm cấp bậc mới', 'success')
       closeModal()
-    } catch (e: any) {
-      show(editing ? 'Lỗi cập nhật: ' + e.message : 'Lỗi thêm mới: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show(editing ? 'Lỗi cập nhật: ' + ((e as Error).message ?? 'Unknown') : 'Lỗi thêm mới: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
   }
 
-  const startEdit = (rank: any) => {
+  const startEdit = (rank: ApiRank) => {
     setEditing(rank)
     setShowModal(true)
   }
@@ -106,10 +107,10 @@ export default function RanksPage() {
       return
     }
     try {
-      await deleteMut.mutateAsync(deleting.id)
+      await deleteMut.mutateAsync(deleting.id as string)
       show('Đã xóa cấp bậc', 'success')
-    } catch (e: any) {
-      show('Lỗi xóa: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi xóa: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
     setDeleteBusy(false)
     setDeleting(null)

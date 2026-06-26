@@ -33,6 +33,7 @@ function sanitizeHtml(dirty: string): string {
   }) as string
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function plainTextToHtml(text: string): string {
   if (!text) return ''
   if (/<[a-z][\s\S]*>/i.test(text)) return text
@@ -41,6 +42,28 @@ export function plainTextToHtml(text: string): string {
     .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
     .join('')
 }
+
+const ToolbarButton = ({
+  onClick,
+  active,
+  children,
+  title,
+}: {
+  onClick: () => void
+  active?: boolean
+  children: React.ReactNode
+  title?: string
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={title}
+    className={`h-8 w-8 flex items-center justify-center rounded text-neutral-600 hover:bg-neutral-100 transition-colors ${active ? 'bg-neutral-100 text-primary' : ''}`}
+  >
+    {children}
+  </button>
+)
+
 
 export default function HtmlEditor({
   value,
@@ -111,26 +134,6 @@ export default function HtmlEditor({
     return sanitizeHtml(result)
   }
 
-  const ToolbarButton = ({
-    onClick,
-    active,
-    children,
-    title,
-  }: {
-    onClick: () => void
-    active?: boolean
-    children: React.ReactNode
-    title?: string
-  }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={`h-8 w-8 flex items-center justify-center rounded text-neutral-600 hover:bg-neutral-100 transition-colors ${active ? 'bg-neutral-100 text-primary' : ''}`}
-    >
-      {children}
-    </button>
-  )
 
   return (
     <div className="border border-neutral-300 rounded-md bg-white">

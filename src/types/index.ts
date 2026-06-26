@@ -358,3 +358,85 @@ export interface AgentUplineRankResult {
   rgdd_agents: string | null
   egdd_agents: string | null
 }
+
+// FEAT-030: Google Apps Script Admin Panel — Drive Operations
+
+export type AppsScriptAction =
+  | 'scanFolders'
+  | 'setPermissions'
+  | 'createFolder'
+  | 'copyFolder'
+  | 'listItems'
+  | 'moveItem'
+  | 'removePermission'
+  | 'deleteItem'
+
+export interface AppsScriptLog {
+  id: string
+  action: AppsScriptAction
+  params: Record<string, unknown>
+  result: Record<string, unknown> | null
+  success: boolean
+  error_message: string | null
+  initiated_by: string | null
+  created_at: string
+}
+
+export interface ScanFoldersParams {
+  rootFolderId: string
+  depth: number
+  matchType?: 'exact' | 'contains' | 'startsWith' | 'endsWith' | 'regex'
+  pattern?: string
+}
+
+export interface SetPermissionsParams {
+  itemIds: string[]
+  emails: string[]
+  role: 'reader' | 'commenter' | 'writer'
+}
+
+export interface CreateFolderParams {
+  parentFolderId: string
+  name: string
+}
+
+export interface CopyFolderParams {
+  sourceFolderId: string
+  destFolderId: string
+  newName: string
+}
+
+export interface ListItemsParams {
+  folderId: string
+  pageSize?: number
+}
+
+export interface MoveItemParams {
+  itemId: string
+  destFolderId: string
+}
+
+export interface RemovePermissionParams {
+  itemId: string
+  email: string
+}
+
+export interface DeleteItemParams {
+  itemId: string
+}
+
+export type AppsScriptParams =
+  | ScanFoldersParams
+  | SetPermissionsParams
+  | CreateFolderParams
+  | CopyFolderParams
+  | ListItemsParams
+  | MoveItemParams
+  | RemovePermissionParams
+  | DeleteItemParams
+
+export interface AppsScriptResponse<T = unknown> {
+  success: boolean
+  data?: T
+  error?: string
+}

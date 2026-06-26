@@ -8,6 +8,7 @@ import { useToast } from './Toast'
 import Modal from './Modal'
 import CountdownConfirmModal from './CountdownConfirmModal'
 import { formatDate } from '../lib/date-utils'
+import type { Agent } from '../types'
 
 interface Props {
   agentId: string
@@ -18,32 +19,33 @@ export default function DeactivateAgentModal({ agentId, onClose }: Props) {
   const { user } = useAuth()
   const { show } = useToast()
   const queryClient = useQueryClient()
-  const [agent, setAgent] = useState<any>(null)
-  const [m1s, setM1s] = useState<any[]>([])
+  const [agent, setAgent] = useState<Agent | null>(null)
+  const [m1s, setM1s] = useState<Pick<Agent, 'id' | 'full_name' | 'staff_id'>[]>([])
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
+  // Moved down
+
   useEffect(() => {
+    async function loadData() {
+      setLoading(true)
+      const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
+      setAgent(a)
+
+      const { data: m1Data } = await supabase
+        .from('agents')
+        .select('id, full_name, staff_id')
+        .eq('current_t1_id', agentId)
+        .is('deleted_at', null)
+        .eq('status', 'active')
+      setM1s(m1Data ?? [])
+      setLoading(false)
+    }
     loadData()
   }, [agentId])
-
-  async function loadData() {
-    setLoading(true)
-    const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
-    setAgent(a)
-
-    const { data: m1Data } = await supabase
-      .from('agents')
-      .select('id, full_name, staff_id')
-      .eq('current_t1_id', agentId)
-      .is('deleted_at', null)
-      .eq('status', 'active')
-    setM1s(m1Data ?? [])
-    setLoading(false)
-  }
 
   const handleDeactivate = async () => {
     if (!reason.trim()) {
@@ -67,8 +69,8 @@ export default function DeactivateAgentModal({ agentId, onClose }: Props) {
       show('Đã chấm dứt hoạt động agent', 'success')
       setShowConfirm(false)
       onClose()
-    } catch (e: any) {
-      show('Lỗi: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
     setSubmitting(false)
   }

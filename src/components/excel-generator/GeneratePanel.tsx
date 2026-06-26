@@ -172,12 +172,13 @@ export default function GeneratePanel({ templates }: Props) {
           setMapping(suggested)
           show(`Đã đọc ${rows.length} dòng data. Vui lòng kiểm tra mapping.`, 'success')
         }
-      } catch (e: any) {
-        show('Lỗi đọc file data: ' + e.message, 'error')
+      } catch (e: unknown) {
+        show('Lỗi đọc file data: ' + ((e as Error).message ?? 'Unknown'), 'error')
       } finally {
         setParsing(false)
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [show, templateWorkbook, selectedTemplate, dataHeaderRow]
   )
 
@@ -201,8 +202,8 @@ export default function GeneratePanel({ templates }: Props) {
       const previewData = buildPreview(templateWorkbook, dataRows, mapping, selectedTemplate.template_header_row, XLSX, undefined, parseDateFromInput(generateDate))
       setPreview(previewData)
       setShowMappingPanel(false)
-    } catch (e: any) {
-      show('Lỗi build preview: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi build preview: ' + ((e as Error).message ?? 'Unknown'), 'error')
     } finally {
       setParsing(false)
     }
@@ -272,8 +273,8 @@ export default function GeneratePanel({ templates }: Props) {
       show(`Đã generate file ${generatedFileName}`, 'success')
       resetData()
       setSelectedTemplateId('')
-    } catch (e: any) {
-      show('Lỗi generate: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi generate: ' + ((e as Error).message ?? 'Unknown'), 'error')
     } finally {
       setGenerating(false)
     }

@@ -37,8 +37,8 @@ export default function TrashPage() {
     try {
       await restoreMut.mutateAsync(item)
       show('Đã khôi phục', 'success')
-    } catch (e: any) {
-      show('Lỗi khôi phục: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi khôi phục: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
   }
 
@@ -47,8 +47,8 @@ export default function TrashPage() {
       await deleteMut.mutateAsync(item)
       setConfirmDelete(null)
       show('Đã xóa vĩnh viễn', 'warning')
-    } catch (e: any) {
-      show('Lỗi xóa: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi xóa: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
   }
 
@@ -77,7 +77,7 @@ export default function TrashPage() {
         />
         <select
           value={filter}
-          onChange={(e) => setFilter(e.target.value as any)}
+          onChange={(e) => setFilter(e.target.value as 'all' | 'agent' | 'request')}
           className="h-9 px-3 border border-border-light rounded-sm text-sm text-text-secondary bg-bg-primary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
         >
           <option value="all">Tất cả</option>

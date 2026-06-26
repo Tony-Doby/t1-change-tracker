@@ -50,7 +50,7 @@
 
 | ID | Tiêu đề | Status | Ngày phát hiện | Ngày fix |
 |----|---------|--------|----------------|----------|
-| 021 | M1 Transition task không bị resolved khi agent hoàn tất chuyển T1 | planned | 2026-06-05 | — |
+| 021 | M1 Transition task không bị resolved khi agent hoàn tất chuyển T1 | fixed | 2026-06-05 | 2026-06-05 |
 | 022 | B2PendingAlert không hiển thị do addBusinessDays parse ISO datetime sai | fixed | 2026-06-11 | 2026-06-11 |
 | 023 | Dropdown placeholder trong HtmlEditor bị cắt và không scroll được | fixed | 2026-06-11 | 2026-06-11 |
 | 024 | Placeholder `{{tempT1Name}}` bị trùng giá trị với `{{oldT1Name}}` | fixed | 2026-06-11 | 2026-06-11 |
@@ -269,7 +269,7 @@ Không cần. Cột `resolved_at` đã tồn tại trong `m1_transition_tasks`.
 ## BUG-022: B2PendingAlert không hiển thị do addBusinessDays parse ISO datetime sai
 
 - **Phát hiện**: 2026-06-11
-- **Status**: `planned`
+- **Status**: `fixed`
 - **Severity**: `high`
 
 ### 1. Mô tả bug
@@ -551,7 +551,7 @@ Không cần.
 ## BUG-028: ComposeTemplateModal dropdown chọn loại mẫu tự đóng modal
 
 - **Phát hiện**: 2026-06-12
-- **Status**: `planned`
+- **Status**: `fixed`
 - **Severity**: `high`
 
 ### 1. Mô tả bug
@@ -599,7 +599,7 @@ Không cần.
 ## BUG-029: ComposeTemplateModal không hiển thị mẫu email mới / vẫn hiển thị mẫu đã xóa
 
 - **Phát hiện**: 2026-06-12
-- **Status**: `planned`
+- **Status**: `fixed`
 - **Severity**: `high`
 
 ### 1. Mô tả bug

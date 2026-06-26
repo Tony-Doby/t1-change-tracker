@@ -29,6 +29,7 @@ import { useColumnResize } from '../hooks/useColumnResize'
 import { Power, PowerOff } from 'lucide-react'
 import { BOOKMARKS_KEY } from '../lib/constants'
 import { formatDate } from '../lib/date-utils'
+import type { Agent } from '../types'
 
 type QuickFilter = 'all' | 'no_t1' | 'bookmarked'
 
@@ -130,7 +131,7 @@ export default function AgentsPage() {
   }
 
   async function fetchExportData(): Promise<Record<string, unknown>[]> {
-    const all: any[] = []
+    const all: Agent[] = []
     const batchSize = 1000
     let from = 0
 
@@ -149,24 +150,24 @@ export default function AgentsPage() {
       from += batchSize
     }
 
-    const t1Ids = [...new Set(all.map((a: any) => a.current_t1_id).filter(Boolean))]
+    const t1Ids = [...new Set(all.map((a) => a.current_t1_id).filter(Boolean))] as string[]
     const t1MapAll: Record<string, { full_name: string; staff_id: string }> = {}
     if (t1Ids.length > 0) {
       const { data: t1Data } = await supabase.from('agents').select('id, full_name, staff_id').in('id', t1Ids)
-      t1Data?.forEach((a: any) => { t1MapAll[a.id] = a })
+      t1Data?.forEach((a: Pick<Agent, 'id' | 'full_name' | 'staff_id'>) => { t1MapAll[a.id] = a })
     }
 
-    return all.map((a: any) => ({
+    return all.map((a) => ({
       'Mã NV': a.staff_id,
       'Họ tên': a.full_name,
-      'Cấp bậc': a.rank_name ?? rankNamesMap[a.rank_id] ?? '—',
+      'Cấp bậc': a.rank_name ?? (a.rank_id ? rankNamesMap[a.rank_id] : undefined) ?? '—',
       'Ngày ký HĐ': formatDate(a.contract_signing_date),
       'T1 hiện tại': a.current_t1_id
         ? t1MapAll[a.current_t1_id]
           ? `${t1MapAll[a.current_t1_id].full_name} - ${t1MapAll[a.current_t1_id].staff_id}`
           : a.current_t1_id
         : '—',
-      'Division': divisionMap[a.division_id] ?? '—',
+      'Division': divisionMap[a.division_id ?? ''] ?? '—',
       'Trạng thái': a.status,
     }))
   }
@@ -277,7 +278,7 @@ export default function AgentsPage() {
           <TableHeaderCell width={widths[8]} resizable onResizeStart={(e) => startResize(8, e)}>Trạng thái</TableHeaderCell>
           {role === 'admin' && <TableHeaderCell width={widths[9]} />}
         </TableHeader>
-        <tbody ref={tableRef as any}>
+        <tbody ref={tableRef as unknown as React.RefObject<HTMLTableSectionElement>}>
           {isLoading ? (
             <SkeletonTable rows={5} cols={role === 'admin' ? 10 : 9} />
           ) : (

@@ -3,7 +3,7 @@ import T1History from './T1History'
 import M1List from './M1List'
 import AsT1History from './AsT1History'
 import DeactivationHistory from './DeactivationHistory'
-import type { Agent } from '../../types'
+import type { Agent, T1Change, AgentDeactivationSnapshot } from '../../types'
 
 export default function AgentHistoryTab({
   agentId,
@@ -19,10 +19,10 @@ export default function AgentHistoryTab({
   agentId: string
   contractSigningDate?: string | null
   agentT1Name: string
-  t1History: any[]
-  asT1History: any[]
+  t1History: T1Change[]
+  asT1History: T1Change[]
   m1List: Agent[]
-  deactivationHistory: any[]
+  deactivationHistory: AgentDeactivationSnapshot[]
   getAgentName: (id: string | null) => string
   rankNamesMap: Record<string, string>
 }) {

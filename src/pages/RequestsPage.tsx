@@ -63,7 +63,7 @@ export default function RequestsPage() {
   const filtered = requests.filter((r) => {
     if (!debouncedSearch.trim()) return true
     const q = debouncedSearch.toLowerCase()
-    return r.id?.toLowerCase().includes(q) || (r.agent as any)?.full_name?.toLowerCase().includes(q)
+    return r.id?.toLowerCase().includes(q) || (r.agent as { full_name?: string })?.full_name?.toLowerCase().includes(q)
   })
 
   const counts: Record<string, number> = {}

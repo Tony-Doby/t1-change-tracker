@@ -133,7 +133,7 @@ export default function RequestDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['request', 'detail', id] })
         queryClient.invalidateQueries({ queryKey: ['requests'] })
       }
-    } catch (e: any) { show('Lỗi: ' + e.message, 'error') }
+    } catch (e: unknown) { show('Lỗi: ' + ((e as Error).message ?? 'Unknown'), 'error') }
   }
 
   const handleCancelRequest = async () => {
@@ -217,7 +217,7 @@ export default function RequestDetailPage() {
         <DeadlineInfo step2ConfirmedAt={request.step2_confirmed_at} deadline3={calculatedB3.deadline3} isB3Ready={calculatedB3.isB3Ready} daysLeft={calculatedB3.daysLeft} />
       )}
 
-      <RequestProgress uiStep={uiStep} isCompleted={isCompleted} isCancelled={isCancelled} isB3Locked={request.status === 'step2' && request.step2_confirmed_at && !calculatedB3.isB3Ready} />
+      <RequestProgress uiStep={uiStep} isCompleted={isCompleted} isCancelled={isCancelled} isB3Locked={request.status === 'step2' && !!request.step2_confirmed_at && !calculatedB3.isB3Ready} />
 
       <RequestComments
         comments={comments}
@@ -228,7 +228,7 @@ export default function RequestDetailPage() {
         canComment={role !== 'viewer' && !isCompleted && !isCancelled}
       />
 
-      <StepHistory history={stepHistory.map((h) => ({ description: h.description, created_at: h.created_at }))} />
+      <StepHistory history={stepHistory.map((h) => ({ description: h.description ?? '', created_at: h.created_at }))} />
 
       {isAtB3 && <NotificationChecklist />}
 

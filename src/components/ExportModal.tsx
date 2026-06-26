@@ -30,7 +30,7 @@ export default function ExportModal({ title, onClose, data, filename, hasFilter 
       XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
       XLSX.writeFile(wb, `${filename}.xlsx`)
       show('Đã xuất Excel', 'success')
-    } catch (e) {
+    } catch {
       show('Lỗi xuất Excel', 'error')
     } finally {
       setExporting(false)

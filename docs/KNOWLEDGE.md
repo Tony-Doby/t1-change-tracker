@@ -153,53 +153,53 @@
 
 ---
 
-## 4. Excel Generator Constraints (FEAT-019)
+## 6. Excel Generator Constraints (FEAT-019)
 
-### 4.1 Expression parser chỉ chạy trên dòng template (`template_header_row`)
+### 6.1 Expression parser chỉ chạy trên dòng template (`template_header_row`)
 - App chỉ evaluate expression `(R.num)`, `(dd/mm/yyyy)`... trên **đúng 1 dòng** được chỉ định là `template_header_row`.
 - Các dòng trước (tiêu đề) và sau (chữ ký) trong file export template được giữ nguyên, **không evaluate expression**.
 - Nếu user đặt expression ở dòng data hoặc dòng tiêu đề → expression hiển thị nguyên xi.
 
-### 4.2 Expression-only cells tự động skip mapping (BUG-015 fix)
+### 6.2 Expression-only cells tự động skip mapping (BUG-015 fix)
 - Cell chỉ chứa expression thuần túy `(R.num)`, `(dd/mm/yyyy)` → app tự động **skip mapping** cho cell đó, expression luôn evaluate đúng.
 - Nếu cell kết hợp text + expression (ví dụ: `{{Họ tên}} - (ddmmyy)(R.num)`) → vẫn evaluate expression sau khi replace inline field refs.
 - **Lưu ý:** `isExpressionOnly()` dùng regex `/^\([^)]+\)$/`, nếu cell có space xung quanh vẫn match nhờ `.trim()`.
 
-### 4.3 Inline Field Reference `{{Field}}` (FEAT-020)
+### 6.3 Inline Field Reference `{{Field}}` (FEAT-020)
 - Syntax `{{Tên Field}}` trong cell template để kết hợp data động + expression + text cố định.
 - `replaceFieldReferences()` chạy sau expression evaluation, áp dụng mapping + uppercase nếu có.
 - Ví dụ: `{{Họ và tên}} - (ddmmyy)(R.num)` → `Trần Lê Toàn Hữu - 03062607`
 
-### 4.4 Chọn ngày generate (FEAT-020)
+### 6.4 Chọn ngày generate (FEAT-020)
 - `baseDate` mặc định là ngày hiện tại, user có thể chọn ngày khác qua input date picker trong GeneratePanel.
 - Expression `(dd)`, `(mm)`, `(yy)`... sẽ dùng ngày đã chọn.
 
-### 4.5 `FieldMappingValue` định nghĩa ở 2 nơi — phải sync
+### 6.5 `FieldMappingValue` định nghĩa ở 2 nơi — phải sync
 - `src/types/index.ts` và `src/lib/excel-generator.ts` đều định nghĩa `FieldMappingValue`.
 - Nếu thêm field (ví dụ `uppercase?: boolean`) → **phải sửa cả 2 file**, không chỉ 1.
 - **Gợi ý refactor sau:** Export từ `types/index.ts`, bỏ định nghĩa cục bộ trong `excel-generator.ts`.
 
-### 4.6 CSV import: SheetJS auto-convert số/date → mất số 0, lỗi date
+### 6.6 CSV import: SheetJS auto-convert số/date → mất số 0, lỗi date
 - SheetJS `XLSX.read` parse CSV tự động convert giá trị toàn số (CCCD, SĐT) thành `number` → **mất số 0 đầu**.
 - Giá trị giống date (`25/03/2022`) bị parse thành Excel serial number → `String()` ra số lạ (`44508.000...`).
 - **Không dùng `XLSX.read` cho CSV** khi cần giữ nguyên text.
 - **Giải pháp:** Parse CSV raw text thủ công (`file.text()` + custom parser xử lý quoted fields). Đã implement `parseCsvText()` + `readCsvFile()` trong `excel-generator.ts`.
 
-### 4.7 XLSX import: KHÔNG dùng `cellDates: true` — dùng serial + 1900 epoch (BUG-032 Phase 2)
+### 6.7 XLSX import: KHÔNG dùng `cellDates: true` — dùng serial + 1900 epoch (BUG-032 Phase 2)
 - **TUYỆT ĐỐI KHÔNG DÙNG** `cellDates: true` khi đọc file data XLSX. SheetJS parse Excel serial date thành `Date` object bị lệch timezone (ví dụ serial `44822` → `2022-09-17T16:59:30Z` thay vì `2022-09-18T00:00:00Z`).
 - `readDataFile()` iterate cells thay vì `sheet_to_json`. Detect date serial bằng `cell.w` match pattern `\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}`.
 - `excelSerialToDate(serial)` — tính ngày chính xác từ serial theo **1900 epoch** (`1899-12-30`). Serial `44822` → `2022-09-18T00:00:00Z`.
 - Sau khi có Date chính xác, format bằng `formatDateDDMMYYYY()` với `Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })`.
 - Cell string/number khác: dùng `cell.v` (raw value) để giữ nguyên nội dung, không dùng `cell.w` (có thể có dấu phẩy phân cách).
 
-### 4.8 Date handling trong Excel Generator — LUÔN dùng `Asia/Ho_Chi_Minh` (BUG-032)
+### 6.8 Date handling trong Excel Generator — LUÔN dùng `Asia/Ho_Chi_Minh` (BUG-032)
 - Toàn bộ luồng Excel Generator phải xử lý date theo timezone `Asia/Ho_Chi_Minh`, không dùng local timezone của browser.
 - `parseDateFromInput(dateStr)` — parse `YYYY-MM-DD` từ `<input type="date">` thành Date ở **local timezone** (`new Date(y, m - 1, d)`) thay vì `new Date("YYYY-MM-DD")` (mặc định parse UTC 00:00).
 - `formatDateDDMMYYYY()` — dùng `Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })` để format Date object.
 - `formatDateToken()` trong expression parser — dùng `Intl.DateTimeFormat` với `timeZone: 'Asia/Ho_Chi_Minh'` để lấy `dd`, `mm`, `yy`, `yyyy`.
 - **Lưu ý đặc biệt:** SheetJS `cellDates: true` có known issue với timezone offset. Tính ngày từ serial + 1900 epoch là cách chính xác nhất.
 
-### 4.9 Vitest setup với React 19 + `@testing-library/jest-dom` (FEAT-024)
+### 6.9 Vitest setup với React 19 + `@testing-library/jest-dom` (FEAT-024)
 - Dùng `import '@testing-library/jest-dom/vitest'` trong `src/test/setup.ts` — **KHÔNG DÙNG** `import '@testing-library/jest-dom'` (sẽ bị lỗi `expect is not defined`).
 - `vitest.config.ts` cần `test.environment: 'jsdom'` và `setupFiles: ['./src/test/setup.ts']`.
 - TypeScript strict mode (`verbatimModuleSyntax`, `noUnusedLocals`): không dùng `globals: true`, nên import `describe, it, expect` từ `vitest` trong từng test file.
@@ -207,14 +207,14 @@
 
 ---
 
-## 6. Known Limitations (đang theo dõi)
+## 7. Known Limitations (đang theo dõi)
 
 | Vấn đề | Trạng thái | Plan xử lý |
 |--------|-----------|------------|
 | Email chỉ copy, chưa gửi thật | Planned | `PLAN-feature-dev.md` FEAT-027 (Google Apps Script) |
 | ~~Chưa có In-app Notifications (real)~~ | **Đã hoàn thành (2026-05-29)** | `PLAN-feature-dev.md` FEAT-003 |
-| Chưa dùng Supabase Realtime | Chưa làm | `PLAN-feature-dev.md` FEAT-002 |
-| TanStack Query chưa được dùng | Chưa làm | `PLAN-feature-dev.md` FEAT-004 |
+| ~~Chưa dùng Supabase Realtime~~ | **Đã hoàn thành (2026-06-19)** | `PLAN-feature-dev.md` FEAT-002 |
+| ~~TanStack Query chưa được dùng~~ | **Đã hoàn thành (2026-05-30)** | `PLAN-feature-dev.md` FEAT-004 |
 | Search presets phức tạp bị ẩn | Chưa làm | `PLAN-feature-dev.md` FEAT-005 |
 | UI-DESIGN.md chưa update hết | Đang theo dõi | Cập nhật dần khi redesign |
 | ~~Excel Generator: Expression parser bị override khi map trùng tên~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-bug-fixes.md` BUG-015 |

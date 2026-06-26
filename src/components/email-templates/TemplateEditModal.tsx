@@ -48,6 +48,7 @@ export default function TemplateEditModal({ mode, template, onSave, onClose, sav
     defaultValues: { name: '', template_key: '', subject: '', body: '' },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const nameValue = watch('name')
   const keyValue = watch('template_key')
 

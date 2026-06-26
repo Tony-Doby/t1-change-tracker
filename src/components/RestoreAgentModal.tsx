@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useToast } from './Toast'
 import Modal from './Modal'
 import CountdownConfirmModal from './CountdownConfirmModal'
+import type { Agent } from '../types'
 
 interface Props {
   agentId: string
@@ -15,40 +16,41 @@ interface Props {
 export default function RestoreAgentModal({ agentId, onClose }: Props) {
   const { user } = useAuth()
   const { show } = useToast()
-  const [agent, setAgent] = useState<any>(null)
-  const [affectedM1s, setAffectedM1s] = useState<any[]>([])
+  const [agent, setAgent] = useState<Agent | null>(null)
+  const [affectedM1s, setAffectedM1s] = useState<Pick<Agent, 'id' | 'full_name' | 'staff_id' | 'current_t1_id'>[]>([])
   const [mode, setMode] = useState<'full' | 'light'>('light')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
+  // Moved down
+
   useEffect(() => {
+    async function loadData() {
+      setLoading(true)
+      const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
+      setAgent(a)
+
+      const { data: tasks } = await supabase
+        .from('m1_transition_tasks')
+        .select('m1_agent_id, status')
+        .eq('departed_agent_id', agentId)
+
+      if (tasks && tasks.length > 0) {
+        const m1Ids = [...new Set(tasks.map((t) => t.m1_agent_id))]
+        const { data: m1Data } = await supabase
+          .from('agents')
+          .select('id, full_name, staff_id, current_t1_id')
+          .in('id', m1Ids)
+        setAffectedM1s(m1Data ?? [])
+      } else {
+        setAffectedM1s([])
+      }
+
+      setLoading(false)
+    }
     loadData()
   }, [agentId])
-
-  async function loadData() {
-    setLoading(true)
-    const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
-    setAgent(a)
-
-    const { data: tasks } = await supabase
-      .from('m1_transition_tasks')
-      .select('m1_agent_id, status')
-      .eq('departed_agent_id', agentId)
-
-    if (tasks && tasks.length > 0) {
-      const m1Ids = [...new Set(tasks.map((t) => t.m1_agent_id))]
-      const { data: m1Data } = await supabase
-        .from('agents')
-        .select('id, full_name, staff_id, current_t1_id')
-        .in('id', m1Ids)
-      setAffectedM1s(m1Data ?? [])
-    } else {
-      setAffectedM1s([])
-    }
-
-    setLoading(false)
-  }
 
   const handleRestore = () => {
     setShowConfirm(true)
@@ -65,8 +67,8 @@ export default function RestoreAgentModal({ agentId, onClose }: Props) {
       show('Đã kích hoạt lại agent', 'success')
       setShowConfirm(false)
       onClose()
-    } catch (e: any) {
-      show('Lỗi: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
     setSubmitting(false)
   }

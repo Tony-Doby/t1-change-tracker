@@ -17,15 +17,16 @@ async function fetchTrash(): Promise<TrashItem[]> {
   if (agentsRes.error) throw agentsRes.error
   if (requestsRes.error) throw requestsRes.error
 
-  const agents: TrashItem[] = (agentsRes.data ?? []).map((a: any) => ({
+  const agents: TrashItem[] = (agentsRes.data ?? []).map((a: { id: string; full_name: string; staff_id: string; deleted_at: string }) => ({
     type: 'agent',
     id: a.id,
     name: `${a.full_name} (${a.staff_id})`,
     deletedAt: a.deleted_at,
   }))
 
-  const requests: TrashItem[] = (requestsRes.data ?? []).map((r: any) => ({
-    type: 'request',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const requests: TrashItem[] = ((requestsRes.data as unknown[]) ?? []).map((r: any) => ({
+    type: 'request' as const,
     id: r.id,
     name: `Request #${r.id.slice(0, 8)} — ${r.agent?.full_name ?? '—'}`,
     deletedAt: r.deleted_at,

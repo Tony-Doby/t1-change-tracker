@@ -2,7 +2,9 @@ import { Star, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import EmptyState from '../EmptyState'
 
-export default function BookmarkedAgentsCard({ agents }: { agents: any[] }) {
+import type { Agent } from '../../types'
+
+export default function BookmarkedAgentsCard({ agents }: { agents: Pick<Agent, 'id' | 'full_name' | 'staff_id'>[] }) {
   return (
     <div className="bg-white rounded-lg p-5 shadow-card">
       <h2 className="text-lg font-semibold text-neutral-900 mb-4 flex items-center gap-2">

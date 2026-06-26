@@ -1,10 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 
+import type { T1Request, RequestComment, ActivityLog } from '../../types'
+
+export type RequestDetailWithAgents = T1Request & {
+  agent: { full_name: string; staff_id: string }
+  old_t1: { full_name: string; staff_id: string } | null
+  new_t1: { full_name: string; staff_id: string }
+}
+
 export interface RequestDetailData {
-  request: any
-  comments: any[]
-  stepHistory: any[]
+  request: RequestDetailWithAgents | null
+  comments: RequestComment[]
+  stepHistory: ActivityLog[]
   holidays: Set<string>
 }
 
@@ -44,13 +52,13 @@ export function useRequestDetailQuery(requestId: string | undefined) {
         .from('holidays')
         .select('holiday_date')
       const holidays = new Set<string>(
-        (holidaysData ?? []).map((h: any) => h.holiday_date.slice(0, 10))
+        (holidaysData ?? []).map((h: { holiday_date: string }) => h.holiday_date.slice(0, 10))
       )
 
       return {
-        request: req,
-        comments: cmts ?? [],
-        stepHistory: logs ?? [],
+        request: req as RequestDetailWithAgents | null,
+        comments: (cmts ?? []) as RequestComment[],
+        stepHistory: (logs ?? []) as ActivityLog[],
         holidays,
       }
     },

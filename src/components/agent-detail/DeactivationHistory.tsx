@@ -2,7 +2,9 @@ import { Inbox } from 'lucide-react'
 import { formatDate } from '../../lib/date-utils'
 import EmptyState from '../EmptyState'
 
-export default function DeactivationHistory({ history }: { history: any[] }) {
+import type { AgentDeactivationSnapshot } from '../../types'
+
+export default function DeactivationHistory({ history }: { history: AgentDeactivationSnapshot[] }) {
   if (history.length === 0) {
     return <EmptyState icon={<Inbox className="w-8 h-8" />} title="Chưa có lịch sử chấm dứt" className="py-8" />
   }

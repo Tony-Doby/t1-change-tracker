@@ -36,13 +36,13 @@ export function useRequestsQuery(options: UseRequestsOptions = {}) {
         requests.flatMap((r) => [r.old_t1_id, r.proposed_new_t1_id]).filter(Boolean)
       )] as string[]
 
-      let t1Map: Record<string, { full_name: string; staff_id: string }> = {}
+      const t1Map: Record<string, { full_name: string; staff_id: string }> = {}
       if (t1Ids.length > 0) {
         const { data: t1Data } = await supabase
           .from('agents')
           .select('id, full_name, staff_id')
           .in('id', t1Ids)
-        t1Data?.forEach((a: any) => { t1Map[a.id] = a })
+        t1Data?.forEach((a: { id: string; full_name: string; staff_id: string }) => { t1Map[a.id] = a })
       }
 
       return { requests, t1Map }

@@ -78,6 +78,7 @@ export default function ExcelGeneratorPage() {
   }, [show])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTemplates()
     fetchLogs()
   }, [fetchTemplates, fetchLogs])

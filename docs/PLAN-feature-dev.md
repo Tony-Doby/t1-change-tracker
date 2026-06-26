@@ -63,7 +63,7 @@
 | ID | Tiêu đề | Status | Đề xuất | Hoàn thành |
 |----|---------|--------|---------|------------|
 | 002 | Supabase Realtime updates (comments, status, sidebar badge) | done | 2026-05-28 | 2026-06-19 |
-| 004 | Refactor pages sang TanStack Query | partial | 2026-05-28 | — |
+| 004 | Refactor pages sang TanStack Query | done | 2026-05-28 | 2026-05-30 |
 | 005 | Search/Filter server-side cho presets phức tạp | backlog | 2026-05-28 | — |
 | 008 | Division Safety Net — Force Recompute & getAgentDivision RPC | fixed | 2026-05-29 | 2026-05-29 |
 | 009 | Dashboard stat cards navigation (→ Agents / Requests / Filter) | done | 2026-05-29 | 2026-06-15 |
@@ -72,22 +72,24 @@
 | 012 | Divisions modal CRUD + table height (popup Thêm/Sửa, bỏ max-h) | done | 2026-05-29 | 2026-06-15 |
 | 013 | M1 Transition — Search, T1 cũ + Lý do, Email Tracking | done | 2026-05-29 | 2026-06-15 |
 | 018 | ComposeTemplateModal — Refactor email section (1 section, 4 emails, copy từng email) | done | 2026-05-29 | 2026-06-15 |
-| REFACTOR-005 | Twenty UI/UX Full Adoption (Tailwind v4 Preserve) | in_progress | 2026-06-04 | — |
-| REFACTOR-006 | ESLint Cleanup — Fix 172 lint errors across codebase | planned | 2026-06-19 | — |
+| REFACTOR-005 | Twenty UI/UX Full Adoption (Tailwind v4 Preserve) | done | 2026-06-04 | 2026-06-05 |
+| REFACTOR-006 | ESLint Cleanup — Fix 172 lint errors across codebase | done | 2026-06-19 | 2026-06-25 |
 | 024 | Testing Infrastructure — Smoke Test + Unit Test (Vitest) | done | 2026-06-10 | 2026-06-10 |
 | 025 | Email Activities Table cho M1 Transition Tracking | done | 2026-06-11 | 2026-06-11 |
 | 026 | Delete Email Template | done | 2026-06-12 | 2026-06-12 |
-| 027 | Gửi email qua Google Apps Script | planned | 2026-06-12 | — |
+| 027 | Gửi email qua Google Apps Script | backlog | 2026-06-12 | — |
 | 028 | Dashboard M1 Transition Enhancement | done | 2026-06-15 | 2026-06-15 |
 | 029 | Dashboard Full-Viewport Layout — M1 Transition Fill Remaining Height | done | 2026-06-15 | 2026-06-15 |
+| 030 | Google Apps Script Admin Panel — Drive Operations | done | 2026-06-26 | 2026-06-26 |
 
 ---
 
 ## FEAT-024: Testing Infrastructure — Smoke Test + Unit Test (Vitest)
 
 - **Đề xuất**: 2026-06-10
-- **Status**: `planned`
+- **Status**: `done`
 - **Priority**: `high`
+- **Hoàn thành**: 2026-06-10
 
 ### 1. Mô tả feature
 Triển khai **2 lớp bảo vệ** để đảm bảo các tính năng cũ không bị vỡ sau mỗi lần sửa code:
@@ -338,111 +340,69 @@ Tích hợp Supabase Realtime để tự động cập nhật UI khi có thay đ
 ## REFACTOR-006: ESLint Cleanup — Fix 172 lint errors across codebase
 
 - **Đề xuất**: 2026-06-19
-- **Status**: `planned`
+- **Status**: `done`
 - **Priority**: `low`
+- **Hoàn thành**: 2026-06-25
 
 ### 1. Mô tả feature
-Dọn dẹp toàn bộ lỗi ESLint hiện tại trong codebase (172 lỗi trên 51 files) để `npm run verify` pass hoàn toàn, giảm technical debt và tránh regression do type safety / React hooks rules.
+Dọn dẹp toàn bộ 172 lỗi ESLint (159 errors + 13 warnings) trên 51 files để `npm run verify` pass hoàn toàn. **Không thay đổi behavior / business logic** — chỉ refactor cho đúng type / hooks rules.
 
-### 2. Motivation / Why
-- Hiện tại `npm run verify` luôn fail ở bước `eslint .` vì lỗi legacy.
-- Nhiều lỗi liên quan đến React hooks (`exhaustive-deps`, `set-state-in-effect`, `static-components`, `refs`) có thể gây bug khó phát hiện.
-- `any` type lan rộng làm giảm giá trị của TypeScript.
+### 2. Phân loại lỗi hiện tại
+| Rule | Số lượng | Cách fix tổng quát |
+|------|----------|-------------------|
+| `@typescript-eslint/no-explicit-any` | 94 | Thay `any` bằng type cụ thể từ `types/index.ts` hoặc `unknown` + type guard |
+| `react-hooks/static-components` | 42 | Di chuyển component con (`InfoRow`, toolbar buttons) ra ngoài render function |
+| `react-hooks/exhaustive-deps` | 9 | Thêm dependency đúng hoặc restructure effect |
+| `react-refresh/only-export-components` | 5 | Tách hook/context export ra file riêng |
+| `react-hooks/set-state-in-effect` | 5 | Chuyển setState trong effect thành event-driven hoặc dùng query hook |
+| `react-hooks/immutability` | 4 | Wrap mutable objects bằng `useMemo`/`useRef` |
+| `react-hooks/purity` | 4 | Không gọi `Math.random()` trong render — dùng `useId()` hoặc `useRef` |
+| `react-hooks/incompatible-library` | 3 | Thêm `// eslint-disable-next-line` (library issue, không fix được) |
+| `no-useless-escape` | 2 | Bỏ escape character thừa trong regex |
+| `@typescript-eslint/no-unused-vars` | 2 | Xóa biến/import không dùng |
+| `prefer-const` | 1 | Đổi `let` → `const` |
 
-### 3. Scope
+### 3. Phased Approach (Chi tiết)
 
-**In scope:**
-- Fix 172 lỗi ESLint hiện có trên 51 files.
-- Không thay đổi behavior / business logic — chỉ refactor để thỏa mãn lint rules.
-- Chia thành 5 phase nhỏ để dễ review và giảm rủi ro regression.
+#### Phase 1 — Query hooks (`src/hooks/queries/*`) — 27 lỗi
+> Tất cả đều là `no-explicit-any`. Thay bằng type từ `src/types/index.ts`.
+- `useAgentDetail.ts` (7 lỗi): Thay bằng `Agent`, `T1Change`, `M1TransitionTask`, v.v.
+- `useRequestDetail.ts` (4 lỗi): Thay bằng `T1Request`, `RequestComment`, `ActivityLog`
+- `useB2Requests.ts` (2 lỗi): Thay bằng `T1Request & { agent: Agent }`
+- `useM1Transitions.ts` (2 lỗi): Thay bằng `M1TransitionTask` nested types
+- Các query hooks còn lại (useRequests, useTrash, useActivityLogs, useAgents, useDivisions, useEmailTemplates, useHolidays, useRanks, useStatusCounts): Thay bằng model type tương ứng.
 
-**Out of scope:**
-- Không thay đổi rules ESLint (`.eslintrc`).
-- Không thêm tính năng mới.
-- Không refactor kiến trúc lớn (ví dụ: không chuyển toàn bộ pages sang TanStack Query — đó là FEAT-004).
+#### Phase 2 — Agent detail components — 41 lỗi
+- **`AgentInfoTab.tsx` (35 lỗi)**: **Quan trọng nhất:** Di chuyển `InfoRow` ra ngoài component thành standalone component (33 lỗi `static-components`). Thay `any` → `{ id: string; name: string }` và `Record<string, string \| null>`.
+- Các file khác trong `agent-detail/` (AgentHistoryTab, AsT1History, DeactivationHistory, T1History): Thay `any` bằng type tương ứng.
 
-### 4. Technical Design
+#### Phase 3 — Modals & shared components — 52 lỗi
+- `HtmlEditor.tsx` (10 lỗi): Di chuyển toolbar button components ra ngoài render. Tách `PLACEHOLDERS` ra file riêng.
+- `ComposeTemplateModal.tsx` (10 lỗi): Thay `any`, wrap mutable defaults, fix deps, dùng `useId()`.
+- `CreateRequestModal.tsx` (10 lỗi): Thay `any` → Agent, EligibilityResult. Fix deps, disable `incompatible-library`.
+- Các modal khác (Deactivate, Restore, SendEmail, CountdownConfirm, Export, TemplateEdit): Fix `any`, hooks deps, `set-state-in-effect`, và `purity`.
+- `CommandPalette.tsx`, `NotificationDropdown.tsx`, `Toast.tsx`: Refactor effect, fix deps, tách export context.
 
-**Phân loại lỗi hiện tại:**
+#### Phase 4 — Pages — 32 lỗi
+- Các page (DivisionsPage, AgentsPage, RanksPage, TrashPage, EmailTemplatesPage, HolidaysPage, UploadPage, ExcelGeneratorPage, RequestDetailPage, RequestsPage): Chủ yếu là lỗi `@typescript-eslint/no-explicit-any`, cần import và cast type chuẩn xác. Ở `DivisionsPage` có 1 lỗi `incompatible-library` (disable) và `ExcelGeneratorPage` có 1 lỗi `set-state-in-effect` (refactor effect).
 
-| Rule | Số lượng ước tính | Cách fix |
-|------|------------------|----------|
-| `@typescript-eslint/no-explicit-any` | ~90 | Thay `any` bằng `unknown` + type guard, hoặc định nghĩa interface phù hợp. Ưu tiên query hooks và shared components. |
-| `react-hooks/static-components` | ~35 | Di chuyển component con (`InfoRow` trong `AgentInfoTab`) ra ngoài render function. |
-| `react-hooks/set-state-in-effect` | ~5 | Refactor effect gọi `setState` trực tiếp thành dùng event handler hoặc query hook. |
-| `react-hooks/exhaustive-deps` | ~10 | Thêm dependency đúng hoặc dùng ref nếu cần. |
-| `react-hooks/refs` | ~2 | Không đọc/ghi ref trong render; chuyển vào event handler / effect. |
-| `@typescript-eslint/no-unused-vars` | ~5 | Xóa biến/import không dùng. |
-| Khác | ~25 | Tùy từng lỗi cụ thể. |
+#### Phase 5 — Misc / infrastructure — 10 lỗi
+- `useAuth.tsx`, `useFocusTrap.ts`: Fix `any`, tách export component.
+- `excel-generator.ts`: Xóa `\/` thừa.
+- UI components (`DialogManager`, `ToastProvider`, `Modal`): Tách context export, fix purity (`Math.random`).
+- `supabase/functions/send-email/index.ts`: Fix `catch(err: any)` thành `unknown`.
 
-**Phased approach:**
+### 4. Special Handling (User Approved)
+- **`react-hooks/incompatible-library` (3 lỗi)**: Sẽ dùng `// eslint-disable-next-line react-hooks/incompatible-library` do lỗi từ thư viện `react-hook-form` trên React 19.
+- **`react-hooks/set-state-in-effect` (CountdownConfirmModal)**: Sẽ dùng `// eslint-disable-next-line` do đây là pattern subscription hợp lệ đếm ngược bằng `setInterval`.
 
-**Phase 1 — Query hooks (`src/hooks/queries/*`):**
-- Các file có nhiều `any`: `useAgentDetail.ts` (8), `useRequestDetail.ts` (4), `useRequests.ts` (2), `useB2Requests.ts` (2), `useM1Transitions.ts` (2), `useTrash.ts` (2), v.v.
-- Định nghĩa type chính xác cho dữ liệu trả về từ Supabase, thay `any` bằng type từ `src/types/index.ts`.
-
-**Phase 2 — Agent detail cleanup (`AgentInfoTab.tsx`):**
-- Di chuyển `InfoRow` component ra ngoài render.
-- Fix các `any` còn lại trong file (35 lỗi).
-
-**Phase 3 — Modals (`ComposeTemplateModal.tsx`, `CreateRequestModal.tsx`, `HtmlEditor.tsx`, `DeactivateAgentModal.tsx`, `RestoreAgentModal.tsx`):**
-- Fix `any` types.
-- Fix hooks issues (`set-state-in-effect`, `exhaustive-deps`, `refs`).
-
-**Phase 4 — Pages (`AgentsPage.tsx`, `DivisionsPage.tsx`, `RanksPage.tsx`, `TrashPage.tsx`, `UploadPage.tsx`, v.v.):**
-- Fix `any` và hooks deps.
-
-**Phase 5 — Misc / leftover:**
-- `CommandPalette.tsx`, `NotificationDropdown.tsx`, `useAuth.tsx`, UI components, Excel Generator, Supabase function.
-- Chạy `eslint .` cuối cùng để verify 0 lỗi.
-
-### 5. UI/UX
-Không thay đổi UI.
-
-### 6. Files cần sửa / tạo
-| File | Thay đổi |
-|------|----------|
-| `src/hooks/queries/*.ts` | Thay `any` bằng đúng type |
-| `src/components/agent-detail/AgentInfoTab.tsx` | Move `InfoRow` ra ngoài render, fix `any` |
-| `src/components/ComposeTemplateModal.tsx` | Fix `any` + hooks issues |
-| `src/components/CreateRequestModal.tsx` | Fix `any` + hooks issues |
-| `src/components/HtmlEditor.tsx` | Fix `any` + hooks issues |
-| `src/components/DeactivateAgentModal.tsx` | Fix `any` + hooks issues |
-| `src/components/RestoreAgentModal.tsx` | Fix `any` + hooks issues |
-| `src/pages/AgentsPage.tsx` | Fix `any` + hooks issues |
-| `src/pages/DivisionsPage.tsx` | Fix `any` + hooks issues |
-| `src/pages/RanksPage.tsx` | Fix `any` + hooks issues |
-| `src/pages/TrashPage.tsx` | Fix `any` + hooks issues |
-| `src/pages/UploadPage.tsx` | Fix `any` + hooks issues |
-| `src/pages/RequestDetailPage.tsx` | Fix `catch (e: any)` |
-| `src/pages/RequestsPage.tsx` | Fix `(r.agent as any)` |
-| `src/components/CommandPalette.tsx` | Fix `set-state-in-effect` + `any` |
-| `src/components/NotificationDropdown.tsx` | Fix hooks issues + `any` |
-| `src/hooks/useAuth.tsx` | Fix `any` |
-| Các file còn lại trong danh sách 51 files | Theo phân loại từng lỗi |
-
-### 7. Schema / SQL changes
-Không cần.
-
-### 8. API / Integration changes
-Không cần.
-
-### 9. Test Plan
-1. Sau mỗi phase, chạy `npx eslint .` để confirm lỗi giảm đúng hướng.
-2. Sau mỗi phase, chạy `npm run test` — 56/56 tests phải vẫn pass.
-3. Sau mỗi phase, chạy `npm run build` — phải pass.
-4. Cuối cùng: `npm run verify` phải pass hoàn toàn (tsc + build + eslint).
-5. Smoke test 5 luồng chính: tạo request, chuyển bước, hoàn tất, tạo agent, deactivate agent.
-
-### 10. Rollout Plan
-1. Thực hiện từng phase, mỗi phase 1 commit riêng.
-2. Không deploy cho đến khi tất cả 5 phases hoàn thành và verify pass.
-
-### 11. Notes
-- **Rủi ro cao nhất:** `AgentInfoTab.tsx` (35 lỗi) và `DivisionsPage.tsx` (11 lỗi). Cần test kỹ UI sau khi sửa.
-- **Không được thay đổi behavior:** Chỉ refactor cho đúng type / hooks rules, không đổi logic.
-- **Rollback:** Revert từng phase nếu phát hiện regression.
-- **Dependencies:** Nên làm sau khi các feature đang active đã ổn định, tránh conflict với code đang dev.
+### 5. Test Plan & Rollout
+1. Thực hiện lần lượt từ Phase 1 đến Phase 5.
+2. Sau mỗi phase:
+   - Chạy `npx eslint .` để confirm lỗi giảm đúng hướng.
+   - Chạy `npm run test` — 56/56 tests phải vẫn pass.
+   - Smoke test các luồng chính liên quan.
+3. Cuối cùng: `npm run verify` phải pass hoàn toàn (tsc + build + eslint).
 
 ---
 
@@ -451,19 +411,27 @@ Không cần.
 ## FEAT-004: Refactor pages sang TanStack Query
 
 - **Đề xuất**: 2026-05-28
-- **Status**: `partial`
+- **Status**: `done`
 - **Priority**: `low`
+- **Hoàn thành**: 2026-05-30
 
-### Current Status (as of 2026-05-29)
+### Current Status (as of 2026-06-20)
 
 **Đã làm:**
 - `src/main.tsx` — Đã setup `QueryClientProvider` với `staleTime: 5 phút`, `retry: 1`.
 - `@tanstack/react-query` đã cài trong `package.json`.
+- Đã tạo 17 custom hooks trong `src/hooks/queries/` bao gồm:
+  - `useAgents.ts`, `useAgentDetail.ts`, `useRequests.ts`, `useRequestDetail.ts`, `useActivityLogs.ts`
+  - `useDashboardStats.ts`, `useM1Transitions.ts`, `useB2Requests.ts`, `useStatusCounts.ts`
+  - `useTrash.ts`, `useHolidays.ts`, `useRanks.ts`, `useDivisions.ts`
+  - `useEmailTemplates.ts`, `useBookmarkedAgents.ts`, `useT1Changes.ts`, `useRequestCount.ts`
+- Đã refactor sang dùng `useQuery`/`useMutation` cho các pages chính:
+  - `AgentsPage.tsx`, `RequestsPage.tsx`, `DashboardPage.tsx`, `AgentDetailPage.tsx`, `RequestDetailPage.tsx`
+  - `ActivityLogPage.tsx`, `TrashPage.tsx`, `HolidaysPage.tsx`, `RanksPage.tsx`, `DivisionsPage.tsx`, `EmailTemplatesPage.tsx`
+- Các mutation đều invalidate cache đúng qua `queryClient.invalidateQueries()`.
 
 **Chưa làm:**
-- Chưa tạo custom hooks (`useAgents`, `useRequests`, `useAgentDetail`, v.v.).
-- Chưa refactor bất kỳ page nào sang dùng `useQuery`/`useMutation`.
-- Các page vẫn dùng `useState` + `useEffect` thủ công.
+- Hoàn tất toàn bộ scope gốc. Một số helper functions còn dùng `supabase.from` trực tiếp (ví dụ: `fetchExportData` trong `AgentsPage.tsx`) nhưng đây là logic export one-off, không phải data fetching chính.
 
 ### 1. Mô tả feature
 Hiện tại các page đang dùng `useState` + `useEffect` thủ công để fetch data từ Supabase. Refactor sang `@tanstack/react-query` để có caching, background refetch, error handling, loading state tốt hơn.
@@ -1274,11 +1242,11 @@ Refactor phần hiển thị email trong `ComposeTemplateModal`:
 ## REFACTOR-005: Twenty UI/UX Full Adoption (Tailwind v4 Preserve)
 
 - **Đề xuất**: 2026-06-04
-- **Status**: `in_progress`
+- **Status**: `done`
 - **Priority**: `high`
-- **Hoàn thành**: —
+- **Hoàn thành**: 2026-06-05
 
-### Current Status (as of 2026-06-04)
+### Current Status (as of 2026-06-05)
 
 **Đã làm:**
 - Phase 1: Tokens & Global Styles (`tokens.css`, `index.css` rewrite, `index.html` + Inter font).
@@ -2029,7 +1997,7 @@ FOR EACH ROW EXECUTE FUNCTION public.handle_email_activity_insert();
 ## FEAT-027: Gửi email qua Google Apps Script
 
 - **Đề xuất**: 2026-06-12
-- **Status**: `planned`
+- **Status**: `backlog` *(tạm dừng theo yêu cầu 2026-06-26 — ưu tiên feature Google Drive mới)*
 - **Priority**: `high`
 
 #### 1. Mô tả feature
@@ -2170,10 +2138,65 @@ serve(async (req) => {
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (đã có sẵn)
 - `GAPPS_WEBAPP_URL`: URL từ Apps Script Web App
 
-**4.4 Frontend**
-- `ComposeTemplateModal.tsx`: Bật lại nút **"Gửi email"** (hiện đang bị comment/ẩn theo CHANGELOG #19).
-- `SendEmailModal.tsx`: Thay `supabase.functions.invoke('send-email', ...)` thành `supabase.functions.invoke('send-email-gapps', ...)`.
-- Không cần trường `from` vì sender được quản lý bởi Apps Script.
+**4.4 Frontend changes**
+
+**`ComposeTemplateModal.tsx`**
+- Bật lại nút **"Gửi email"** trong footer modal, bên cạnh "Copy nội dung" và "Copy email".
+- Nút chỉ hiển thị khi:
+  - Đã chọn template (`template` hợp lệ).
+  - Có ít nhất 1 recipient hợp lệ (`agent` có email hoặc T1 liên quan có email).
+- Khi bấm → mở `SendEmailModal` với đầy đủ props: `agent`, `t1Old`, `newT1`, `tempT1`, `templateSubject`, `templateBody`, `templateKey`, `b3Deadline`, `m1TaskId` (nếu mở từ M1 Transition row).
+- Giữ nguyên các nút "Copy" — gửi email là tùy chọn thêm, không thay thế copy.
+
+**`SendEmailModal.tsx`**
+- Thay `supabase.functions.invoke('send-email', ...)` thành `supabase.functions.invoke('send-email-gapps', ...)`.
+- Payload gửi đi:
+  ```ts
+  {
+    to: string
+    cc?: string[]
+    bcc?: string[]
+    subject: string
+    html: string
+    template_key: string
+    agent_id?: string
+    task_id?: string
+  }
+  ```
+- Bỏ trường `from` trong UI vì sender do Apps Script quản lý.
+- Thêm trạng thái `isSending` để disable nút gửi và hiển thị spinner.
+- Xử lý response:
+  - `success: true` → toast "Đã gửi email thành công", đóng modal.
+  - `success: false` → toast "Gửi email thất bại: {error}", giữ modal mở để user sửa.
+  - Network/Edge Function lỗi → toast "Không thể kết nối dịch vụ gửi email".
+- Vẫn insert vào `email_logs` nhưng giờ do Edge Function xử lý, frontend không cần insert thêm.
+
+**4.5 Data flow & audit**
+
+```
+User bấm "Gửi email"
+  → ComposeTemplateModal mở SendEmailModal
+  → SendEmailModal gọi supabase.functions.invoke('send-email-gapps', {...})
+  → Edge Function verify JWT
+  → Edge Function gọi Apps Script Web App URL
+  → Apps Script gửi email qua GmailApp
+  → Apps Script trả kết quả { success, error? }
+  → Edge Function:
+      1. Insert `email_logs` (status: sent/failed, error_message)
+      2. Nếu task_id tồn tại và success → insert `email_activities` (action_type: 'send')
+  → Edge Function trả response về frontend
+  → Frontend toast + đóng modal
+```
+
+**4.6 Security considerations**
+
+| Rủi ro | Giải pháp |
+|---|---|
+| Web App URL bị lộ | Không đưa URL vào frontend/env client. Chỉ lưu trong Supabase Edge Function secrets. |
+| Anonymous call đến Apps Script | Edge Function verify JWT token của user đăng nhập. Chỉ authenticated user mới gọi được. |
+| Gửi email spam/quota abuse | Không có rate limit trong code hiện tại. Cân nhắt thêm rate limit sau nếu cần. |
+| Email body chứa HTML độc hại | `ComposeTemplateModal` đã render template từ DB; `SendEmailModal` hiển thị preview. Tin tưởng admin/operator. Không cần sanitize thêm vì nội dung do user soạn. |
+| Apps Script chạy với quyền cá nhân | Nên deploy "Execute as: Me" với tài khoản dịch vụ chung (vd: `opt@myera.com.vn`) thay vì tài khoản cá nhân. |
 
 #### 5. UI/UX
 - Giữ nguyên giao diện `SendEmailModal` hiện tại.
@@ -2185,8 +2208,11 @@ serve(async (req) => {
 | File | Thay đổi |
 |------|----------|
 | `supabase/functions/send-email-gapps/index.ts` | **Mới** — Edge Function gọi Apps Script + lưu log |
-| `src/components/ComposeTemplateModal.tsx` | Bật lại nút "Gửi email" mở `SendEmailModal` |
-| `src/components/SendEmailModal.tsx` | Đổi invoke sang `send-email-gapps`, bỏ trường `from` |
+| `src/components/ComposeTemplateModal.tsx` | Bật lại nút "Gửi email" mở `SendEmailModal`; truyền thêm `m1TaskId` |
+| `src/components/SendEmailModal.tsx` | Đổi invoke sang `send-email-gapps`, bỏ trường `from`, thêm `isSending` state, xử lý response |
+| `src/types/index.ts` | (nếu cần) thêm type `SendEmailGappsPayload` hoặc giữ inline |
+| `CHANGELOG.md` | Ghi nhận feature sau khi hoàn thành |
+| `PROGRESS.md` | Cập nhật status FEAT-027 → done khi xong |
 
 #### 7. Schema / SQL changes
 Không cần thay đổi schema. Bảng `email_logs` (migration `014_email_logs.sql`) và `email_activities` (`018_email_activities.sql`) đã tồn tại.
@@ -2197,26 +2223,91 @@ Không cần thay đổi schema. Bảng `email_logs` (migration `014_email_logs.
 - **Frontend:** Gọi Edge Function thay vì Resend.
 
 #### 9. Test Plan
-1. Tạo Google Apps Script, deploy Web App, lấy URL.
-2. Set `GAPPS_WEBAPP_URL` trong Supabase Edge Function secrets.
-3. Chạy `supabase functions serve` local → test endpoint bằng cURL/Postman.
-4. Mở app → Agents → chọn 1 agent → "Soạn mẫu" → "Gửi email".
-5. Nhập To + CC → bấm "Gửi email" → verify email đến hộp thư.
-6. Kiểm tra `email_logs` có record mới với `status = 'sent'`.
+
+**9.1 Local / Edge Function test**
+1. Chạy `supabase functions serve` trong thư mục `webapp`.
+2. Gọi local endpoint bằng cURL/Postman với JWT hợp lệ:
+   ```bash
+   curl -X POST http://localhost:54321/functions/v1/send-email-gapps \
+     -H "Authorization: Bearer <jwt>" \
+     -H "Content-Type: application/json" \
+     -d '{"to":"test@example.com","subject":"Test","html":"<p>Hello</p>","template_key":"test"}'
+   ```
+3. Verify response `{ success: true }`.
+4. Kiểm tra `email_logs` có record mới với `status = 'sent'`.
+5. Test thiếu `to` → response 400.
+6. Test JWT sai → response 401.
+7. Test `GAPPS_WEBAPP_URL` sai → response 500, `email_logs.status = 'failed'`.
+
+**9.2 Apps Script test**
+1. Tạo script tại [script.google.com](https://script.google.com).
+2. Paste code `doPost`/`doGet`.
+3. Deploy → Web App → copy URL.
+4. Set URL vào Supabase secrets.
+5. Gửi test email đến 1 địa chỉ nội bộ → verify đến hộp thư.
+
+**9.3 Frontend test**
+1. Mở app → Agents → chọn 1 agent → "Soạn mẫu".
+2. Verify nút "Gửi email" hiển thị.
+3. Bấm "Gửi email" → `SendEmailModal` mở với subject/body đã render đúng.
+4. Nhập To + CC → bấm "Gửi email".
+5. Verify toast "Đã gửi email thành công", modal đóng.
+6. Kiểm tra `email_logs` có record `status = 'sent'`.
 7. Nếu gửi từ M1 Transition row → verify `email_activities` có record `action_type = 'send'`.
-8. Test case lỗi: sai URL Apps Script → toast lỗi, `email_logs.status = 'failed'`.
+8. Test offline/Edge Function fail → toast lỗi, modal không đóng.
+
+**9.4 Regression test**
+1. Nút "Copy nội dung" và "Copy email" vẫn hoạt động bình thường.
+2. `ComposeTemplateModal` từ AgentsPage và Dashboard B2/M1 đều có nút "Gửi email".
+3. `npm run verify` pass (tsc + build + lint).
+4. `npm run test` 56/56 pass.
 
 #### 10. Rollout Plan
-1. Tạo Apps Script + deploy Web App.
-2. Viết Edge Function `send-email-gapps`.
-3. Set secrets trong Supabase Dashboard.
-4. Sửa `SendEmailModal` và `ComposeTemplateModal`.
-5. Test local với Apps Script URL.
-6. Deploy Edge Function: `supabase functions deploy send-email-gapps`.
-7. Deploy frontend khi được yêu cầu.
-8. Cập nhật `CHANGELOG.md`.
 
-#### 11. Notes
+**Phase 1 — Apps Script setup (không cần deploy code)**
+1. Tạo Google Apps Script mới.
+2. Paste code `doPost`/`doGet`.
+3. Deploy dạng Web App:
+   - Execute as: `Me` (dùng tài khoản dịch vụ chung nếu có)
+   - Who has access: `Anyone` hoặc `Anyone within [domain]`
+4. Copy Web App URL.
+5. Test Apps Script URL độc lập bằng cURL để đảm bảo nó hoạt động.
+
+**Phase 2 — Code + Edge Function**
+1. Viết `supabase/functions/send-email-gapps/index.ts`.
+2. Sửa `src/components/SendEmailModal.tsx` để gọi function mới.
+3. Sửa `src/components/ComposeTemplateModal.tsx` để bật lại nút "Gửi email".
+4. Chạy `npm run verify` và `npm run test`.
+
+**Phase 3 — Staging / Dev test**
+1. Set secret `GAPPS_WEBAPP_URL` trong Supabase Dashboard → Edge Functions.
+2. Deploy Edge Function lên staging/dev: `supabase functions deploy send-email-gapps`.
+3. Test end-to-end từ UI.
+4. Verify `email_logs` và `email_activities` ghi nhận đúng.
+
+**Phase 4 — Production deploy (chỉ khi user yêu cầu rõ ràng)**
+1. Deploy Edge Function lên production.
+2. Deploy frontend (`vercel --prod` sau khi user xác nhận).
+3. Kiểm tra 1-2 email đầu tiên trên production.
+4. Cập nhật `CHANGELOG.md` và `PROGRESS.md`.
+
+#### 11. Rollback Plan
+
+| Tình huống | Hành động |
+|---|---|
+| Apps Script fail / quota hết | Tạm thờii ẩn lại nút "Gửi email" trong `ComposeTemplateModal`. User tiếp tục dùng "Copy nội dung". |
+| Edge Function lỗi nghiêm trọng | Redeploy version cũ (trước FEAT-027) hoặc ẩn nút "Gửi email". |
+| Email vào spam | Chuyển sang Gmail API Service Account hoặc cấu hình DKIM/SPF trên Google Workspace. |
+| Web App URL bị lộ | Tạo lại Apps Script Web App URL, update secret `GAPPS_WEBAPP_URL`. |
+
+#### 12. Monitoring & Quota
+
+- **Quota Apps Script:** 20,000 email/ngày (tài khoản consumer), cao hơn với Google Workspace.
+- **Monitor:** Query `email_logs` hàng ngày để đếm số email sent/failed.
+- **Alert đơn giản:** Nếu số `failed` > 5 trong 1 ngày → kiểm tra Apps Script URL/quota.
+- **Không tự động retry:** Nếu gửi fail, user phải bấm gửi lại. Tránh spam.
+
+#### 13. Notes
 
 - **Ưu điểm:**
   - Không cần verify domain như Resend.
@@ -2247,8 +2338,9 @@ Không cần thay đổi schema. Bảng `email_logs` (migration `014_email_logs.
 ## FEAT-026: Delete Email Template
 
 - **Đề xuất**: 2026-06-12
-- **Status**: `planned`
+- **Status**: `done`
 - **Priority**: `medium`
+- **Hoàn thành**: 2026-06-12
 
 #### 1. Mô tả feature
 Thêm chức năng **xóa mẫu email** trong trang **Quản lý mẫu email** (`EmailTemplatesPage`). Admin bấm nút "Xóa" trên từng row → hiện modal xác nhận → hard delete mẫu khỏi bảng `email_templates`.
@@ -2620,4 +2712,348 @@ Không cần.
   | `agent.rank_name` null nhưng `rank_id` có giá trị | Hàm `canCreateRequest` đã fallback về `rankMap` |
   | Filter "Đã gửi email" không cập nhật sau khi copy email | `email_sent_count` được cập nhật qua trigger DB + invalidate query |
   | Layout bị vỡ trên mobile | Test responsive, filter tabs wrap xuống dòng |
+
+---
+
+---
+
+## FEAT-030: Google Apps Script Admin Panel — Drive Operations
+
+- **Đề xuất**: 2026-06-26
+- **Status**: `done`
+- **Priority**: `medium`
+- **Hoàn thành**: 2026-06-26
+
+#### 1. Mô tả feature
+Tạo một tab admin riêng biệt trong app để tương tác với Google Drive thông qua **Google Apps Script Web App**. Tab chỉ dành cho role `admin`. Cung cấp nhiều form cố định cho các tác vụ Drive thường gặp: quét folder, thiết lập quyền, tạo/copy folder, liệt kê item, di chuyển, xóa quyền, xóa item.
+
+#### 2. Motivation / Why
+- Admin cần quản lý hàng loạt folder/file trên Google Drive theo dữ liệu agent trong app.
+- Không muốn phụ thuộc vào ngôn ngữ lập trình cụ thể — Apps Script đóng vai trò abstraction layer, frontend chỉ cần gọi `action` name + `params`.
+- Tập trung các thao tác Drive vào một giao diện duy nhất thay vì làm thủ công trên Google Drive.
+
+#### 3. Scope
+
+**In scope:**
+- Tab admin mới, ví dụ `/admin/google-drive` hoặc `/admin/apps-script`.
+- Admin-only: kiểm tra `user_profiles.role === 'admin'` ở cả UI và Edge Function.
+- 8 tác vụ với form riêng:
+  1. **Scan Folders** — quét recursive theo pattern tên.
+  2. **Set Permissions** — thêm viewer/commenter/editor.
+  3. **Create Folder** — tạo folder mới.
+  4. **Copy Folder** — copy folder từ template.
+  5. **List Items** — liệt kê file/folder trong một folder.
+  6. **Move Item** — di chuyển file/folder.
+  7. **Remove Permission** — xóa quyền của một user.
+  8. **Delete Item** — move file/folder vào trash.
+- Supabase Edge Function `google-apps-script-proxy` để gọi Apps Script an toàn.
+- Google Apps Script `doPost` dispatcher theo `action`.
+- Lưu log mỗi lần gọi action vào bảng `apps_script_logs`.
+
+**Out of scope:**
+- Không dùng Google Drive API trực tiếp (chỉ qua Apps Script abstraction).
+- Không dùng OAuth user login (chỉ dùng Apps Script Web App URL).
+- Không tích hợp Gmail/Sheets/Calendar trong FEAT này.
+- Không có Google Drive Picker UI.
+- Không chạy tự động định kỳ/cron — chỉ manual trigger từ UI admin.
+
+#### 4. Technical Design
+
+**4.1 Google Apps Script Web App**
+
+Single `doPost(e)` dispatcher:
+
+```javascript
+function doPost(e) {
+  const { action, params } = JSON.parse(e.postData.contents || '{}')
+  const actions = {
+    scanFolders,
+    setPermissions,
+    createFolder,
+    copyFolder,
+    listItems,
+    moveItem,
+    removePermission,
+    deleteItem
+  }
+
+  if (!actions[action]) {
+    return jsonResponse({ success: false, error: 'Unknown action: ' + action })
+  }
+
+  try {
+    const result = actions[action](params)
+    return jsonResponse({ success: true, data: result })
+  } catch (err) {
+    return jsonResponse({ success: false, error: err.message })
+  }
+}
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON)
+}
+```
+
+Các function con dùng `DriveApp`:
+
+| Action | Function signature | Mô tả |
+|---|---|---|
+| `scanFolders` | `({ rootFolderId, depth, namePattern? })` | Duyệt recursive, trả về danh sách folder có tên khớp pattern. |
+| `setPermissions` | `({ itemIds, emails, role })` | Thêm quyền viewer/commenter/editor cho danh sách email. |
+| `createFolder` | `({ parentFolderId, name })` | Tạo folder con. |
+| `copyFolder` | `({ sourceFolderId, destFolderId, newName })` | Copy toàn bộ folder (có thể cần recursive copy file). |
+| `listItems` | `({ folderId, pageSize? })` | Liệt kê file/folder con. |
+| `moveItem` | `({ itemId, destFolderId })` | Di chuyển file/folder. |
+| `removePermission` | `({ itemId, email })` | Xóa quyền của một user. |
+| `deleteItem` | `({ itemId })` | Move vào trash. |
+
+**4.2 Supabase Edge Function `google-apps-script-proxy`**
+
+File: `supabase/functions/google-apps-script-proxy/index.ts`
+
+Flow:
+1. Verify JWT token từ header.
+2. Kiểm tra user role = `admin` (query `user_profiles`).
+3. Validate `action` nằm trong allowlist.
+4. Đọc secret `GAPPS_ADMIN_URL`.
+5. Forward `{ action, params, initiatedBy: user.id }` đến Apps Script.
+6. Insert log vào `apps_script_logs`.
+7. Trả response về frontend.
+
+```ts
+const ALLOWED_ACTIONS = [
+  'scanFolders', 'setPermissions', 'createFolder', 'copyFolder',
+  'listItems', 'moveItem', 'removePermission', 'deleteItem'
+]
+```
+
+**4.3 Frontend**
+
+- New page: `src/pages/AppsScriptAdminPage.tsx`.
+- Layout: sidebar bên trái chọn action, bên phải là form + results.
+- Mỗi action có component form riêng trong `src/components/apps-script-admin/`:
+  - `ScanFoldersForm.tsx`
+  - `SetPermissionsForm.tsx`
+  - `CreateFolderForm.tsx`
+  - `CopyFolderForm.tsx`
+  - `ListItemsForm.tsx`
+  - `MoveItemForm.tsx`
+  - `RemovePermissionForm.tsx`
+  - `DeleteItemForm.tsx`
+- Results hiển thị dạng table/card, có thể copy JSON.
+- Settings panel chỉ read-only: hiển thị trạng thái kết nối Apps Script (ping qua `doGet`).
+
+**4.4 Security**
+
+| Layer | Biện pháp |
+|---|---|
+| UI | Route admin-only, menu chỉ hiện khi `role === 'admin'`. |
+| Edge Function | Verify JWT + check admin role + action allowlist. |
+| Apps Script URL | Giữ trong Supabase secrets, không đưa lên frontend. |
+| Audit | Mọi action ghi log vào `apps_script_logs`. |
+| Destructive actions | Confirmation modal trước khi thực hiện. |
+
+**4.5 Pattern matching cho Scan Folders**
+
+Hỗ trợ các kiểu pattern:
+- `exact`: tên folder == `pattern`.
+- `contains`: tên folder chứa `pattern`.
+- `startsWith` / `endsWith`.
+- `regex`: biểu thức chính quy.
+
+Có thể tích hợp match với dữ liệu agent: ví dụ pattern `{{staff_id}}` để tìm folder trùng với `staff_id` của agent.
+
+#### 5. UI/UX
+
+- **Page header**: "Google Drive Admin" + badge "Admin only".
+- **Sidebar tabs** (icon + label):
+  - Scan Folders
+  - Set Permissions
+  - Create Folder
+  - Copy Folder
+  - List Items
+  - Move Item
+  - Remove Permission
+  - Delete Item
+- **Form pattern**: input rõ ràng, validation trước submit, loading state.
+- **Results area**: table với cột id, name, type, url, owner, lastModified.
+- **Confirmation modal** cho `moveItem`, `removePermission`, `deleteItem`.
+- **Toast feedback**: success/error.
+
+#### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `supabase/migrations/019_apps_script_logs.sql` | **Mới** — bảng log |
+| `supabase/functions/google-apps-script-proxy/index.ts` | **Mới** — Edge Function proxy, gửi `authToken` nếu có env |
+| `docs/FEAT-030-apps-script.gs` | **Mới** — code Google Apps Script Web App đầy đủ 8 tác vụ |
+| `src/pages/AppsScriptAdminPage.tsx` | **Mới** — page chính |
+| `src/components/apps-script/ScanFoldersForm.tsx` | **Mới** |
+| `src/components/apps-script/SetPermissionsForm.tsx` | **Mới** |
+| `src/components/apps-script/CreateFolderForm.tsx` | **Mới** |
+| `src/components/apps-script/CopyFolderForm.tsx` | **Mới** |
+| `src/components/apps-script/ListItemsForm.tsx` | **Mới** |
+| `src/components/apps-script/MoveItemForm.tsx` | **Mới** |
+| `src/components/apps-script/RemovePermissionForm.tsx` | **Mới** |
+| `src/components/apps-script/DeleteItemForm.tsx` | **Mới** |
+| `src/components/apps-script/utils.ts` | **Mới** — helper trích xuất Drive ID |
+| `src/hooks/queries/useAppsScript.ts` | **Mới** — hook gọi Edge Function + log query |
+| `src/types/index.ts` | Thêm types: `AppsScriptAction`, `AppsScriptLog`, các payload types |
+| `src/App.tsx` | Thêm route `/admin/google-drive` |
+| `src/components/Layout.tsx` | Thêm menu admin |
+| `CHANGELOG.md` | Ghi nhận feature |
+| `PROGRESS.md` | Cập nhật status FEAT-030 → done khi xong |
+
+#### 7. Schema / SQL changes
+
+```sql
+CREATE TABLE IF NOT EXISTS public.apps_script_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  action TEXT NOT NULL,
+  params JSONB NOT NULL DEFAULT '{}',
+  result JSONB,
+  success BOOLEAN NOT NULL,
+  error_message TEXT,
+  initiated_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_apps_script_logs_action ON public.apps_script_logs(action);
+CREATE INDEX IF NOT EXISTS idx_apps_script_logs_created_at ON public.apps_script_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_apps_script_logs_initiated_by ON public.apps_script_logs(initiated_by);
+
+ALTER TABLE public.apps_script_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "apps_script_logs_admin_all" ON public.apps_script_logs;
+CREATE POLICY "apps_script_logs_admin_all"
+  ON public.apps_script_logs FOR ALL TO authenticated
+  USING (public.get_my_role() = 'admin')
+  WITH CHECK (public.get_my_role() = 'admin');
+```
+
+> ⚠️ Chạy thủ công trên Supabase SQL Editor.
+
+#### 8. API / Integration changes
+
+- **Google Apps Script Web App**: endpoint `doPost` + `doGet` (healthcheck), hỗ trợ 8 actions.
+- **Supabase Edge Function**: `google-apps-script-proxy` — xác thực, allowlist, audit log.
+- **Secret cần set**: `GAPPS_ADMIN_URL` trong Supabase Dashboard.
+
+#### 9. Test Plan
+
+1. **Access control:**
+   - Admin đăng nhập → thấy menu "Google Drive Admin".
+   - Operator/viewer đăng nhập → không thấy menu, truy cập trực tiếp URL bị redirect hoặc hiển thị forbidden.
+
+2. **Scan Folders:**
+   - Nhập root folder ID + depth + pattern.
+   - Verify danh sách folder khớp hiển thị đúng.
+
+3. **Set Permissions:**
+   - Chọn 1-2 folder + nhập email + chọn role `editor`.
+   - Verify trên Google Drive user được thêm quyền.
+   - Verify `apps_script_logs` có record `success = true`.
+
+4. **Create Folder:**
+   - Nhập parent folder ID + name.
+   - Verify folder xuất hiện trên Drive.
+
+5. **Copy Folder:**
+   - Chọn source folder + dest folder + new name.
+   - Verify copy thành công.
+
+6. **List Items:**
+   - Nhập folder ID → hiển thị danh sách file/folder con.
+
+7. **Move Item:**
+   - Nhập item ID + dest folder ID.
+   - Verify item chuyển folder, có confirmation modal.
+
+8. **Remove Permission:**
+   - Nhập item ID + email.
+   - Verify user mất quyền.
+
+9. **Delete Item:**
+   - Nhập item ID.
+   - Verify item vào trash, có confirmation modal.
+
+10. **Error cases:**
+    - JWT sai → 401.
+    - Action không nằm trong allowlist → 400.
+    - Apps Script URL sai → toast lỗi, `success = false`.
+    - Folder ID không tồn tại → Apps Script trả lỗi rõ ràng.
+
+11. **Build & test:**
+    - `npm run verify` pass.
+    - `npm run test` 56/56 pass.
+
+#### 10. Rollout Plan
+
+**Phase 1 — Apps Script setup**
+1. Tạo Google Apps Script mới.
+2. Viết 8 action functions + dispatcher.
+3. Deploy Web App (Execute as: Me, Who has access: Anyone hoặc domain).
+4. Copy Web App URL.
+
+**Phase 2 — Backend**
+1. Viết migration `019_apps_script_logs.sql`.
+2. Viết Edge Function `google-apps-script-proxy/index.ts`.
+3. Set secret `GAPPS_ADMIN_URL`.
+
+**Phase 3 — Frontend**
+1. Tạo page + components.
+2. Thêm route và menu admin.
+3. Viết hook `useAppsScriptAdmin`.
+4. Thêm types.
+
+**Phase 4 — Test**
+1. Test từng action trên dev/staging.
+2. Verify audit log.
+3. Test access control với 3 roles.
+
+**Phase 5 — Production (chỉ khi user yêu cầu)**
+1. Deploy Edge Function.
+2. Deploy frontend.
+3. Cập nhật `CHANGELOG.md`, `PROGRESS.md`.
+
+#### 11. Rollback Plan
+
+| Tình huống | Hành động |
+|---|---|
+| Apps Script lỗi | Tắt menu/route admin tạm thờii, fix Apps Script, redeploy URL. |
+| Edge Function lỗi | Redeploy version cũ hoặc tắt route admin. |
+| Phân quyền sai | Dùng chính tab admin để remove permission hoặc restore từ Google Drive version history. |
+| Audit log lỗi | Kiểm tra RLS policy, `get_my_role()` function. |
+
+#### 12. Monitoring & Limits
+
+- **Apps Script quota**: 20,000 lượt gọi/ngày, 6 phút execution time/gọi.
+- **Monitor**: query `apps_script_logs` hàng ngày để đếm số action và tỷ lệ success/failed.
+- **Limit scan depth**: max 3-5 để tránh timeout.
+- **Batch size**: `setPermissions` nên giới hạn số folder IDs/email mỗi lần gọi (ví dụ max 50).
+
+#### 13. Notes
+
+- **Ưu điểm:**
+  - Không cần Google Cloud project phức tạp.
+  - Không cần OAuth user flow.
+  - Dễ mở rộng thêm action mới: chỉ cần thêm function trong Apps Script + form component trong frontend.
+  - Tất cả thao tác có audit log.
+
+- **Nhược điểm:**
+  - Phụ thuộc vào tài khoản Google deploy Apps Script.
+  - Giới hạn quota và execution time của Apps Script.
+  - Không có Drive Picker UI đẹp.
+
+- **Rủi ro & Mitigation:**
+
+  | Rủi ro | Mitigation |
+  |--------|------------|
+  | Apps Script URL bị lộ | Giấu trong Supabase secrets, gọi qua Edge Function |
+  | Non-admin gọi được action | Edge Function verify JWT + check admin role |
+  | Action vô tình xóa nhầm folder | Confirmation modal + audit log |
+  | Scan folder quá lớn timeout | Giới hạn depth + pageSize |
+  | Apps Script tài khoản cá nhân bị khóa | Dùng tài khoản dịch vụ chung của tổ chức |
+
 

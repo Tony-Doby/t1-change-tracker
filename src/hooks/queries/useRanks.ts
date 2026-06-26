@@ -15,7 +15,7 @@ export function useRanksMapQuery() {
       const { data, error } = await supabase.from('ranks').select('id, name')
       if (error) throw error
       const map: Record<string, string> = {}
-      data?.forEach((r: any) => { map[r.id] = r.name })
+      data?.forEach((r: { id: string; name: string }) => { map[r.id] = r.name })
       return map
     },
     staleTime: 1000 * 60 * 30,

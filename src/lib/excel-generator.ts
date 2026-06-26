@@ -267,7 +267,7 @@ function formatDateDDMMYYYY(date: Date): string {
 
 function isDateFormatted(w: string | undefined): boolean {
   if (!w) return false
-  return /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(w.trim())
+  return /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(w.trim())
 }
 
 function excelSerialToDate(serial: number): Date {

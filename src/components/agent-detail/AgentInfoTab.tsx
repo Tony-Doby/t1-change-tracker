@@ -18,6 +18,14 @@ interface Props {
   divisionMap: Record<string, string>
 }
 
+const InfoRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
+  <div className="flex gap-3 text-sm">
+    <span className="w-36 text-neutral-500 shrink-0">{label}</span>
+    <span className="text-neutral-900 font-medium">{value}</span>
+  </div>
+)
+
+
 export default function AgentInfoTab({ agent, relatedMap, rankNamesMap, divisionMap }: Props) {
   const { show } = useToast()
   const queryClient = useQueryClient()
@@ -28,7 +36,7 @@ export default function AgentInfoTab({ agent, relatedMap, rankNamesMap, division
   useEffect(() => {
     supabase.from('ranks').select('id, name').then(({ data }) => {
       const map: Record<string, string> = {}
-      data?.forEach((r: any) => { map[r.id] = r.name })
+      data?.forEach((r: { id: string; name: string }) => { map[r.id] = r.name })
       setRanks(map)
     })
   }, [])
@@ -109,7 +117,7 @@ export default function AgentInfoTab({ agent, relatedMap, rankNamesMap, division
 
   const onSubmit = async (data: AgentInfoFormData) => {
     setSaving(true)
-    const payload: Record<string, any> = {}
+    const payload: Record<string, string | null> = {}
     Object.entries(data).forEach(([key, value]) => {
       if (value === '' || value == null) {
         payload[key] = null
@@ -145,12 +153,6 @@ export default function AgentInfoTab({ agent, relatedMap, rankNamesMap, division
   const agentT1Id = agent.current_t1_id ?? null
   const rankDisplay = agent.rank_name ?? rankNamesMap[agent.rank_id ?? ''] ?? '—'
 
-  const InfoRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
-    <div className="flex gap-3 text-sm">
-      <span className="w-36 text-neutral-500 shrink-0">{label}</span>
-      <span className="text-neutral-900 font-medium">{value}</span>
-    </div>
-  )
 
   if (!isEditing) {
     return (

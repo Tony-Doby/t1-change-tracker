@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -21,7 +21,7 @@ const sizeMap: Record<string, string> = {
 
 export default function Modal({ children, onClose, title, maxWidth, showClose = true, size = 'md' }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const titleId = title ? `modal-title-${Math.random().toString(36).slice(2, 9)}` : undefined
+  const [titleId] = useState(() => title ? `modal-title-${Math.random().toString(36).slice(2, 9)}` : undefined)
   useFocusTrap(ref, onClose)
 
   useEffect(() => {

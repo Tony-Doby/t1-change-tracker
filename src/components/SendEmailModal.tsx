@@ -41,6 +41,7 @@ export default function SendEmailModal({
   const [subject] = useState(templateSubject)
   const [sending, setSending] = useState(false)
 
+  const [now] = useState(() => Date.now())
   const previewData = useMemo(() => ({
     '{{agentName}}': agent.full_name ?? '',
     '{{staffId}}': agent.staff_id ?? '',
@@ -49,13 +50,13 @@ export default function SendEmailModal({
     '{{newT1Name}}': newT1?.full_name ?? '',
     '{{newT1Email}}': newT1?.email ?? '',
     '{{newT1StaffId}}': newT1?.staff_id ?? '',
-    '{{date}}': new Date().toLocaleDateString('vi-VN'),
-    '{{deadlineDate}}': new Date(Date.now() + 30 * 86400000).toLocaleDateString('vi-VN'),
-    '{{notifyDate}}': new Date().toLocaleDateString('vi-VN'),
+    '{{date}}': new Date(now).toLocaleDateString('vi-VN'),
+    '{{deadlineDate}}': new Date(now + 30 * 86400000).toLocaleDateString('vi-VN'),
+    '{{notifyDate}}': new Date(now).toLocaleDateString('vi-VN'),
     '{{tempT1Name}}': tempT1?.full_name ?? '',
     '{{tempT1StaffId}}': tempT1?.staff_id ?? '',
     '{{b3Deadline}}': b3Deadline ?? '',
-  }), [agent, t1Old, newT1, tempT1, b3Deadline])
+  }), [agent, t1Old, newT1, tempT1, b3Deadline, now])
 
   const renderedSubject = useMemo(() => {
     let s = subject
@@ -110,8 +111,8 @@ export default function SendEmailModal({
         show('Đã gửi email thành công', 'success')
         onClose()
       }
-    } catch (err: any) {
-      show('Lỗi gửi email: ' + (err.message ?? 'Unknown'), 'error')
+    } catch (err: unknown) {
+      show('Lỗi gửi email: ' + ((err as Error).message ?? 'Unknown'), 'error')
     } finally {
       setSending(false)
     }

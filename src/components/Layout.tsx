@@ -20,6 +20,7 @@ import {
   Building2,
   FileSpreadsheet,
   PanelLeft,
+  HardDrive,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { UserRole } from '../types'
@@ -59,6 +60,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Requests', icon: ClipboardList, path: '/requests', roles: ['admin', 'operator', 'viewer'], badge: requestCount },
     { label: 'Activity', icon: Activity, path: '/activity', roles: ['admin', 'operator', 'viewer'] },
     { label: 'Email', icon: Mail, path: '/templates', roles: ['admin'] },
+    { label: 'Google Drive', icon: HardDrive, path: '/admin/google-drive', roles: ['admin'] },
     { label: 'Upload', icon: Upload, path: '/upload', roles: ['admin', 'operator'] },
     { label: 'Trash', icon: Trash2, path: '/trash', roles: ['admin'] },
     { label: 'Holidays', icon: Calendar, path: '/holidays', roles: ['admin'] },

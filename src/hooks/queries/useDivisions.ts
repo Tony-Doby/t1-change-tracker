@@ -16,7 +16,7 @@ export function useDivisionsMapQuery() {
       const { data, error } = await supabase.from('divisions').select('id, name')
       if (error) throw error
       const map: Record<string, string> = {}
-      data?.forEach((d: any) => { map[d.id] = d.name })
+      data?.forEach((d: { id: string; name: string }) => { map[d.id] = d.name })
       return map
     },
     staleTime: 1000 * 60 * 30,

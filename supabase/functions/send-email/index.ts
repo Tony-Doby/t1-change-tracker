@@ -104,8 +104,8 @@ Deno.serve(async (req) => {
         },
       }
     )
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message ?? 'Unknown error' }), {
+  } catch (err: unknown) {
+    return new Response(JSON.stringify({ error: (err as Error).message ?? 'Unknown error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     })

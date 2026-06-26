@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { Agent } from '../types'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { supabase } from '../lib/supabase'
@@ -7,7 +8,7 @@ import { useAuth } from '../hooks/useAuth'
 import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../ui/display/EmptyState'
 import CountdownConfirmModal from '../components/CountdownConfirmModal'
-import { useDivisionsListQuery, useSaveDivisionMutation, useDeleteDivisionMutation, useRecomputeDivisionsMutation } from '../hooks/queries/useDivisions'
+import { useDivisionsListQuery, useSaveDivisionMutation, useDeleteDivisionMutation, useRecomputeDivisionsMutation, type Division as ApiDivision } from '../hooks/queries/useDivisions'
 import { Shield, Search, X, RefreshCw } from 'lucide-react'
 import PageHeader from '../ui/layout/PageHeader'
 import Table from '../ui/layout/Table'
@@ -30,16 +31,16 @@ export default function DivisionsPage() {
   const recomputeMut = useRecomputeDivisionsMutation()
 
   const [agents, setAgents] = useState<Record<string, { full_name: string; staff_id: string }>>({})
-  const [editing, setEditing] = useState<any | null>(null)
+  const [editing, setEditing] = useState<Partial<ApiDivision> | null>(null)
   const [showRecomputeConfirm, setShowRecomputeConfirm] = useState(false)
   const [showModal, setShowModal] = useState(false)
-  const [deleting, setDeleting] = useState<any | null>(null)
+  const [deleting, setDeleting] = useState<Partial<ApiDivision> | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
 
   const role = user?.role ?? 'viewer'
 
   const [searchTerm, setSearchTerm] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchResults, setSearchResults] = useState<Pick<Agent, 'id' | 'full_name' | 'staff_id'>[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -58,6 +59,7 @@ export default function DivisionsPage() {
     defaultValues: { name: '', head_agent_id: '', is_official: false },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const headAgentId = watch('head_agent_id')
 
   useEffect(() => {
@@ -65,7 +67,7 @@ export default function DivisionsPage() {
     if (headIds.length === 0) { setAgents({}); return }
     supabase.from('agents').select('id, full_name, staff_id').in('id', headIds).then(({ data }) => {
       const map: Record<string, { full_name: string; staff_id: string }> = {}
-      data?.forEach((a: any) => { map[a.id] = a })
+      data?.forEach((a: Pick<Agent, 'id' | 'full_name' | 'staff_id'>) => { map[a.id] = a })
       setAgents(map)
     })
   }, [divisions])
@@ -74,7 +76,6 @@ export default function DivisionsPage() {
     if (!searchTerm.trim()) { setSearchResults([]); setShowDropdown(false); return }
     const timer = setTimeout(() => doSearch(searchTerm), 300)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm])
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export default function DivisionsPage() {
           head_agent_id: editing.head_agent_id ?? '',
           is_official: editing.is_official ?? false,
         })
-        const cached = agents[editing.head_agent_id]
+        const cached = editing.head_agent_id ? agents[editing.head_agent_id] : undefined
         if (cached) {
           setSearchTerm(`${cached.full_name} (${cached.staff_id})`)
         } else if (editing.head_agent_id) {
@@ -127,7 +128,7 @@ export default function DivisionsPage() {
     setSearchLoading(false)
   }
 
-  function selectAgent(agent: any) {
+  function selectAgent(agent: Pick<Agent, 'id' | 'full_name' | 'staff_id'>) {
     setValue('head_agent_id', agent.id, { shouldValidate: true })
     setSearchTerm(`${agent.full_name} (${agent.staff_id})`)
     setShowDropdown(false)
@@ -150,12 +151,12 @@ export default function DivisionsPage() {
       await saveMut.mutateAsync({ id: editing?.id, payload })
       show(editing ? 'Đã cập nhật division' : 'Đã thêm division mới', 'success')
       closeModal()
-    } catch (e: any) {
-      show(editing ? 'Lỗi cập nhật: ' + e.message : 'Lỗi thêm mới: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show(editing ? 'Lỗi cập nhật: ' + ((e as Error).message ?? 'Unknown') : 'Lỗi thêm mới: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
   }
 
-  const startEdit = (div: any) => {
+  const startEdit = (div: ApiDivision) => {
     setEditing(div)
     setShowModal(true)
   }
@@ -194,10 +195,10 @@ export default function DivisionsPage() {
       return
     }
     try {
-      await deleteMut.mutateAsync(deleting.id)
+      await deleteMut.mutateAsync(deleting.id as string)
       show('Đã xóa division', 'success')
-    } catch (e: any) {
-      show('Lỗi xóa: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi xóa: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
     setDeleteBusy(false)
     setDeleting(null)
@@ -367,8 +368,8 @@ export default function DivisionsPage() {
               } else {
                 show('Tất cả division đã đồng bộ, không có thay đổi', 'info')
               }
-            } catch (e: any) {
-              show('Lỗi: ' + e.message, 'error')
+            } catch (e: unknown) {
+              show('Lỗi: ' + ((e as Error).message ?? 'Unknown'), 'error')
             }
           }}
         >

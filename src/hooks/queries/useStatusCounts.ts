@@ -10,7 +10,7 @@ export function useStatusCountsQuery() {
         .select('status')
         .is('deleted_at', null)
       const counts: Record<string, number> = {}
-      data?.forEach((r: any) => {
+      data?.forEach((r: { status: string }) => {
         counts[r.status] = (counts[r.status] ?? 0) + 1
       })
       return counts

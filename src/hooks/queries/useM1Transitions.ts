@@ -37,9 +37,13 @@ export function useM1TransitionsQuery() {
 
       if (error) throw error
 
+      type M1TaskRaw = Omit<TransitionTask, 'daysLeft'> & {
+        m1_agent: { full_name: string; staff_id: string; contract_signing_date: string; rank_name: string; status: string } | null
+      }
+
       const mapped: TransitionTask[] = (tasks ?? [])
-        .filter((t: any) => t.m1_agent?.status === 'active')
-        .map((t: any) => {
+        .filter((t: M1TaskRaw) => t.m1_agent?.status === 'active')
+        .map((t: M1TaskRaw) => {
         const daysLeft = Math.ceil(
           (new Date(t.deadline_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
         )

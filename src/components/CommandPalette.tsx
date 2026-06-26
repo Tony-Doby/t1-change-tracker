@@ -55,6 +55,7 @@ export default function CommandPalette() {
       setTimeout(() => inputRef.current?.focus(), 50)
     } else {
       document.body.style.overflow = ''
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery('')
       setItems([])
     }
@@ -109,7 +110,7 @@ export default function CommandPalette() {
     )
 
     // Agents
-    ;(agentsRes.data ?? []).forEach((a: any) =>
+    ;(agentsRes.data ?? []).forEach((a: { id: string; full_name: string; staff_id: string }) =>
       results.push({
         id: `agent-${a.id}`,
         label: a.full_name,
@@ -121,7 +122,8 @@ export default function CommandPalette() {
     )
 
     // Requests
-    ;(requestsRes.data ?? []).forEach((r: any) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(requestsRes.data as unknown[] ?? []).forEach((r: any) =>
       results.push({
         id: `req-${r.id}`,
         label: `Request #${r.id.slice(0, 8)}`,

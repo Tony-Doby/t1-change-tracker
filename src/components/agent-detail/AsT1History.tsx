@@ -2,7 +2,9 @@ import { Inbox } from 'lucide-react'
 import { formatDate } from '../../lib/date-utils'
 import EmptyState from '../EmptyState'
 
-export default function AsT1History({ asT1History, agentId, getAgentName }: { asT1History: any[]; agentId: string; getAgentName: (id: string | null) => string }) {
+import type { T1Change } from '../../types'
+
+export default function AsT1History({ asT1History, agentId, getAgentName }: { asT1History: T1Change[]; agentId: string; getAgentName: (id: string | null) => string }) {
   if (asT1History.length === 0) {
     return <EmptyState icon={<Inbox className="w-8 h-8" />} title="Agent này chưa từng làm T1 của ai" className="py-8" />
   }

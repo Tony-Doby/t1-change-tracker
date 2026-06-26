@@ -18,6 +18,7 @@ import HolidaysPage from './pages/HolidaysPage'
 import RanksPage from './pages/RanksPage'
 import DivisionsPage from './pages/DivisionsPage'
 import ExcelGeneratorPage from './pages/ExcelGeneratorPage'
+import AppsScriptAdminPage from './pages/AppsScriptAdminPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuth()
@@ -63,6 +64,33 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, user } = useAuth()
+  const location = useLocation()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-tertiary">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (user?.must_change_password && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />
+  }
+
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" replace />
+  }
+
+  return <Layout><PageTransition>{children}</PageTransition></Layout>
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -83,6 +111,7 @@ export default function App() {
         <Route path="/ranks" element={<ProtectedRoute><RanksPage /></ProtectedRoute>} />
         <Route path="/divisions" element={<ProtectedRoute><DivisionsPage /></ProtectedRoute>} />
         <Route path="/excel-generator" element={<ProtectedRoute><ExcelGeneratorPage /></ProtectedRoute>} />
+        <Route path="/admin/google-drive" element={<AdminRoute><AppsScriptAdminPage /></AdminRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </ErrorBoundary>

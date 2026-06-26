@@ -139,8 +139,8 @@ export default function UplineLookupPanel() {
         const typed = (data ?? []) as AgentUplineRankResult[]
         setResults(typed)
         show(`Đã tra cứu xong ${typed.length}/${staffIds.length} Staff ID.`, 'success')
-      } catch (e: any) {
-        show('Lỗi đọc file: ' + e.message, 'error')
+      } catch (e: unknown) {
+        show('Lỗi đọc file: ' + ((e as Error).message ?? 'Unknown'), 'error')
       } finally {
         setLoading(false)
       }
@@ -198,8 +198,8 @@ export default function UplineLookupPanel() {
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Upline Ranks')
       XLSX.writeFile(wb, `upline-ranks-${new Date().toISOString().split('T')[0]}.xlsx`)
-    } catch (e: any) {
-      show('Lỗi tạo file Excel: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi tạo file Excel: ' + ((e as Error).message ?? 'Unknown'), 'error')
     } finally {
       setDownloadLoading(false)
     }

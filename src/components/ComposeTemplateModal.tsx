@@ -7,7 +7,7 @@ import { formatDate } from '../lib/date-utils'
 import { addBusinessDays } from '../lib/eligibility'
 import Modal from './Modal'
 import Select from '../ui/input/Select'
-import type { EmailTemplate } from '../types'
+import type { Agent, EmailTemplate } from '../types'
 import SendEmailModal from './SendEmailModal'
 
 interface Props {
@@ -58,10 +58,10 @@ Phòng Vận Hành ERA`,
 export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onClose }: Props) {
   const { show } = useToast()
   const queryClient = useQueryClient()
-  const [agent, setAgent] = useState<any>(null)
-  const [t1Old, setT1Old] = useState<any>(null)
-  const [newT1, setNewT1] = useState<any>(null)
-  const [tempT1, setTempT1] = useState<any>(null)
+  const [agent, setAgent] = useState<Agent | null>(null)
+  const [t1Old, setT1Old] = useState<Agent | null>(null)
+  const [newT1, setNewT1] = useState<Agent | null>(null)
+  const [tempT1, setTempT1] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
   const [templates, setTemplates] = useState(defaultTemplates)
   const [selectedKey, setSelectedKey] = useState(defaultTemplates[0].key)
@@ -69,116 +69,58 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
   const [b3Deadline, setB3Deadline] = useState('')
 
   useEffect(() => {
-    loadData()
-    loadTemplates()
-  }, [agentId, requestId, m1TaskId])
+    async function loadTemplates() {
+      const { data, error } = await supabase.from('email_templates').select('*').order('created_at', { ascending: true })
+      if (error) {
+        console.error('Lỗi load templates:', error)
+        return
+      }
 
-  async function loadTemplates() {
-    const { data, error } = await supabase.from('email_templates').select('*').order('created_at', { ascending: true })
-    if (error) {
-      console.error('Lỗi load templates:', error)
-      return
+      if (data && data.length > 0) {
+        const dbTemplates = (data as EmailTemplate[]).map((t) => ({
+          key: t.template_key,
+          name: t.name,
+          subject: t.subject,
+          body: t.body,
+        }))
+        setTemplates(dbTemplates)
+        // Đảm bảo selectedKey hợp lệ với danh sách từ DB
+        if (!dbTemplates.some((t) => t.key === selectedKey)) {
+          setSelectedKey(dbTemplates[0].key)
+        }
+      } else {
+        setTemplates(defaultTemplates)
+        if (!defaultTemplates.some((t) => t.key === selectedKey)) {
+          setSelectedKey(defaultTemplates[0].key)
+        }
+      }
     }
 
-    if (data && data.length > 0) {
-      const dbTemplates = (data as EmailTemplate[]).map((t) => ({
-        key: t.template_key,
-        name: t.name,
-        subject: t.subject,
-        body: t.body,
-      }))
-      setTemplates(dbTemplates)
-      // Đảm bảo selectedKey hợp lệ với danh sách từ DB
-      if (!dbTemplates.some((t) => t.key === selectedKey)) {
-        setSelectedKey(dbTemplates[0].key)
-      }
-    } else {
-      setTemplates(defaultTemplates)
-      if (!defaultTemplates.some((t) => t.key === selectedKey)) {
-        setSelectedKey(defaultTemplates[0].key)
-      }
-    }
-  }
+    async function loadData() {
+      setLoading(true)
 
-  async function loadData() {
-    setLoading(true)
+      const { data: holidaysData } = await supabase.from('holidays').select('holiday_date')
+      const holidays = new Set<string>((holidaysData ?? []).map((h: { holiday_date: string }) => h.holiday_date.slice(0, 10)))
 
-    const { data: holidaysData } = await supabase.from('holidays').select('holiday_date')
-    const holidays = new Set<string>((holidaysData ?? []).map((h: any) => h.holiday_date.slice(0, 10)))
+      const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
+      setAgent(a)
 
-    const { data: a } = await supabase.from('agents').select('*').eq('id', agentId).single()
-    setAgent(a)
+      let b3Date = ''
 
-    let b3Date = ''
-
-    if (requestId) {
-      // Load directly from request ID
-      const { data: req } = await supabase
-        .from('t1_requests')
-        .select('id, old_t1_id, proposed_new_t1_id, step2_confirmed_at')
-        .eq('id', requestId)
-        .single()
-
-      if (req?.old_t1_id) {
-        const { data: t1 } = await supabase.from('agents').select('*').eq('id', req.old_t1_id).single()
-        setT1Old(t1)
-      } else {
-        setT1Old(null)
-      }
-
-      if (req?.proposed_new_t1_id) {
-        const { data: t1New } = await supabase.from('agents').select('*').eq('id', req.proposed_new_t1_id).single()
-        setNewT1(t1New)
-      } else {
-        setNewT1(null)
-      }
-
-      // Load tempT1 from m1_transition_tasks (t1_requests does not have temp_t1_id)
-      const { data: task } = await supabase
-        .from('m1_transition_tasks')
-        .select('temp_t1_id')
-        .eq('parent_request_id', requestId)
-        .maybeSingle()
-
-      if (task?.temp_t1_id) {
-        const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', task.temp_t1_id).single()
-        setTempT1(t1Temp)
-      } else {
-        setTempT1(null)
-      }
-
-      if (req?.step2_confirmed_at) {
-        const d = addBusinessDays(req.step2_confirmed_at.slice(0, 10), 3, holidays)
-        b3Date = formatDate(d)
-      }
-    } else if (m1TaskId) {
-      // Load from M1 transition task
-      const { data: task } = await supabase
-        .from('m1_transition_tasks')
-        .select('temp_t1_id, departed_agent_id, parent_request_id')
-        .eq('id', m1TaskId)
-        .single()
-
-      if (task?.departed_agent_id) {
-        const { data: t1 } = await supabase.from('agents').select('*').eq('id', task.departed_agent_id).single()
-        setT1Old(t1)
-      } else {
-        setT1Old(null)
-      }
-
-      if (task?.temp_t1_id) {
-        const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', task.temp_t1_id).single()
-        setTempT1(t1Temp)
-      } else {
-        setTempT1(null)
-      }
-
-      if (task?.parent_request_id) {
+      if (requestId) {
+        // Load directly from request ID
         const { data: req } = await supabase
           .from('t1_requests')
-          .select('proposed_new_t1_id, step2_confirmed_at')
-          .eq('id', task.parent_request_id)
+          .select('id, old_t1_id, proposed_new_t1_id, step2_confirmed_at')
+          .eq('id', requestId)
           .single()
+
+        if (req?.old_t1_id) {
+          const { data: t1 } = await supabase.from('agents').select('*').eq('id', req.old_t1_id).single()
+          setT1Old(t1)
+        } else {
+          setT1Old(null)
+        }
 
         if (req?.proposed_new_t1_id) {
           const { data: t1New } = await supabase.from('agents').select('*').eq('id', req.proposed_new_t1_id).single()
@@ -187,44 +129,11 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
           setNewT1(null)
         }
 
-        if (req?.step2_confirmed_at) {
-          const d = addBusinessDays(req.step2_confirmed_at.slice(0, 10), 3, holidays)
-          b3Date = formatDate(d)
-        }
-      } else {
-        setNewT1(null)
-      }
-    } else if (a?.id) {
-      // Load from active request
-      const { data: req } = await supabase
-        .from('t1_requests')
-        .select('id, old_t1_id, proposed_new_t1_id, step2_confirmed_at')
-        .eq('agent_id', a.id)
-        .not('status', 'in', '("completed","cancelled")')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (req?.old_t1_id) {
-        const { data: t1 } = await supabase.from('agents').select('*').eq('id', req.old_t1_id).single()
-        setT1Old(t1)
-      } else {
-        setT1Old(null)
-      }
-
-      if (req?.proposed_new_t1_id) {
-        const { data: t1New } = await supabase.from('agents').select('*').eq('id', req.proposed_new_t1_id).single()
-        setNewT1(t1New)
-      } else {
-        setNewT1(null)
-      }
-
-      // Load tempT1 from m1_transition_tasks (t1_requests does not have temp_t1_id)
-      if (req?.id) {
+        // Load tempT1 from m1_transition_tasks (t1_requests does not have temp_t1_id)
         const { data: task } = await supabase
           .from('m1_transition_tasks')
           .select('temp_t1_id')
-          .eq('parent_request_id', req.id)
+          .eq('parent_request_id', requestId)
           .maybeSingle()
 
         if (task?.temp_t1_id) {
@@ -233,21 +142,117 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
         } else {
           setTempT1(null)
         }
-      } else {
-        setTempT1(null)
+
+        if (req?.step2_confirmed_at) {
+          const d = addBusinessDays(req.step2_confirmed_at.slice(0, 10), 3, holidays)
+          b3Date = formatDate(d)
+        }
+      } else if (m1TaskId) {
+        // Load from M1 transition task
+        const { data: task } = await supabase
+          .from('m1_transition_tasks')
+          .select('temp_t1_id, departed_agent_id, parent_request_id')
+          .eq('id', m1TaskId)
+          .single()
+
+        if (task?.departed_agent_id) {
+          const { data: t1 } = await supabase.from('agents').select('*').eq('id', task.departed_agent_id).single()
+          setT1Old(t1)
+        } else {
+          setT1Old(null)
+        }
+
+        if (task?.temp_t1_id) {
+          const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', task.temp_t1_id).single()
+          setTempT1(t1Temp)
+        } else {
+          setTempT1(null)
+        }
+
+        if (task?.parent_request_id) {
+          const { data: req } = await supabase
+            .from('t1_requests')
+            .select('proposed_new_t1_id, step2_confirmed_at')
+            .eq('id', task.parent_request_id)
+            .single()
+
+          if (req?.proposed_new_t1_id) {
+            const { data: t1New } = await supabase.from('agents').select('*').eq('id', req.proposed_new_t1_id).single()
+            setNewT1(t1New)
+          } else {
+            setNewT1(null)
+          }
+
+          if (req?.step2_confirmed_at) {
+            const d = addBusinessDays(req.step2_confirmed_at.slice(0, 10), 3, holidays)
+            b3Date = formatDate(d)
+          }
+        } else {
+          setNewT1(null)
+        }
+      } else if (a?.id) {
+        // Load from active request
+        const { data: req } = await supabase
+          .from('t1_requests')
+          .select('id, old_t1_id, proposed_new_t1_id, step2_confirmed_at')
+          .eq('agent_id', a.id)
+          .not('status', 'in', '("completed","cancelled")')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (req?.old_t1_id) {
+          const { data: t1 } = await supabase.from('agents').select('*').eq('id', req.old_t1_id).single()
+          setT1Old(t1)
+        } else {
+          setT1Old(null)
+        }
+
+        if (req?.proposed_new_t1_id) {
+          const { data: t1New } = await supabase.from('agents').select('*').eq('id', req.proposed_new_t1_id).single()
+          setNewT1(t1New)
+        } else {
+          setNewT1(null)
+        }
+
+        // Load tempT1 from m1_transition_tasks (t1_requests does not have temp_t1_id)
+        if (req?.id) {
+          const { data: task } = await supabase
+            .from('m1_transition_tasks')
+            .select('temp_t1_id')
+            .eq('parent_request_id', req.id)
+            .maybeSingle()
+
+          if (task?.temp_t1_id) {
+            const { data: t1Temp } = await supabase.from('agents').select('*').eq('id', task.temp_t1_id).single()
+            setTempT1(t1Temp)
+          } else {
+            setTempT1(null)
+          }
+        } else {
+          setTempT1(null)
+        }
+
+        if (req?.step2_confirmed_at) {
+          const d = addBusinessDays(req.step2_confirmed_at.slice(0, 10), 3, holidays)
+          b3Date = formatDate(d)
+        }
       }
 
-      if (req?.step2_confirmed_at) {
-        const d = addBusinessDays(req.step2_confirmed_at.slice(0, 10), 3, holidays)
-        b3Date = formatDate(d)
-      }
+      setB3Deadline(b3Date)
+      setLoading(false)
     }
 
-    setB3Deadline(b3Date)
-    setLoading(false)
-  }
+    loadData()
+    loadTemplates()
+  }, [agentId, requestId, m1TaskId, selectedKey])
+
+  // Moved down
 
   const template = templates.find((t) => t.key === selectedKey) ?? templates[0]
+
+  const [now] = useState(() => new Date())
+  const [nowPlus30] = useState(() => new Date(Date.now() + 30 * 86400000))
 
   const rendered = useMemo(() => {
     return template.body
@@ -259,13 +264,13 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
       .replace(/{{newT1Name}}/g, newT1?.full_name ?? '')
       .replace(/{{newT1Email}}/g, newT1?.email ?? '')
       .replace(/{{newT1StaffId}}/g, newT1?.staff_id ?? '')
-      .replace(/{{date}}/g, formatDate(new Date()))
-      .replace(/{{deadlineDate}}/g, formatDate(new Date(Date.now() + 30 * 86400000)))
-      .replace(/{{notifyDate}}/g, formatDate(new Date()))
+      .replace(/{{date}}/g, formatDate(now))
+      .replace(/{{deadlineDate}}/g, formatDate(nowPlus30))
+      .replace(/{{notifyDate}}/g, formatDate(now))
       .replace(/{{tempT1Name}}/g, tempT1?.full_name ?? '')
       .replace(/{{tempT1StaffId}}/g, tempT1?.staff_id ?? '')
       .replace(/{{b3Deadline}}/g, b3Deadline)
-  }, [template, agent, t1Old, newT1, b3Deadline])
+  }, [template, agent, t1Old, newT1, tempT1, b3Deadline, now, nowPlus30])
 
   const copyContent = async () => {
     const tmp = document.createElement('div')
@@ -343,8 +348,10 @@ export default function ComposeTemplateModal({ agentId, requestId, m1TaskId, onC
                   {item.email && (
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(item.email)
-                        show('Đã copy email', 'success')
+                        if (item.email) {
+                          navigator.clipboard.writeText(item.email)
+                          show('Đã copy email', 'success')
+                        }
                       }}
                       className="p-1.5 rounded-md hover:bg-neutral-200 text-neutral-500 hover:text-neutral-700 transition-colors"
                       title="Copy email"

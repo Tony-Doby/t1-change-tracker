@@ -43,8 +43,8 @@ export default function EmailTemplatesPage() {
       await deleteMut.mutateAsync(deletingTemplate.id)
       show('Đã xóa mẫu email', 'success')
       setDeletingTemplate(null)
-    } catch (e: any) {
-      show('Lỗi xóa mẫu: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi xóa mẫu: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
   }
 
@@ -64,11 +64,12 @@ export default function EmailTemplatesPage() {
       show(payload.id ? 'Đã lưu mẫu email' : 'Đã tạo mẫu email mới', 'success')
       setSaving(false)
       closeModal()
-    } catch (e: any) {
-      if (e.message?.includes('duplicate') || e.code === '23505') {
+    } catch (e: unknown) {
+      const err = e as Error & { code?: string }
+      if (err.message?.includes('duplicate') || err.code === '23505') {
         show('Template key đã tồn tại, vui lòng chọn key khác', 'error')
       } else {
-        show(payload.id ? 'Lỗi lưu: ' + e.message : 'Lỗi tạo mẫu: ' + e.message, 'error')
+        show(payload.id ? 'Lỗi lưu: ' + (err.message ?? 'Unknown') : 'Lỗi tạo mẫu: ' + (err.message ?? 'Unknown'), 'error')
       }
       setSaving(false)
     }

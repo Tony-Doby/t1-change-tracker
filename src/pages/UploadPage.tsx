@@ -174,7 +174,7 @@ export default function UploadPage() {
 
     const payload = validRows.map((r) => {
       const d = r.data
-      const base: Record<string, any> = {
+      const base: Record<string, string | null> = {
         staff_id: String(d['staff_id'] || '').trim(),
         full_name: String(d['full_name'] || '').trim(),
         email: d['email'] ? String(d['email']).trim() : null,
@@ -218,7 +218,7 @@ export default function UploadPage() {
 
     const existingAgentSet = new Set((agentsData ?? []).map((a) => a.staff_id))
     const rankMap = new Map<string, string>()
-    ranksData?.forEach((r: any) => {
+    ranksData?.forEach((r: { id: string; name: string }) => {
       rankMap.set(String(r.name).trim().toLowerCase(), r.id)
     })
 

@@ -3,7 +3,7 @@
 > File này là **bản tóm tắt nhanh** để nối lại công việc sau khi ngưng.  
 > **Đọc kèm** `AGENTS.md` + `KNOWLEDGE.md` để nắm gotchas & constraints.  
 > **Xem trạng thái feature chi tiết** tại `PLAN-feature-dev.md` → Feature Registry.  
-> Cập nhật: 2026-06-04
+> Cập nhật: 2026-06-26
 
 ---
 
@@ -58,12 +58,19 @@ Nói với AI những cụm từ trigger sau:
 | Cụm từ | Hành động AI |
 |--------|-------------|
 | *"Làm deploy lên Vercel"* | Build + `vercel --prod` (hỏi xác nhận trước) |
-| *"Tích hợp gửi email"* | FEAT-001 — Resend/SendGrid Edge Function |
-| *"Realtime updates"* | FEAT-002 — Supabase Realtime subscription |
-| *"Notifications thật"* | FEAT-003 — Bảng `notifications` + tạo noti tự động |
-| *"TanStack Query refactor"* | FEAT-004 — Custom hooks + refactor pages |
+| ~~*"Tích hợp gửi email"*~~ | ~~FEAT-001 — Resend/SendGrid Edge Function~~ |
+| ~~*"Realtime updates"*~~ | ~~FEAT-002 — Supabase Realtime subscription~~ |
+| ~~*"Notifications thật"*~~ | ~~FEAT-003 — Bảng `notifications` + tạo noti tự động~~ |
+| ~~*"TanStack Query refactor"*~~ | ~~FEAT-004 — Custom hooks + refactor pages~~ |
+| ~~*"Email activities tracking"*~~ | ~~FEAT-025 — Bảng `email_activities` + trigger count~~ |
+| ~~*"Xóa mẫu email"*~~ | ~~FEAT-026 — Delete Email Template~~ |
+| *"Gửi email qua Google Apps Script"* | FEAT-027 — Edge Function + Apps Script Web App (planned) |
+| *"Google Drive Admin Panel"* | FEAT-030 — Apps Script proxy + quản lý Drive (done) |
+| ~~*"Dashboard M1 full width"*~~ | ~~FEAT-028 — Ẩn chart/bookmark, M1 filter tabs~~ |
+| ~~*"Dashboard full viewport"*~~ | ~~FEAT-029 — M1 fill remaining height~~ |
+| ~~*"Dọn ESLint errors"*~~ | ~~REFACTOR-006 — Fix 172 lint errors~~ |
 | *"Search presets server-side"* | FEAT-005 — RPC `search_agents` + bật presets |
-| *"Schema v2 hoàn chỉnh"* | FEAT-006 — UI dùng hết cột mới, upload headers mới |
-| *"Deactivation hoàn chỉnh"* | FEAT-007 — Tab lịch sử chấm dứt ở AgentDetailPage |
+| ~~*"Schema v2 hoàn chỉnh"*~~ | ~~FEAT-006 — UI dùng hết cột mới, upload headers mới~~ |
+| ~~*"Deactivation hoàn chỉnh"*~~ | ~~FEAT-007 — Tab lịch sử chấm dứt ở AgentDetailPage~~ |
 
 > ⚠️ **Tất cả feature trên đều phải lập plan trong `PLAN-feature-dev.md` trước khi code.** Xem `AGENTS.md` section 4.

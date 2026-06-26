@@ -25,7 +25,7 @@ export function useActivityLogsQuery() {
         .order('created_at', { ascending: false })
         .limit(500)
       if (error) throw error
-      return (data ?? []).map((l: any) => ({
+      return (data ?? []).map((l: Omit<LogItem, 'agent_name'> & { agent?: { full_name: string } }) => ({
         ...l,
         agent_name: l.agent?.full_name ?? null,
       })) as LogItem[]

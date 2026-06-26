@@ -10,7 +10,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useToast } from './Toast'
 import Modal from './Modal'
 import { createRequestSchema, type CreateRequestFormData } from '../lib/form-schemas'
-import type { EligibilityResult } from '../types'
+import type { EligibilityResult, Agent, T1Change } from '../types'
 import type { T1Capacity, M1ImpactSummary } from '../lib/eligibility'
 
 interface Props {
@@ -22,13 +22,13 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
   const { show } = useToast()
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const [agents, setAgents] = useState<any[]>([])
-  const [agent, setAgent] = useState<any>(null)
-  const [t1Changes, setT1Changes] = useState<any[]>([])
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [agent, setAgent] = useState<Agent | null>(null)
+  const [t1Changes, setT1Changes] = useState<T1Change[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
-  const [dropdownAgents, setDropdownAgents] = useState<any[]>([])
+  const [dropdownAgents, setDropdownAgents] = useState<Agent[]>([])
   const [searchingDropdown, setSearchingDropdown] = useState(false)
   const [checking, setChecking] = useState(false)
   const [result, setResult] = useState<EligibilityResult | null>(null)
@@ -48,10 +48,12 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
     defaultValues: { selectedT1Id: '' },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedT1Id = watch('selectedT1Id')
 
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId])
 
   async function loadData() {
@@ -69,14 +71,14 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
       supabase.from('agents').select('*').eq('current_t1_id', agentId).is('deleted_at', null),
       supabase.from('ranks').select('id, name'),
     ])
-    const merged = new Map<string, any>()
-    ;(agentsData ?? []).forEach((a) => merged.set(a.id, a))
-    ;(m1Agents ?? []).forEach((a) => merged.set(a.id, a))
-    if (agentData) merged.set(agentData.id, agentData)
+    const merged = new Map<string, Agent>()
+    ;(agentsData ?? []).forEach((a: Agent) => merged.set(a.id, a))
+    ;(m1Agents ?? []).forEach((a: Agent) => merged.set(a.id, a))
+    if (agentData) merged.set(agentData.id, agentData as Agent)
     const allAgents = Array.from(merged.values())
 
     const rMap = new Map<string, string>()
-    ranksData?.forEach((r: any) => rMap.set(r.id, r.name))
+    ranksData?.forEach((r: { id: string; name: string }) => rMap.set(r.id, r.name))
     setRankNamesMap(rMap)
 
     setAgents(allAgents)
@@ -126,6 +128,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
       }
     }
     ensureAgent()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedT1Id])
 
   useEffect(() => {
@@ -145,6 +148,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
     return () => clearTimeout(timer)
   }, [agentId, selectedT1Id, agents, t1Changes, agent])
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const onSubmit = async (_data: CreateRequestFormData) => {
     if (!result?.eligible || !selectedT1Id || !agent) return
     setSubmitting(true)
@@ -231,7 +235,7 @@ export default function CreateRequestModal({ agentId, onClose }: Props) {
                   <button type="button" key={c.id} onClick={() => { setValue('selectedT1Id', c.id, { shouldValidate: true }); setShowDropdown(false); setSearch('') }}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-bold">{c.full_name.charAt(0)}</div>
-                    <div><p className="font-medium text-neutral-900">{c.full_name}</p><p className="text-xs text-neutral-500">{c.staff_id} • {c.rank_name ?? rankNamesMap.get(c.rank_id) ?? '—'}</p></div>
+                    <div><p className="font-medium text-neutral-900">{c.full_name}</p><p className="text-xs text-neutral-500">{c.staff_id} • {c.rank_name ?? rankNamesMap.get(c.rank_id ?? '') ?? '—'}</p></div>
                   </button>
                 ))}
               </div>

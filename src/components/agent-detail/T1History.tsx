@@ -1,6 +1,7 @@
 import { Inbox } from 'lucide-react'
 import { formatDate } from '../../lib/date-utils'
 import EmptyState from '../EmptyState'
+import type { T1Change } from '../../types'
 
 export default function T1History({
   contractSigningDate,
@@ -10,7 +11,7 @@ export default function T1History({
 }: {
   contractSigningDate?: string | null
   agentT1Name: string
-  t1History: any[]
+  t1History: T1Change[]
   getAgentName: (id: string | null) => string
 }) {
   return (

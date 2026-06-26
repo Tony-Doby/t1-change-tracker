@@ -68,7 +68,7 @@ export function useAgentsQuery(options: UseAgentsOptions = {}) {
 
       // Build T1 map from embedded FK data
       const t1Map: Record<string, { full_name: string; staff_id: string }> = {}
-      agents.forEach((a: any) => {
+      agents.forEach((a: Agent & { t1?: { id: string; full_name: string; staff_id: string } }) => {
         if (a.t1?.id) {
           t1Map[a.t1.id] = a.t1
         }

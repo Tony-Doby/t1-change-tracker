@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import type { Agent } from '../../types'
+import type { Agent, T1Change, AgentDeactivationSnapshot } from '../../types'
 
 export interface AgentDetailData {
   agent: Agent | null
   relatedMap: Record<string, { full_name: string; staff_id: string }>
-  t1History: any[]
-  asT1History: any[]
+  t1History: T1Change[]
+  asT1History: T1Change[]
   m1List: Agent[]
-  deactivationHistory: any[]
+  deactivationHistory: AgentDeactivationSnapshot[]
   rankNamesMap: Record<string, string>
   divisionMap: Record<string, string>
 }
@@ -54,7 +54,7 @@ export function useAgentDetailQuery(agentId: string | undefined) {
         .is('deleted_at', null)
         .order('change_date', { ascending: false })
 
-      histData?.forEach((c: any) => {
+      histData?.forEach((c: T1Change) => {
         if (c.old_t1_id) relatedIds.add(c.old_t1_id)
         if (c.new_t1_id) relatedIds.add(c.new_t1_id)
       })
@@ -66,7 +66,7 @@ export function useAgentDetailQuery(agentId: string | undefined) {
         .is('deleted_at', null)
         .order('change_date', { ascending: false })
 
-      asT1Data?.forEach((c: any) => {
+      asT1Data?.forEach((c: T1Change) => {
         if (c.agent_id) relatedIds.add(c.agent_id)
       })
 
@@ -76,16 +76,16 @@ export function useAgentDetailQuery(agentId: string | undefined) {
           .from('agents')
           .select('id, full_name, staff_id')
           .in('id', Array.from(relatedIds))
-        related?.forEach((a: any) => { relatedMap[a.id] = a })
+        related?.forEach((a: { id: string; full_name: string; staff_id: string }) => { relatedMap[a.id] = a })
       }
 
       const { data: ranksData } = await supabase.from('ranks').select('id, name')
       const rankNamesMap: Record<string, string> = {}
-      ranksData?.forEach((r: any) => { rankNamesMap[r.id] = r.name })
+      ranksData?.forEach((r: { id: string; name: string }) => { rankNamesMap[r.id] = r.name })
 
       const { data: divData } = await supabase.from('divisions').select('id, name')
       const divisionMap: Record<string, string> = {}
-      divData?.forEach((d: any) => { divisionMap[d.id] = d.name })
+      divData?.forEach((d: { id: string; name: string }) => { divisionMap[d.id] = d.name })
 
       const { data: deactData } = await supabase
         .from('agent_deactivation_snapshots')

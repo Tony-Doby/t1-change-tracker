@@ -43,8 +43,8 @@ export default function HolidaysPage() {
       reset()
       setShowAdd(false)
       show('Đã thêm ngày lễ', 'success')
-    } catch (e: any) {
-      show('Lỗi thêm: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi thêm: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
   }
 
@@ -52,8 +52,8 @@ export default function HolidaysPage() {
     try {
       await delMut.mutateAsync(id)
       show('Đã xóa ngày lễ', 'info')
-    } catch (e: any) {
-      show('Lỗi xóa: ' + e.message, 'error')
+    } catch (e: unknown) {
+      show('Lỗi xóa: ' + ((e as Error).message ?? 'Unknown'), 'error')
     }
   }
 

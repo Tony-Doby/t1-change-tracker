@@ -14,7 +14,7 @@ export function useHolidaysSetQuery() {
     queryFn: async () => {
       const { data, error } = await supabase.from('holidays').select('holiday_date')
       if (error) throw error
-      return new Set<string>((data ?? []).map((h: any) => h.holiday_date.slice(0, 10)))
+      return new Set<string>((data ?? []).map((h: { holiday_date: string }) => h.holiday_date.slice(0, 10)))
     },
     staleTime: 1000 * 60 * 60,
   })

@@ -5,6 +5,86 @@
 
 ---
 
+## 2026-06-26
+
+### 82. Feature FEAT-030: Google Apps Script Admin Panel — Drive Operations
+
+**Mô tả:** Tab admin riêng biệt để quản lý Google Drive thông qua Google Apps Script Web App, không phụ thuộc ngôn ngữ lập trình ở tầng Apps Script. Chỉ user có role `admin` mới truy cập được.
+
+**Files tạo:**
+- `webapp/supabase/migrations/019_apps_script_logs.sql`: Bảng audit `apps_script_logs`, indexes và RLS admin-only.
+- `webapp/supabase/functions/google-apps-script-proxy/index.ts`: Edge Function proxy xác thực JWT, kiểm tra role admin, validate action allowlist, forward request đến Apps Script Web App, ghi audit log. Hỗ trợ optional `APPS_SCRIPT_TOKEN`.
+- `webapp/docs/FEAT-030-apps-script.gs`: Code Google Apps Script Web App đầy đủ 8 tác vụ Drive.
+- `webapp/src/types/index.ts`: Types `AppsScriptAction`, `AppsScriptLog`, các payload params và `AppsScriptResponse`.
+- `webapp/src/hooks/queries/useAppsScript.ts`: `useAppsScriptMutation` gọi Edge Function + `useAppsScriptLogsQuery` đọc lịch sử.
+- `webapp/src/components/apps-script/*.tsx`: 8 form component cố định theo tác vụ.
+- `webapp/src/components/apps-script/utils.ts`: Helper trích xuất Drive ID từ link và parse danh sách.
+- `webapp/src/pages/AppsScriptAdminPage.tsx`: Trang admin với menu tác vụ, form, kết quả và lịch sử.
+
+**Files sửa:**
+- `webapp/src/App.tsx`: Thêm `AdminRoute` và route `/admin/google-drive`.
+- `webapp/src/components/Layout.tsx`: Thêm menu `Google Drive` (admin-only) với icon `HardDrive`.
+- `webapp/supabase/functions/google-apps-script-proxy/index.ts`: Gửi `authToken` nếu env `APPS_SCRIPT_TOKEN` được cấu hình.
+
+**Kết quả:**
+- `npm run verify` pass (tsc + build + eslint).
+- `npm run test` pass (56/56 tests).
+- 8 tác vụ khả dụng: Scan Folders, Set Permissions, Create Folder, Copy Folder, List Items, Move Item, Remove Permission, Delete Item.
+- Edge Function hỗ trợ optional shared-secret với Apps Script Web App.
+
+**Hướng dẫn deploy Apps Script:**
+1. Tạo project mới tại https://script.google.com, dán `docs/FEAT-030-apps-script.gs` vào Code.gs.
+2. Bật Advanced Service: Extensions → Services → Google Drive API (v3).
+3. Deploy as Web App: Execute as Me, Anyone, copy URL.
+4. (Khuyến nghị) Tạo script property `APPS_SCRIPT_TOKEN` và Supabase secret `APPS_SCRIPT_TOKEN` để bảo vệ URL.
+5. Set Supabase secrets: `APPS_SCRIPT_WEB_APP_URL`, `SB_URL`, `SB_SERVICE_ROLE_KEY` (và `APPS_SCRIPT_TOKEN` nếu dùng).
+6. Deploy Edge Function: `supabase functions deploy google-apps-script-proxy`.
+7. Chạy migration: `supabase db push`.
+
+---
+
+## 2026-06-25
+
+### 81. Refactor REFACTOR-006: ESLint Cleanup
+
+**Mô tả:** Dọn dẹp toàn bộ 172 lỗi ESLint và TypeScript across 5 phases, đảm bảo codebase đạt trạng thái clean build (100% không còn lỗi compile hay lint).
+- **Phase 1:** Sửa type `any` thành type cụ thể cho tất cả các hooks queries.
+- **Phase 2:** Di chuyển các component con ra ngoài component chính trong Agent Detail để tránh `react-hooks/static-components` error, sửa type an toàn.
+- **Phase 3:** Fix dependencies array trong hooks, tách exported components, remove setState synchronously trong Modals (DeactivateAgentModal, ComposeTemplateModal, CountdownConfirmModal, v.v.).
+- **Phase 4:** Fix props, types và `no-explicit-any` tại Pages.
+- **Phase 5:** Khắc phục warning hook trong `useAuth.tsx`, UI components và refactor lại các catch-block error (casting sang `Error` safety).
+
+**Kết quả:**
+- `npm run lint` pass (chỉ còn lại 1 unused-disable warning).
+- `npm run build` pass không có lỗi type.
+
+---
+
+## 2026-06-20
+
+### 80. Docs sync: Cập nhật trạng thái FEAT-004 trong PLAN-feature-dev.md
+
+**Mô tả:** Đối chiếu codebase xác nhận FEAT-004 đã được triển khai toàn diện trong code. Cập nhật `PLAN-feature-dev.md` và `AGENTS.md` cho khớp với thực tế.
+
+**Codebase evidence:**
+- `webapp/src/main.tsx` đã setup `QueryClientProvider`.
+- `webapp/src/hooks/queries/` có 17 hooks (vượt xa scope gốc plan: 4 hooks + 2 pages).
+- Các pages chính đã refactor sang dùng `useQuery`/`useMutation`: `AgentsPage`, `RequestsPage`, `DashboardPage`, `AgentDetailPage`, `RequestDetailPage`, `ActivityLogPage`, `TrashPage`, `HolidaysPage`, `RanksPage`, `DivisionsPage`, `EmailTemplatesPage`.
+- Logic `fetchExportData` trong `AgentsPage.tsx` vẫn dùng `supabase.from` trực tiếp nhưng đây là helper export one-off, không phải data fetching chính.
+
+**Files sửa:**
+- `webapp/docs/PLAN-feature-dev.md`:
+  - Feature Registry: FEAT-004 status `partial` → `done`, thêm ngày hoàn thành `2026-05-30`.
+  - Section FEAT-004: cập nhật Current Status phản ánh 17 hooks + các pages đã refactor.
+- `webapp/docs/CHANGELOG.md`: Thêm entry này.
+- `AGENTS.md`: Cập nhật Known Issues — FEAT-004 từ `Partial` → `done`.
+
+**Kết quả:**
+- Plan file đồng bộ với codebase.
+- FEAT-004 chính thức đánh dấu hoàn thành.
+
+---
+
 ## 2026-06-19
 
 ### 79. Fix BUG-036: Dashboard B2 chờ phản hồi chấp thuận không cập nhật khi active B2
@@ -459,7 +539,7 @@ Supabase REST API yêu cầu dấu nháy kép bên trong: `("completed","cancell
 - `webapp/package.json` — thêm scripts `verify`, `test`, `test:watch`, `test:coverage`; thêm devDependencies (`vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `@vitest/coverage-v8`)
 - `webapp/src/lib/eligibility.ts` — export thêm `AgentLike` và `ChangeLike` (để test import)
 
-**Kết quả:** 55 tests pass. Build pass. ESLint có lỗi legacy từ code cũ (không phải do feature này).
+**Kết quả:** 56/56 tests pass. Build pass. ESLint có lỗi legacy từ code cũ (không phải do feature này).
 
 **Fix bug phát hiện nhờ test:** `addBusinessDays()` trong `eligibility.ts` bị lệch timezone do `setHours(0,0,0,0)` dùng local time làm lùi UTC date, và `toISOString().slice(0,10)` dùng UTC trong khi `setDate()` dùng local time.
 - Fix: Parse `startDateStr` bằng `new Date(y, m-1, d)` (local timezone) thay vì `new Date(startDateStr)` (UTC). Thêm helper `formatLocalDate()` dùng local getters để tạo YYYY-MM-DD string.

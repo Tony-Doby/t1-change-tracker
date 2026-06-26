@@ -16,7 +16,7 @@ export function useEmailTemplatesQuery() {
     queryFn: async () => {
       const { data, error } = await supabase.from('email_templates').select('*').order('created_at', { ascending: true })
       if (error) throw error
-      return (data ?? []).map((t: any) => ({
+      return (data ?? []).map((t: { id: string; template_key: string; name: string; subject: string; body: string; placeholders?: string[] }) => ({
         id: t.id,
         template_key: t.template_key,
         name: t.name,
