@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mockup — Vị trí Bulk Action (Cấp quyền) cho bảng Kết quả quét</title>
+<style>
+  :root {
+    --accent: #6c5ce7;
+    --accent-hover: #5a4bd4;
+    --accent-subtle: #efedfd;
+    --accent-border: #d9d4fa;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f7f7f9;
+    --bg-tertiary: #eeeef2;
+    --text-primary: #1a1a2e;
+    --text-secondary: #4a4a63;
+    --text-tertiary: #8a8aa0;
+    --border-hairline: #ececf1;
+    --border-light: #dcdce4;
+    --warning: #b7791f;
+    --warning-subtle: #fdf6e3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f0f0f4;
+    color: var(--text-primary);
+    padding: 32px 16px 80px;
+  }
+  .page { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .lead { color: var(--text-secondary); font-size: 0.95rem; margin: 0 0 28px; }
+
+  .option-block { margin-bottom: 48px; }
+  .option-head {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px;
+  }
+  .option-tag {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 999px;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 0.85rem;
+  }
+  .option-title { font-size: 1.15rem; font-weight: 600; margin: 0; }
+  .option-desc { color: var(--text-secondary); font-size: 0.9rem; margin: 4px 0 14px 36px; }
+  .badge-reco {
+    margin-left: 8px; font-size: 0.7rem; font-weight: 600; color: var(--accent);
+    background: var(--accent-subtle); border: 1px solid var(--accent-border);
+    padding: 2px 8px; border-radius: 999px; vertical-align: middle;
+  }
+
+  /* Card */
+  .card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-hairline);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    position: relative;
+  }
+  .result-title { font-size: 0.875rem; color: var(--text-secondary); margin: 0 0 12px; }
+
+  .search {
+    display: flex; align-items: center; gap: 8px;
+    height: 34px; padding: 0 12px; margin-bottom: 12px;
+    border: 1px solid var(--border-light); border-radius: 8px;
+    color: var(--text-tertiary); font-size: 0.85rem;
+  }
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 14px; }
+  .filter-group { display: flex; align-items: center; gap: 6px; }
+  .filter-label { font-size: 0.72rem; color: var(--text-tertiary); margin-right: 2px; }
+  .chip {
+    display: inline-flex; align-items: center; height: 28px; padding: 0 12px;
+    border-radius: 999px; font-size: 0.72rem; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--border-light); background: var(--bg-secondary); color: var(--text-secondary);
+  }
+  .chip.on { background: var(--accent-subtle); color: var(--accent); border-color: var(--accent-border); }
+
+  table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
+  thead th {
+    font-weight: 500; color: var(--text-tertiary); padding: 8px 12px;
+    border-bottom: 1px solid var(--border-hairline); background: var(--bg-secondary);
+  }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border-hairline); color: var(--text-primary); }
+  tbody td.path { color: var(--text-tertiary); }
+  .b-shared {
+    display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
+    border-radius: 999px; font-size: 0.72rem; font-weight: 500;
+    background: var(--accent-subtle); color: var(--accent); border: 1px solid var(--accent-border);
+  }
+  .lnk { color: var(--accent); text-decoration: none; }
+  input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; vertical-align: middle; }
+
+  /* Bulk bar — shared inner */
+  .bulk-inner { display: flex; align-items: center; gap: 14px; }
+  .bulk-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 22px; min-width: 22px; padding: 0 7px; border-radius: 999px;
+    background: var(--accent); color: #fff; font-size: 0.72rem; font-weight: 600;
+  }
+  .bulk-sel { font-size: 0.85rem; color: var(--text-secondary); }
+  .divider { width: 1px; height: 16px; background: var(--border-light); }
+  .btn-grant {
+    height: 32px; padding: 0 14px; border: none; border-radius: 8px;
+    background: var(--accent); color: #fff; font-size: 0.82rem; font-weight: 500; cursor: pointer;
+  }
+  .btn-grant:hover { background: var(--accent-hover); }
+  .btn-clear {
+    height: 32px; padding: 0 10px; border: 1px solid var(--border-light); border-radius: 8px;
+    background: transparent; color: var(--text-secondary); font-size: 0.82rem; cursor: pointer;
+  }
+  .badge-drive-sum {
+    display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px;
+    font-size: 0.7rem; font-weight: 500; background: var(--accent-subtle); color: var(--accent);
+    border: 1px solid var(--accent-border);
+  }
+
+  /* OPTION 1 — inline toolbar above table */
+  .bulk-inline {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 14px; margin-bottom: 14px;
+    background: var(--accent-subtle); border: 1px solid var(--accent-border);
+    border-radius: 10px;
+  }
+
+  /* OPTION 2 — sticky inside scroll container */
+  .scroll-box { max-height: 320px; overflow: auto; border: 1px solid var(--border-hairline); border-radius: 10px; position: relative; }
+  .bulk-sticky {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 14px;
+    background: var(--accent-subtle); border-bottom: 1px solid var(--accent-border);
+  }
+  .scroll-box table thead th { top: 53px; position: sticky; } /* under sticky bar */
+
+  /* OPTION 3 — floating anchored inside card bottom */
+  .card-floating { padding-bottom: 72px; }
+  .bulk-floating {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 16px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.16);
+  }
+
+  .note { font-size: 0.78rem; color: var(--text-tertiary); margin: 10px 0 0 36px; }
+  .hist-hint {
+    margin-top: 16px; padding: 14px; border: 1px dashed var(--border-light);
+    border-radius: 10px; color: var(--text-tertiary); font-size: 0.82rem; background: #fafafc;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Mockup — Vị trí nút “Cấp quyền” (bulk action)</h1>
+  <p class="lead">So sánh 3 phương án thay cho thanh floating cũ (đang bị neo ở đáy viewport và đè lên “Lịch sử thao tác”). Dữ liệu mẫu giống ảnh thật của bạn.</p>
+
+  <!-- OPTION 1 -->
+  <div class="option-block">
+    <div class="option-head">
+      <span class="option-tag">1</span>
+      <h2 class="option-title">Thanh inline trên đầu bảng<span class="badge-reco">ĐỀ XUẤT</span></h2>
+    </div>
+    <p class="option-desc">Khi có dòng được chọn, một dải nhỏ “N đã chọn · Cấp quyền · Bỏ chọn” chèn ngay dưới bộ lọc, phía trên bảng. Luôn nằm cạnh bảng, cuộn theo trang, không bao giờ rơi xuống Lịch sử.</p>
+    <div class="card">
+      <p class="result-title">Kết quả quét (2/382 folder)</p>
+      <div class="search">🔍 hoi</div>
+      <div class="filters">
+        <div class="filter-group"><span class="filter-label">Loại Drive:</span>
+          <span class="chip on">Tất cả</span><span class="chip">My Drive</span><span class="chip">Shared Drive</span></div>
+        <div class="filter-group"><span class="filter-label">Cấp:</span>
+          <span class="chip">0</span><span class="chip">1</span><span class="chip on">2</span></div>
+      </div>
+
+      <div class="bulk-inline">
+        <span class="bulk-count">2</span><span class="bulk-sel">đã chọn</span>
+        <span class="badge-drive-sum">2 Shared Drive</span>
+        <div class="divider"></div>
+        <button class="btn-grant">Cấp quyền</button>
+        <button class="btn-clear">Bỏ chọn</button>
+      </div>
+
+      <table>
+        <thead><tr><th style="width:36px"><input type="checkbox" checked></th><th>Tên</th><th>Đường dẫn</th><th>Cấp</th><th>Loại Drive</th><th>Link</th></tr></thead>
+        <tbody>
+          <tr><td><input type="checkbox" checked></td><td>Giai Đoạn 1</td><td class="path">Drive/Hoiana Residences/Giai Đoạn 1</td><td>2</td><td><span class="b-shared">Shared Drive</span></td><td><a class="lnk" href="#">↗ Mở</a></td></tr>
+          <tr><td><input type="checkbox" checked></td><td>Giai Đoạn 1</td><td class="path">Drive/Hoiana Beach Villas/Giai Đoạn 1</td><td>2</td><td><span class="b-shared">Shared Drive</span></td><td><a class="lnk" href="#">↗ Mở</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Ưu: đơn giản, rõ ngữ cảnh, không cần position phức tạp. Nhược: nếu bảng rất dài và bạn cuộn sâu, thanh sẽ khuất phía trên (xem phương án 2 nếu cần luôn thấy).</p>
+  </div>
+
+  <!-- OPTION 2 -->
+  <div class="option-block">
+    <div class="option-head">
+      <span class="option-tag">2</span>
+      <h2 class="option-title">Sticky dính đỉnh khung bảng</h2>
+    </div>
+    <p class="option-desc">Bảng cuộn nội bộ trong khung (thanh cuộn riêng). Thanh action dính ở đỉnh khung nên luôn nhìn thấy dù cuộn sâu. Gọn trong Card, không đè Lịch sử. <em>(Cuộn thử bảng dưới đây.)</em></p>
+    <div class="card">
+      <p class="result-title">Kết quả quét (8/382 folder)</p>
+      <div class="search">🔍 giai</div>
+      <div class="filters">
+        <div class="filter-group"><span class="filter-label">Loại Drive:</span>
+          <span class="chip on">Tất cả</span><span class="chip">My Drive</span><span class="chip">Shared Drive</span></div>
+      </div>
+      <div class="scroll-box">
+        <div class="bulk-sticky">
+          <span class="bulk-count">2</span><span class="bulk-sel">đã chọn</span>
+          <div class="divider"></div>
+          <button class="btn-grant">Cấp quyền</button>
+          <button class="btn-clear">Bỏ chọn</button>
+        </div>
+        <table>
+          <thead><tr><th style="width:36px"><input type="checkbox"></th><th>Tên</th><th>Đường dẫn</th><th>Cấp</th><th>Loại Drive</th><th>Link</th></tr></thead>
+          <tbody id="rows2"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="note">Ưu: thanh luôn hiển thị khi cuộn bảng dài. Nhược: bảng có thanh cuộn riêng (2 vùng cuộn — trang + bảng), một số người thấy hơi “kẹp”.</p>
+  </div>
+
+  <!-- OPTION 3 -->
+  <div class="option-block">
+    <div class="option-head">
+      <span class="option-tag">3</span>
+      <h2 class="option-title">Floating nhưng neo trong Card</h2>
+    </div>
+    <p class="option-desc">Giữ kiểu “viên thuốc” nổi như cũ (đẹp, có bóng đổ) nhưng neo absolute ở đáy <strong>Card kết quả</strong> thay vì đáy viewport — nên không bao giờ trôi xuống đè Lịch sử thao tác.</p>
+    <div class="card card-floating">
+      <p class="result-title">Kết quả quét (2/382 folder)</p>
+      <div class="search">🔍 hoi</div>
+      <div class="filters">
+        <div class="filter-group"><span class="filter-label">Loại Drive:</span>
+          <span class="chip on">Tất cả</span><span class="chip">My Drive</span><span class="chip">Shared Drive</span></div>
+        <div class="filter-group"><span class="filter-label">Cấp:</span>
+          <span class="chip">0</span><span class="chip">1</span><span class="chip on">2</span></div>
+      </div>
+      <table>
+        <thead><tr><th style="width:36px"><input type="checkbox" checked></th><th>Tên</th><th>Đường dẫn</th><th>Cấp</th><th>Loại Drive</th><th>Link</th></tr></thead>
+        <tbody>
+          <tr><td><input type="checkbox" checked></td><td>Giai Đoạn 1</td><td class="path">Drive/Hoiana Residences/Giai Đoạn 1</td><td>2</td><td><span class="b-shared">Shared Drive</span></td><td><a class="lnk" href="#">↗ Mở</a></td></tr>
+          <tr><td><input type="checkbox" checked></td><td>Giai Đoạn 1</td><td class="path">Drive/Hoiana Beach Villas/Giai Đoạn 1</td><td>2</td><td><span class="b-shared">Shared Drive</span></td><td><a class="lnk" href="#">↗ Mở</a></td></tr>
+        </tbody>
+      </table>
+      <div class="bulk-floating">
+        <span class="bulk-count">2</span><span class="bulk-sel">đã chọn</span>
+        <div class="divider"></div>
+        <button class="btn-grant">Cấp quyền</button>
+        <button class="btn-clear">✕</button>
+      </div>
+    </div>
+    <div class="hist-hint">⬇ “Lịch sử thao tác” là một Card riêng nằm dưới — với phương án này, thanh floating dừng trong Card kết quả nên không còn đè lên đây nữa.</div>
+    <p class="note">Ưu: giữ nguyên thẩm mỹ thanh cũ. Nhược: vẫn che mất 1–2 dòng cuối của bảng; cần đệm padding đáy.</p>
+  </div>
+</div>
+
+<script>
+  // Fill option 2 with enough rows to demonstrate sticky scrolling
+  const paths = [
+    ['Giai Đoạn 1','Drive/Hoiana Residences/Giai Đoạn 1'],
+    ['Giai Đoạn 1','Drive/Hoiana Beach Villas/Giai Đoạn 1'],
+    ['Giai Đoạn 2','Drive/Hoiana Residences/Giai Đoạn 2'],
+    ['Giai Đoạn 2','Drive/Hoiana Beach Villas/Giai Đoạn 2'],
+    ['Giai Đoạn 3','Drive/Hoiana Residences/Giai Đoạn 3'],
+    ['Giai Đoạn 1 - Hồ sơ','Drive/Marina/Giai Đoạn 1 - Hồ sơ'],
+    ['Giai Đoạn 4','Drive/Hoiana Residences/Giai Đoạn 4'],
+    ['Giai Đoạn 5','Drive/Hoiana Residences/Giai Đoạn 5'],
+  ];
+  const tb = document.getElementById('rows2');
+  paths.forEach((p, i) => {
+    const checked = i < 2 ? 'checked' : '';
+    tb.insertAdjacentHTML('beforeend',
+      `<tr><td><input type="checkbox" ${checked}></td><td>${p[0]}</td><td class="path">${p[1]}</td><td>2</td><td><span class="b-shared">Shared Drive</span></td><td><a class="lnk" href="#">↗ Mở</a></td></tr>`);
+  });
+</script>
+</body>
+</html>

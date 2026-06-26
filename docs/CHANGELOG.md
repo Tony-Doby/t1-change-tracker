@@ -7,6 +7,20 @@
 
 ## 2026-06-26
 
+### 84. UX FEAT-032: Đổi thanh "Cấp quyền" hàng loạt từ floating sang sticky trong khung bảng
+
+**Vấn đề:** `BulkActionsBar` dùng `position: fixed` neo ở đáy viewport → khi cuộn xuống xem bảng, thanh trôi xuống đè lên Card "Lịch sử thao tác", mất ngữ cảnh với bảng kết quả.
+
+**Thay đổi:**
+- `webapp/src/components/apps-script/ScanResultsTable.tsx`: Bỏ `BulkActionsBar` (floating). Thay bằng **thanh sticky dính đỉnh khung bảng cuộn** (`sticky top-0`), header cột dính ngay dưới (`top-11`). Search + filter chips vẫn nằm ngoài vùng cuộn nên luôn hiển thị. Thanh gồm: số đếm "N đã chọn", nút **Cấp quyền**, nút **Bỏ chọn**.
+- `webapp/docs/mockup-bulk-action-placement.html` (mới): mockup so sánh 3 phương án vị trí (inline / sticky / floating-trong-card) đã dùng để chốt thiết kế.
+
+**Lý do chọn sticky:** thanh action + header cột luôn thấy khi cuộn bảng dài, gọn trong Card, không bao giờ đè Lịch sử thao tác.
+
+**Kết quả:** `npm run build` pass.
+
+---
+
 ### 83. Feature FEAT-031 + FEAT-032: Cấp quyền Drive linh hoạt + Bảng kết quả Quét folder tương tác
 
 **Mô tả:** Mở rộng tab **Cấp quyền** của Google Drive Admin (FEAT-030) thành cấp quyền linh hoạt (tự nhận diện loại Drive, đủ 5 role, đối tượng email/anyone-with-link) và nâng bảng **Kết quả** của tác vụ **Quét folder** thành bảng tương tác (search, lọc theo cấp & loại Drive, chọn nhiều, cấp quyền hàng loạt). Gộp fix BUG-037 (typo "Ngườii" → "Người").

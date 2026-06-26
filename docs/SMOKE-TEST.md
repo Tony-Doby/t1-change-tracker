@@ -166,6 +166,51 @@
 
 ---
 
+## 16. Google Drive Admin (FEAT-030/031/032)
+
+> Trang `/admin/google-drive` (chỉ role `admin`). Yêu cầu đã cấu hình: secret `APPS_SCRIPT_WEB_APP_URL` (URL `/exec` hiện hành) + Edge Function `google-apps-script-proxy` đã deploy (có action `detectDriveTypes`) + Apps Script đã dán code `docs/FEAT-030-apps-script.gs` mới nhất (Deploy → New version).
+
+### 16.1 Truy cập & phân quyền
+- [ ] User `admin` thấy menu **Google Drive** (icon HardDrive) trong sidebar
+- [ ] User `operator` / `viewer` **không** thấy menu, vào thẳng URL `/admin/google-drive` bị chặn
+
+### 16.2 Quét folder → Bảng kết quả tương tác (FEAT-032)
+- [ ] Tab **Quét folder** → nhập link/ID folder gốc + độ sâu → bấm Quét → bảng kết quả hiển thị
+- [ ] Cột **Loại Drive** hiện badge đúng: `My Drive` (neutral) hoặc `Shared Drive` (primary)
+- [ ] Ô **search** lọc theo tên/đường dẫn realtime
+- [ ] Chips **Loại Drive** (Tất cả / My Drive / Shared Drive) lọc đúng
+- [ ] Chips **Cấp** (theo độ sâu) toggle nhiều cấp được, đếm `(x/y folder)` cập nhật
+- [ ] Tick checkbox dòng + **select-all** ở header hoạt động (chỉ chọn các dòng đang lọc)
+- [ ] Khi có ≥1 dòng chọn → thanh **sticky "N đã chọn · Cấp quyền · Bỏ chọn"** dính ở **đỉnh khung bảng** (không phải floating đáy viewport, không đè Lịch sử)
+- [ ] Cuộn bảng dài → thanh sticky + header cột vẫn luôn hiển thị; search + filter chips vẫn thấy (nằm ngoài vùng cuộn)
+- [ ] Bấm **Cấp quyền** trên thanh sticky → mở **Modal "Cấp quyền hàng loạt"**, hiện "Đã chọn N item" + badge loại Drive tổng hợp
+- [ ] Bấm **Bỏ chọn** → thanh sticky biến mất, header cột trở về đỉnh khung
+- [ ] Cột **Link** "Mở" → mở folder trên Drive ở tab mới
+
+### 16.3 Cấp quyền linh hoạt — nhập tay (FEAT-031)
+- [ ] Tab **Cấp quyền** → dán item(s) → **click ra ngoài ô** → hiện "Đang phát hiện loại Drive..." rồi badge kết quả
+- [ ] (Nếu lỗi `Action "detectDriveTypes" is not allowed` → Edge Function chưa deploy bản mới)
+- [ ] Dropdown **Quyền** không còn typo "Ngườii" (đúng "Người xem / Người nhận xét / Người chỉnh sửa")
+- [ ] Item **toàn bộ Shared Drive** → dropdown có thêm 2 role: **Người quản lý nội dung (fileOrganizer)** + **Người quản lý (organizer)**; nhãn writer đổi thành "Người đóng góp"
+- [ ] Item **toàn bộ My Drive** → chỉ 3 role chung
+- [ ] Item **lẫn My + Shared** → banner cảnh báo màu vàng + chỉ còn 3 role chung; chọn role chỉ-Shared bị chặn (báo lỗi)
+- [ ] Select **Đối tượng = "Người dùng cụ thể"** → hiện ô email (bắt buộc); để trống email → báo lỗi
+- [ ] Select **Đối tượng = "Bất kỳ ai có link"** → ô email **ẩn**, hiện ghi chú quyền anyone
+- [ ] Submit hợp lệ (scope user, ≥1 email) → toast thành công, kết quả trả về từng item `success: true`
+- [ ] Submit scope anyone → folder thực sự thành "ai có link cũng [role]" (kiểm tra trên Drive: Share → General access)
+
+### 16.4 Cấp quyền hàng loạt từ bảng quét (FEAT-031 + 032)
+- [ ] Trong Modal (mở từ 16.2) → chọn Đối tượng + role + (email nếu user) → **Cấp quyền** → toast thành công, Modal đóng
+- [ ] Item preset đã biết loại Drive sẵn → **không** gọi lại `detectDriveTypes` (không thấy spinner phát hiện)
+- [ ] Nếu các item chọn lẫn 2 loại Drive → Modal hiện banner + giới hạn 3 role chung
+
+### 16.5 Audit log
+- [ ] Mọi thao tác (kể cả `detectDriveTypes`) xuất hiện trong **"Lịch sử thao tác"** với trạng thái Thành công/Thất bại
+- [ ] Thao tác lỗi → cột **Lỗi** hiện message (hover xem full)
+- [ ] Bấm **Làm mới** → bảng log cập nhật
+
+---
+
 ## Business Logic Regression (5 luồng cốt lõi)
 
 ### BL-1: Tạo request đổi T1

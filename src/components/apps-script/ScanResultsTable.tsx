@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Search, ExternalLink } from 'lucide-react'
+import { Search, ExternalLink, X } from 'lucide-react'
 import TextInput from '../../ui/input/TextInput'
 import Badge from '../../ui/display/Badge'
-import BulkActionsBar from '../../ui/feedback/BulkActionsBar'
 import EmptyState from '../../ui/display/EmptyState'
 import type { ScanFolderResult } from '../../types'
 import type { PresetItem } from './SetPermissionsForm'
@@ -133,9 +132,33 @@ export default function ScanResultsTable({ results, onBulkGrant }: Props) {
       {filtered.length === 0 ? (
         <EmptyState context="filter_empty" title="Không có folder khớp" subtitle="Thử đổi từ khóa hoặc bộ lọc." />
       ) : (
-        <div className="overflow-auto max-h-[28rem] border border-border-hairline rounded-sm">
+        <div className="overflow-auto max-h-[28rem] border border-border-hairline rounded-sm relative">
+          {/* FEAT-032: thanh cấp quyền hàng loạt — dính đỉnh khung bảng, không trôi xuống Lịch sử */}
+          {selected.size > 0 && (
+            <div className="sticky top-0 z-20 flex items-center gap-3 h-11 px-4 bg-accent-subtle border-b border-accent/20">
+              <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-pill bg-accent text-white text-xs font-medium">
+                {selected.size}
+              </span>
+              <span className="text-sm text-text-secondary">đã chọn</span>
+              <div className="h-4 w-px bg-accent/20" />
+              <button
+                type="button"
+                onClick={handleBulkGrant}
+                className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
+              >
+                Cấp quyền
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="inline-flex items-center gap-1 px-2 h-8 text-sm text-text-secondary hover:text-text-primary transition-colors"
+              >
+                <X className="w-3.5 h-3.5" /> Bỏ chọn
+              </button>
+            </div>
+          )}
           <table className="w-full text-left text-sm">
-            <thead className="bg-bg-secondary sticky top-0 z-10">
+            <thead className={`bg-bg-secondary sticky z-10 ${selected.size > 0 ? 'top-11' : 'top-0'}`}>
               <tr>
                 <th className="px-3 py-2 w-10 border-b border-border-hairline">
                   <input
@@ -190,22 +213,6 @@ export default function ScanResultsTable({ results, onBulkGrant }: Props) {
             </tbody>
           </table>
         </div>
-      )}
-
-      {selected.size > 0 && (
-        <BulkActionsBar
-          count={selected.size}
-          onClear={() => setSelected(new Set())}
-          actions={
-            <button
-              type="button"
-              onClick={handleBulkGrant}
-              className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
-            >
-              Cấp quyền
-            </button>
-          }
-        />
       )}
     </div>
   )
