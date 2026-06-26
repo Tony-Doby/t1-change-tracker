@@ -10,6 +10,7 @@ import TableRow from '../ui/layout/TableRow'
 import TableCell from '../ui/layout/TableCell'
 import Badge from '../ui/display/Badge'
 import EmptyState from '../ui/display/EmptyState'
+import Modal from '../ui/layout/Modal'
 import ConfirmationModal from '../ui/feedback/ConfirmationModal'
 import { useToast } from '../components/Toast'
 import {
@@ -25,12 +26,20 @@ import {
   MoveItemForm,
   RemovePermissionForm,
   DeleteItemForm,
+  ScanResultsTable,
 } from '../components/apps-script'
-import type { AppsScriptAction, AppsScriptParams, AppsScriptLog } from '../types'
+import type { PresetItem } from '../components/apps-script/SetPermissionsForm'
+import type {
+  AppsScriptAction,
+  AppsScriptParams,
+  AppsScriptLog,
+  ScanFolderResult,
+  DetectDriveTypeResult,
+} from '../types'
 
 const ACTION_OPTIONS: { value: AppsScriptAction; label: string; description: string }[] = [
   { value: 'scanFolders', label: 'Quét folder', description: 'Tìm các folder con theo tên trong phạm vi độ sâu.' },
-  { value: 'setPermissions', label: 'Cấp quyền', description: 'Gán quyền reader/writer/commenter cho nhiều item và email.' },
+  { value: 'setPermissions', label: 'Cấp quyền', description: 'Cấp quyền linh hoạt (xem→quản lý) cho email cụ thể hoặc bất kỳ ai có link.' },
   { value: 'createFolder', label: 'Tạo folder', description: 'Tạo folder mới bên trong folder cha.' },
   { value: 'copyFolder', label: 'Sao chép folder', description: 'Sao chép toàn bộ folder sang folder đích với tên mới.' },
   { value: 'listItems', label: 'Liệt kê items', description: 'Xem danh sách file và folder bên trong một folder.' },
@@ -53,6 +62,18 @@ function formatDate(iso: string) {
 
 function isArrayResult(data: unknown): data is Array<Record<string, unknown>> {
   return Array.isArray(data)
+}
+
+// FEAT-032: kết quả scanFolders giờ kèm isSharedDrive cho bảng tương tác.
+function isScanResults(data: unknown): data is ScanFolderResult[] {
+  return (
+    Array.isArray(data) &&
+    data.length > 0 &&
+    typeof data[0] === 'object' &&
+    data[0] !== null &&
+    'isSharedDrive' in (data[0] as Record<string, unknown>) &&
+    'path' in (data[0] as Record<string, unknown>)
+  )
 }
 
 function ResultPanel({ data }: { data: unknown }) {
@@ -149,10 +170,18 @@ export default function AppsScriptAdminPage() {
   const [selectedAction, setSelectedAction] = useState<AppsScriptAction>('scanFolders')
   const [result, setResult] = useState<unknown>(null)
   const [pendingAction, setPendingAction] = useState<{ action: AppsScriptAction; params: AppsScriptParams } | null>(null)
+  // FEAT-032: items chọn từ bảng quét để cấp quyền hàng loạt qua Modal.
+  const [bulkGrantItems, setBulkGrantItems] = useState<PresetItem[] | null>(null)
 
   const { show } = useToast()
   const { mutateAsync, isPending } = useAppsScriptMutation()
   const { data: logs, isLoading: logsLoading, refetch } = useAppsScriptLogsQuery()
+
+  // FEAT-031: phát hiện loại Drive cho item nhập tay (không ghi vào ô kết quả chính).
+  const detectDriveTypes = async (itemIds: string[]): Promise<DetectDriveTypeResult[]> => {
+    const res = await mutateAsync({ action: 'detectDriveTypes', params: { itemIds } })
+    return (res.data ?? []) as DetectDriveTypeResult[]
+  }
 
   const executeAction = async (action: AppsScriptAction, params: AppsScriptParams) => {
     try {
@@ -218,7 +247,11 @@ export default function AppsScriptAdminPage() {
               <ScanFoldersForm onSubmit={(p) => handleAction('scanFolders', p)} isLoading={isPending} />
             )}
             {selectedAction === 'setPermissions' && (
-              <SetPermissionsForm onSubmit={(p) => handleAction('setPermissions', p)} isLoading={isPending} />
+              <SetPermissionsForm
+                onSubmit={(p) => handleAction('setPermissions', p)}
+                isLoading={isPending}
+                onDetectDriveTypes={detectDriveTypes}
+              />
             )}
             {selectedAction === 'createFolder' && (
               <CreateFolderForm onSubmit={(p) => handleAction('createFolder', p)} isLoading={isPending} />
@@ -242,7 +275,11 @@ export default function AppsScriptAdminPage() {
 
           {result !== null && (
             <Card>
-              <ResultPanel data={result} />
+              {selectedAction === 'scanFolders' && isScanResults(result) ? (
+                <ScanResultsTable results={result} onBulkGrant={setBulkGrantItems} />
+              ) : (
+                <ResultPanel data={result} />
+              )}
             </Card>
           )}
 
@@ -277,6 +314,19 @@ export default function AppsScriptAdminPage() {
         confirmType={pendingAction?.action === 'deleteItem' ? 'danger' : 'primary'}
         loading={isPending}
       />
+
+      {bulkGrantItems && (
+        <Modal title="Cấp quyền hàng loạt" size="lg" onClose={() => setBulkGrantItems(null)}>
+          <SetPermissionsForm
+            presetItems={bulkGrantItems}
+            isLoading={isPending}
+            onSubmit={async (p) => {
+              await executeAction('setPermissions', p)
+              setBulkGrantItems(null)
+            }}
+          />
+        </Modal>
+      )}
     </PageContainer>
   )
 }

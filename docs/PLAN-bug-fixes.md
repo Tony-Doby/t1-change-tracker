@@ -63,6 +63,72 @@
 | 033 | Agent Detail lưu thông tin không tự refresh, phải F5 mới thấy mới | fixed | 2026-06-19 | 2026-06-19 |
 | 035 | RequestsPage không tự cập nhật khi tạo / thay đổi request | fixed | 2026-06-19 | 2026-06-19 |
 | 036 | Dashboard B2 chờ phản hồi chấp thuận không cập nhật khi active B2 | fixed | 2026-06-19 | 2026-06-19 |
+| 037 | Dropdown "Quyền" (Google Drive Admin) sai chính tả "Ngườii" và thuật ngữ chưa khớp Google Drive | fixed | 2026-06-26 | 2026-06-26 |
+
+---
+
+## BUG-037: Dropdown "Quyền" (Google Drive Admin) sai chính tả "Ngườii" và thuật ngữ chưa khớp Google Drive
+
+- **Phát hiện**: 2026-06-26
+- **Status**: `fixed` (2026-06-26, trong **FEAT-031** — xem `PLAN-feature-dev.md`)
+- **Severity**: `low`
+
+> ⚠️ Fix typo này được thực hiện **như một phần của FEAT-031** (cấp quyền Drive linh hoạt), vì FEAT-031 viết lại toàn bộ `roleOptions`. Không fix riêng lẻ.
+
+### 1. Mô tả bug
+Trong trang **Google Drive Admin** (`/admin/google-drive`) → tab **Cấp quyền** (`SetPermissionsForm`), dropdown **"Quyền"** hiển thị 3 option bị **sai chính tả "Ngườii"** (thừa chữ *i*):
+- "Ngườii xem (reader)"
+- "Ngườii bình luận (commenter)"
+- "Ngườii chỉnh sửa (writer)"
+
+Ngoài lỗi chính tả, thuật ngữ chưa khớp với nhãn chuẩn tiếng Việt của Google Drive (reader = "Người xem", commenter = "Người nhận xét", writer/editor = "Người chỉnh sửa").
+
+### 2. Root Cause
+Hardcode trong biến `roleOptions` tại `src/components/apps-script/SetPermissionsForm.tsx:12-16`:
+```ts
+const roleOptions = [
+  { value: 'reader', label: 'Ngườii xem (reader)' },
+  { value: 'commenter', label: 'Ngườii bình luận (commenter)' },
+  { value: 'writer', label: 'Ngườii chỉnh sửa (writer)' },
+]
+```
+Lỗi typo "Ngườii" (lỗi gõ lặp lại trong dự án). Giá trị `value` (`reader`/`commenter`/`writer`) **đúng** và khớp với `SetPermissionsParams['role']` cũng như Apps Script backend — KHÔNG được đổi.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Chỉ sửa phần `label` của `roleOptions`, giữ nguyên `value`:
+```ts
+const roleOptions = [
+  { value: 'reader', label: 'Người xem (reader)' },
+  { value: 'commenter', label: 'Người nhận xét (commenter)' },
+  { value: 'writer', label: 'Người chỉnh sửa (writer)' },
+]
+```
+- Sửa typo "Ngườii" → "Người" (cả 3 dòng).
+- Đổi "bình luận" → "nhận xét" để khớp thuật ngữ Google Drive (commenter = "Người nhận xét").
+- Giữ hậu tố tiếng Anh `(reader)`/`(commenter)`/`(writer)` để rõ nghĩa kỹ thuật (khớp role gửi lên Apps Script).
+
+> ⚠️ **Phạm vi backend**: Apps Script `setPermissions` chỉ hỗ trợ 3 role này (`addViewer`/`addCommenter`/`addEditor`). Các role "Người đóng góp" / "Người quản lý nội dung" trong ảnh Google thuộc Shared Drive, không nằm trong phạm vi fix.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/apps-script/SetPermissionsForm.tsx` | Sửa `label` của 3 phần tử `roleOptions` (dòng 13-15) — fix typo + thuật ngữ |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Mở `/admin/google-drive` → tab "Cấp quyền".
+2. Mở dropdown "Quyền" → verify 3 option hiển thị: "Người xem (reader)", "Người nhận xét (commenter)", "Người chỉnh sửa (writer)" — không còn "Ngườii".
+3. Verify giá trị gửi lên (network/log `apps_script_logs`) vẫn là `reader`/`commenter`/`writer`.
+4. Build pass.
+
+### 8. Notes
+- Đây là pure UI label fix, không ảnh hưởng logic. Rollback: revert 3 dòng label.
+- **Cân nhắc cần xác nhận**: có giữ hậu tố tiếng Anh `(reader)`... hay bỏ để giống hệt Google Drive? Mặc định plan giữ hậu tố.
 
 ---
 

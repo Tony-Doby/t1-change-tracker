@@ -221,3 +221,27 @@
 | ~~Excel Generator: Chưa hỗ trợ inline field reference `{{Field}}`~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-feature-dev.md` FEAT-020 |
 | ~~Excel Generator: Chưa hỗ trợ edit template đã lưu~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-feature-dev.md` FEAT-021 |
 | ~~`addBusinessDays()` bị lệch timezone do `toISOString()` dùng UTC~~ | **Đã fix (2026-06-10)** | Parse bằng `new Date(y, m-1, d)` + helper `formatLocalDate()` |
+
+---
+
+## 8. Google Drive Admin — Apps Script (FEAT-030/031/032)
+
+### 8.1 Thêm action Apps Script mới = sửa 2 nơi + redeploy
+- Action mới (vd `detectDriveTypes`) phải được thêm vào **cả** `ALLOWED_ACTIONS` (Edge Function `google-apps-script-proxy/index.ts`) **và** `switch` trong `doPost` (`FEAT-030-apps-script.gs`).
+- Thiếu ở Edge Function → lỗi `400 Action "..." is not allowed` (chặn trước khi tới Apps Script).
+- **Sau khi sửa**: `supabase functions deploy google-apps-script-proxy` **và** Apps Script → **Deploy → New version**. Sửa file repo KHÔNG tự cập nhật bản đang chạy.
+
+### 8.2 Loại Drive chỉ phân biệt được qua `driveId` (không qua URL/ID)
+- My Drive vs Shared Drive **không** suy ra được từ link/ID. Phải gọi `Drive.Files.get(id, { fields: 'driveId', supportsAllDrives: true })`: có `driveId` ⇒ Shared Drive.
+- Mọi lệnh Advanced Drive Service trên item Shared Drive phải kèm `supportsAllDrives: true`, nếu không sẽ "not found".
+- `scanFolders` chỉ detect 1 lần ở folder gốc rồi gán cho mọi con — cây folder không thể nằm cả 2 loại Drive.
+
+### 8.3 Role `fileOrganizer`/`organizer` chỉ hợp lệ trên Shared Drive
+- 3 role chung cho cả 2 loại Drive: `reader`, `commenter`, `writer`.
+- 2 role chỉ-Shared: `fileOrganizer` (Người quản lý nội dung), `organizer` (Người quản lý). Áp lên item My Drive → API lỗi.
+- UI chỉ mở khóa 5 role khi **toàn bộ** item là Shared Drive; danh sách lẫn 2 loại → giới hạn 3 role chung + banner. Backend `setPermissions` cũng validate lại từng item.
+
+### 8.4 "Bất kỳ ai có link" = `type: 'anyone'` + `allowFileDiscovery: false`
+- Cấp public-view-by-link: `Drive.Permissions.create({ type: 'anyone', role, allowFileDiscovery: false }, id, { supportsAllDrives: true })`.
+- `allowFileDiscovery: false` = có link mới xem được (không bị tìm thấy/lập chỉ mục công khai).
+- `setPermissions` dùng **1 code path duy nhất** (`Drive.Permissions.create`) cho cả My Drive lẫn Shared Drive, cả scope user lẫn anyone — không dùng `DriveApp.addEditor/setSharing`.

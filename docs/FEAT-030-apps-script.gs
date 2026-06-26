@@ -54,6 +54,9 @@ function doPost(e) {
       case 'deleteItem':
         data = deleteItem(params)
         break
+      case 'detectDriveTypes':
+        data = detectDriveTypes(params)
+        break
       default:
         throw new Error('Unknown action: ' + action)
     }
@@ -118,13 +121,24 @@ function scanFolders(params) {
   const matchType = params.matchType || 'contains'
   const pattern = params.pattern || ''
 
+  // FEAT-031/032: Phát hiện loại Drive 1 lần ở gốc. Mọi folder con trong cùng cây
+  // luôn cùng loại Drive (My Drive vs Shared Drive), nên không cần gọi lại cho từng item.
+  let driveId = null
+  try {
+    const meta = Drive.Files.get(rootFolderId, { fields: 'driveId', supportsAllDrives: true })
+    driveId = meta.driveId || null
+  } catch (e) {
+    driveId = null
+  }
+  const isSharedDrive = !!driveId
+
   const root = DriveApp.getFolderById(rootFolderId)
   const results = []
-  collectFolders(root, '', 0, depth, matchType, pattern, results)
+  collectFolders(root, '', 0, depth, matchType, pattern, results, driveId, isSharedDrive)
   return results
 }
 
-function collectFolders(folder, path, currentDepth, maxDepth, matchType, pattern, results) {
+function collectFolders(folder, path, currentDepth, maxDepth, matchType, pattern, results, driveId, isSharedDrive) {
   const name = folder.getName()
   const fullPath = path ? path + '/' + name : name
 
@@ -135,6 +149,8 @@ function collectFolders(folder, path, currentDepth, maxDepth, matchType, pattern
       path: fullPath,
       depth: currentDepth,
       url: 'https://drive.google.com/drive/folders/' + folder.getId(),
+      driveId: driveId,
+      isSharedDrive: isSharedDrive,
     })
   }
 
@@ -142,28 +158,68 @@ function collectFolders(folder, path, currentDepth, maxDepth, matchType, pattern
 
   const subFolders = folder.getFolders()
   while (subFolders.hasNext()) {
-    collectFolders(subFolders.next(), fullPath, currentDepth + 1, maxDepth, matchType, pattern, results)
+    collectFolders(subFolders.next(), fullPath, currentDepth + 1, maxDepth, matchType, pattern, results, driveId, isSharedDrive)
   }
 }
 
+// FEAT-031: Phát hiện loại Drive (My Drive vs Shared Drive) cho từng item.
+// driveId có giá trị => item nằm trong Shared Drive.
+function detectDriveTypes(params) {
+  const itemIds = params.itemIds || []
+  return itemIds.map(function (id) {
+    try {
+      const f = Drive.Files.get(id, { fields: 'id,name,driveId', supportsAllDrives: true })
+      return { id: id, name: f.name, isSharedDrive: !!f.driveId }
+    } catch (e) {
+      return { id: id, isSharedDrive: false, error: String(e) }
+    }
+  })
+}
+
+// FEAT-031: Cấp quyền linh hoạt qua Advanced Drive Service (1 code path cho cả 2 loại Drive).
+// - scope 'user': cấp cho từng email (type=user)
+// - scope 'anyone': bất kỳ ai có link (type=anyone, allowFileDiscovery=false)
+// - role fileOrganizer/organizer chỉ hợp lệ cho item trong Shared Drive => validate trước.
 function setPermissions(params) {
   const itemIds = params.itemIds || []
   const emails = params.emails || []
   const role = params.role || 'reader'
-
+  const scope = params.scope || 'user'
+  const SHARED_ONLY = { fileOrganizer: true, organizer: true }
   const results = []
+
   for (const id of itemIds) {
-    const item = getDriveItem(id)
-    for (const email of emails) {
-      if (role === 'writer') {
-        item.addEditor(email)
-      } else if (role === 'commenter') {
-        item.addCommenter(email)
-      } else {
-        item.addViewer(email)
+    try {
+      if (SHARED_ONLY[role]) {
+        const f = Drive.Files.get(id, { fields: 'driveId', supportsAllDrives: true })
+        if (!f.driveId) {
+          throw new Error('Role "' + role + '" chỉ áp dụng cho item trong Shared Drive')
+        }
       }
+
+      if (scope === 'anyone') {
+        Drive.Permissions.create(
+          { type: 'anyone', role: role, allowFileDiscovery: false },
+          id,
+          { supportsAllDrives: true }
+        )
+        results.push({ id: id, scope: scope, role: role, success: true })
+      } else {
+        if (emails.length === 0) {
+          throw new Error('scope "user" yêu cầu ít nhất một email')
+        }
+        for (const email of emails) {
+          Drive.Permissions.create(
+            { type: 'user', role: role, emailAddress: email },
+            id,
+            { supportsAllDrives: true, sendNotificationEmail: false }
+          )
+          results.push({ id: id, scope: scope, email: email, role: role, success: true })
+        }
+      }
+    } catch (e) {
+      results.push({ id: id, scope: scope, role: role, success: false, error: String(e) })
     }
-    results.push({ id: id, name: item.getName(), role: role, emails: emails })
   }
   return results
 }

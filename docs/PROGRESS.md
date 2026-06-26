@@ -66,6 +66,8 @@ Nói với AI những cụm từ trigger sau:
 | ~~*"Xóa mẫu email"*~~ | ~~FEAT-026 — Delete Email Template~~ |
 | *"Gửi email qua Google Apps Script"* | FEAT-027 — Edge Function + Apps Script Web App (planned) |
 | *"Google Drive Admin Panel"* | FEAT-030 — Apps Script proxy + quản lý Drive (done) |
+| *"Cấp quyền Drive linh hoạt"* | FEAT-031 — Tự nhận diện loại Drive + 5 role + email/anyone-with-link (done) |
+| *"Bảng Quét folder tương tác"* | FEAT-032 — Search, lọc cấp/loại Drive, chọn nhiều + cấp quyền hàng loạt (done) |
 | ~~*"Dashboard M1 full width"*~~ | ~~FEAT-028 — Ẩn chart/bookmark, M1 filter tabs~~ |
 | ~~*"Dashboard full viewport"*~~ | ~~FEAT-029 — M1 fill remaining height~~ |
 | ~~*"Dọn ESLint errors"*~~ | ~~REFACTOR-006 — Fix 172 lint errors~~ |

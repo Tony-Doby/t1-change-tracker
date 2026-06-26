@@ -14,6 +14,7 @@ const ALLOWED_ACTIONS = new Set([
   'moveItem',
   'removePermission',
   'deleteItem',
+  'detectDriveTypes',
 ])
 
 interface AppsScriptPayload {

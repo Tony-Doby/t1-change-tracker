@@ -81,6 +81,265 @@
 | 028 | Dashboard M1 Transition Enhancement | done | 2026-06-15 | 2026-06-15 |
 | 029 | Dashboard Full-Viewport Layout — M1 Transition Fill Remaining Height | done | 2026-06-15 | 2026-06-15 |
 | 030 | Google Apps Script Admin Panel — Drive Operations | done | 2026-06-26 | 2026-06-26 |
+| 031 | Cấp quyền Drive linh hoạt — Loại Drive + Đối tượng (email / anyone-with-link) + đủ 5 role | done | 2026-06-26 | 2026-06-26 |
+| 032 | Bảng kết quả Quét folder — Search, Lọc theo cấp, Chọn nhiều + Cấp quyền hàng loạt | done | 2026-06-26 | 2026-06-26 |
+
+---
+
+## FEAT-031: Cấp quyền Drive linh hoạt — Tự nhận diện loại Drive + Đối tượng + đủ 5 role
+
+- **Đề xuất**: 2026-06-26
+- **Status**: `done` (2026-06-26)
+- **Priority**: `medium`
+
+### 1. Mô tả feature
+Trong trang **Google Drive Admin** → tab **Cấp quyền** (`SetPermissionsForm`), nâng cấp để cấp quyền linh hoạt giống giao diện gốc Google Drive, với **tự nhận diện loại Drive** (không bắt admin chọn tay):
+
+**Tự nhận diện loại Drive (auto-detect):** Backend đọc trường `driveId` của từng item (`driveId` có → Shared Drive, không có → My Drive). Tập role hiển thị tự suy theo loại Drive đã phát hiện:
+- Item **My Drive** → 3 role: Người xem, Người nhận xét, Người chỉnh sửa.
+- Item **Shared Drive** → 5 role: Người xem, Người nhận xét, **Người đóng góp**, **Người quản lý nội dung**, **Người quản lý**.
+
+**Đối tượng** (`type` — cấp cho AI):
+- **Người dùng cụ thể** (`type: 'user'`) → nhập email.
+- **Bất kỳ ai có link** (`type: 'anyone'`) → ẩn ô email, gửi `allowFileDiscovery: false` (có link mới xem được, không bị Google index).
+
+Tiện thể fix luôn lỗi chính tả "Ngườii" (gộp **BUG-037**).
+
+### 2. Motivation / Why
+- App chỉ hỗ trợ 3 role qua `DriveApp` — thiếu `fileOrganizer`/`organizer` (chỉ có ở Shared Drive).
+- App chỉ cấp theo email — không làm được "Bất kỳ ai có link".
+- **URL/ID không phân biệt được loại Drive** (cùng cấu trúc `drive.google.com/drive/folders/<id>`) → không nhận diện được ở frontend; chỉ Drive API mới biết qua `driveId`. Vậy nên để admin chọn tay dễ sai → **tự nhận diện** chính xác hơn, đỡ thao tác.
+
+### 3. Scope
+
+**In scope:**
+- Backend: action mới **`detectDriveTypes(itemIds)`** trả `[{ id, isSharedDrive }]` (dùng `Drive.Files.get` field `driveId`). Enrich `scanFolders` trả thêm `driveId` cho mỗi folder.
+- Backend: viết lại `setPermissions` thành **một code path `Drive.Permissions.create`** (`supportsAllDrives: true`), xử lý `type: 'user'` + `type: 'anyone'`, đủ 5 role; **tự `detect driveId` + validate role** trước khi cấp; bắt lỗi từng item.
+- UI: bỏ chọn tay loại Drive → form **tự nhận diện** (gọi `detectDriveTypes` ở luồng manual; nhận sẵn `isSharedDrive` ở luồng bulk-from-scan của FEAT-032). `roleOptions` suy theo loại Drive đã phát hiện.
+- UI: thêm Select **"Đối tượng"** (`user` | `anyone`); ẩn ô email khi `anyone`. Fix typo "Ngườii".
+- UI: **xử lý lẫn lộn 2 loại Drive** (xem §4).
+- Type: `SetPermissionsParams` — `role` thêm `'fileOrganizer' | 'organizer'`, thêm `scope: 'user' | 'anyone'`; `AppsScriptAction` thêm `'detectDriveTypes'`.
+
+**Out of scope:**
+- Không thêm role `owner`; không hỗ trợ `type: 'group'`/`'domain'`.
+- Không làm "Công khai trên web" (`allowFileDiscovery: true`) — chỉ "có link mới xem" (`false`).
+- **Không** tự động tách nhóm cấp role cao cho riêng Shared Drive khi lẫn lộn (tránh âm thầm bỏ sót item — để dành nâng cao sau).
+- Edge Function: **có** thêm 1 action `detectDriveTypes` vào `ALLOWED_ACTIONS` (thay đổi nhỏ); `role`/`scope` vẫn đi trong `params`.
+
+### 4. Technical Design
+
+**Mapping role ↔ nhãn:**
+
+| `value` (Drive API role) | My Drive | Shared Drive |
+|---|---|---|
+| `reader` | Người xem (reader) | Người xem (reader) |
+| `commenter` | Người nhận xét (commenter) | Người nhận xét (commenter) |
+| `writer` | Người chỉnh sửa (writer) | Người đóng góp (writer) |
+| `fileOrganizer` | — | Người quản lý nội dung (fileOrganizer) |
+| `organizer` | — | Người quản lý (organizer) |
+
+**Nhận diện loại Drive (Apps Script):**
+```js
+function detectDriveTypes(params) {
+  const itemIds = params.itemIds || []
+  return itemIds.map(function (id) {
+    try {
+      const f = Drive.Files.get(id, { fields: 'id,name,driveId', supportsAllDrives: true })
+      return { id: id, name: f.name, isSharedDrive: !!f.driveId }
+    } catch (e) {
+      return { id: id, error: String(e) }
+    }
+  })
+}
+```
+> `scanFolders` cũng thêm `driveId` vào mỗi kết quả để FEAT-032 biết loại Drive ngay, khỏi gọi lại.
+
+**Quy tắc role theo selection (xử lý lẫn lộn) — tính ở UI:**
+
+| Selection (sau khi detect) | `roleOptions` hiển thị | Ghi chú UI |
+|---|---|---|
+| Toàn **My Drive** | 3 role | — |
+| Toàn **Shared Drive** | 5 role | — |
+| **Lẫn lộn** My + Shared | **Giao = 3 role chung** (reader/commenter/writer) | Banner: "Đang chọn cả 2 loại Drive → chỉ cấp được 3 quyền chung. Lọc riêng Shared Drive (FEAT-032) để cấp Người quản lý nội dung/Người quản lý." |
+
+**Backend `setPermissions` — một code path, tự validate từng item (lưới an toàn cuối), bỏ hẳn `DriveApp`:**
+```js
+function setPermissions(params) {
+  const itemIds = params.itemIds || []
+  const emails = params.emails || []
+  const role = params.role || 'reader'        // reader|commenter|writer|fileOrganizer|organizer
+  const scope = params.scope || 'user'         // 'user' | 'anyone'
+  const SHARED_ONLY = { fileOrganizer: true, organizer: true }
+
+  const results = []
+  for (const id of itemIds) {
+    try {
+      // Lưới an toàn: role cao chỉ áp cho Shared Drive
+      if (SHARED_ONLY[role]) {
+        const f = Drive.Files.get(id, { fields: 'driveId', supportsAllDrives: true })
+        if (!f.driveId) throw new Error('Role "' + role + '" chỉ áp dụng cho item trong Shared Drive')
+      }
+      if (scope === 'anyone') {
+        Drive.Permissions.create(
+          { type: 'anyone', role: role, allowFileDiscovery: false },
+          id, { supportsAllDrives: true }
+        )
+        results.push({ id: id, scope: scope, role: role, success: true })
+      } else {
+        for (const email of emails) {
+          Drive.Permissions.create(
+            { type: 'user', role: role, emailAddress: email },
+            id, { supportsAllDrives: true, sendNotificationEmail: false }
+          )
+          results.push({ id: id, email: email, role: role, success: true })
+        }
+      }
+    } catch (e) {
+      results.push({ id: id, scope: scope, role: role, success: false, error: String(e) })
+    }
+  }
+  return results
+}
+```
+> Một API duy nhất cho My Drive + Shared Drive, email + anyone-with-link, đủ 5 role. Item nào không hợp role → lỗi riêng item đó, item khác vẫn thành công.
+
+### 5. UI/UX
+Thứ tự field: Danh sách item → *(app tự nhận diện loại Drive, hiện tóm tắt)* → **Đối tượng** → [Danh sách email — ẩn nếu `anyone`] → Quyền → nút Cấp quyền.
+- **Manual (tab Cấp quyền):** sau khi nhập/đổi danh sách item (debounce) → gọi `detectDriveTypes` → hiện tóm tắt "Phát hiện: 3 Shared Drive, 1 My Drive" → `roleOptions` cập nhật theo quy tắc §4.
+- **Bulk (FEAT-032):** nhận `isSharedDrive` sẵn từ kết quả quét, không cần gọi lại detect.
+- Đối tượng = "Bất kỳ ai có link" → ẩn ô email, hint "Ai có link sẽ truy cập được với vai trò đã chọn".
+- Mặc định Đối tượng = **Người dùng cụ thể** — *cần xác nhận*.
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/components/apps-script/SetPermissionsForm.tsx` | Bỏ chọn tay loại Drive; tự `detectDriveTypes` (manual) / nhận `presetItems` (bulk); `roleOptions` theo §4 + banner lẫn lộn; Select "Đối tượng"; ẩn email khi `anyone`; fix typo |
+| `src/types/index.ts` | `SetPermissionsParams`: `role` += `fileOrganizer\|organizer`, += `scope`; `AppsScriptAction` += `detectDriveTypes`; type `DetectDriveTypeResult` |
+| `docs/FEAT-030-apps-script.gs` | Thêm `detectDriveTypes`; enrich `scanFolders` (thêm `driveId`); viết lại `setPermissions` (1 code path + validate) |
+| `supabase/functions/google-apps-script-proxy/index.ts` | Thêm `'detectDriveTypes'` vào `ALLOWED_ACTIONS` |
+
+### 7. Schema / SQL changes
+Không cần.
+
+### 8. API / Integration changes
+- **Apps Script Deploy lại** (Manage deployments → New version) sau khi sửa `.gs`.
+- **Edge Function:** redeploy sau khi thêm action `detectDriveTypes` vào `ALLOWED_ACTIONS`.
+- Yêu cầu **Advanced Drive Service** đã bật (đã bật sẵn cho FEAT-030).
+
+### 9. Test Plan
+1. Tab "Cấp quyền", dán 1 ID folder Shared Drive → app hiện "Phát hiện: 1 Shared Drive", dropdown 5 role; dán 1 ID My Drive → 3 role.
+2. Dán lẫn lộn (1 My + 1 Shared) → dropdown chỉ 3 role chung + banner cảnh báo.
+3. Cấp `fileOrganizer` cho folder Shared Drive → verify quyền "Người quản lý nội dung".
+4. Đối tượng = "Bất kỳ ai có link" + reader → verify "Quyền truy cập chung" = "Bất kỳ ai có đường liên kết / Người xem"; mở ẩn danh xem được.
+5. (Lưới an toàn) Gửi thẳng `role=organizer` cho item My Drive → item đó trả lỗi rõ ràng, item Shared Drive khác vẫn thành công.
+6. Không còn "Ngườii". Build pass.
+
+### 10. Rollout Plan
+1. Merge FE + type.
+2. Cập nhật `FEAT-030-apps-script.gs` → **Deploy New version**.
+3. Thêm action vào Edge Function → **redeploy** Edge Function.
+4. (URL `/exec` giữ nguyên, không cần đổi env.)
+
+### 11. Notes
+- **Gộp BUG-037** (fix typo "Ngườii").
+- **Cần xác nhận**: (a) Đối tượng mặc định = Người dùng cụ thể? (b) `sendNotificationEmail` = false hay true?
+- **Rủi ro 1 (ràng buộc tổ chức)**: Workspace `era.com.vn` có thể chặn chia sẻ `anyone` ra ngoài → `type: 'anyone'` lỗi policy dù code đúng → try/catch báo rõ; phải nhờ admin domain.
+- **Rủi ro 2**: `detectDriveTypes` tốn 1 API call/lô item ở luồng manual (debounce để đỡ gọi nhiều). Luồng bulk không tốn (dùng data quét sẵn).
+- **Rollback**: revert FE + type + Edge Function action; khôi phục `setPermissions`/`scanFolders` cũ trong `.gs`; Deploy lại version cũ.
+
+---
+
+## FEAT-032: Bảng kết quả Quét folder — Search, Lọc theo cấp, Chọn nhiều + Cấp quyền hàng loạt
+
+- **Đề xuất**: 2026-06-26
+- **Status**: `done` (2026-06-26)
+- **Priority**: `medium`
+- **Phụ thuộc**: **FEAT-031** (bulk "Cấp quyền" tái dùng `SetPermissionsForm` đã tự nhận diện loại Drive + 5 role + đối tượng)
+
+### 1. Mô tả feature
+Nâng bảng **"Kết quả"** của tác vụ **Quét folder** từ bảng tĩnh thành bảng tương tác:
+1. **Search** — ô tìm kiếm lọc theo `name` / `path` (không phân biệt hoa thường).
+2. **Lọc theo cấp folder** — chọn các `depth` muốn hiển thị (vd chỉ cấp 1, hoặc cấp 1+2).
+3. **Badge + lọc loại Drive** — mỗi dòng hiện badge 🟦 My Drive / 🟩 Shared Drive (từ `driveId` mà `scanFolders` trả về); bộ lọc loại Drive (Tất cả / My Drive / Shared Drive) để admin gom riêng 1 loại trước khi cấp quyền role cao.
+4. **Chọn nhiều dòng** — checkbox từng dòng + "chọn tất cả" (theo kết quả đang lọc).
+5. **Cấp quyền hàng loạt** — từ các folder đã chọn (kèm `isSharedDrive` từng folder), mở form Cấp quyền với `itemIds` điền sẵn → cấp quyền cho nhiều folder cùng lúc.
+
+### 2. Motivation / Why
+- Sau khi quét ra hàng chục folder (vd 18 bản ghi), admin hiện phải **copy thủ công từng ID** sang tab "Cấp quyền" → chậm và dễ sai.
+- Nhu cầu thực tế: quét → lọc đúng nhóm folder cần → chọn → cấp quyền 1 phát. Đây là luồng chính của trang Drive Admin.
+
+### 3. Scope
+
+**In scope:**
+- Component bảng kết quả riêng cho `scanFolders` (search + lọc depth + **lọc/badge loại Drive** + chọn nhiều).
+- Bulk action **Cấp quyền** cho các folder đã chọn (tái dùng `SetPermissionsForm` qua Modal, truyền `presetItems` = `[{id, isSharedDrive}]` → form tự suy role + xử lý lẫn lộn theo FEAT-031 §4, không cần gọi lại `detectDriveTypes`).
+- Tái dùng UI có sẵn: `TextInput` (search), `FilterChips`/`Select` (lọc depth + loại Drive), `Badge` (loại Drive), `BulkActionsBar`, `Modal`.
+
+**Out of scope:**
+- Bulk **Di chuyển / Xóa / Sao chép** hàng loạt (chỉ làm Cấp quyền trong plan này; các action khác để plan sau).
+- Phân trang server-side (kết quả quét là mảng in-memory, lọc/search client-side là đủ).
+- Lưu/đánh dấu folder giữa các lần quét (selection reset khi quét lại — chấp nhận).
+
+### 4. Technical Design
+- Type `ScanFolderResult` (`id, name, path, depth, url, driveId?, isSharedDrive`) trong `types/index.ts` (FEAT-031 đã enrich `scanFolders` trả `driveId`).
+- **`ScanResultsTable.tsx` (mới)**:
+  - Props: `data: ScanFolderResult[]`, `onBulkSetPermissions: (items: {id: string; isSharedDrive: boolean}[]) => void`.
+  - State: `search`, `depthFilter: Set<number>`, `driveTypeFilter: 'all'|'my'|'shared'`, `selectedIds: Set<string>`.
+  - Derived: `availableDepths`; `filteredRows` = lọc theo search (name/path) + depth + loại Drive.
+  - Cột **"Loại"** hiện `Badge` My Drive / Shared Drive theo `isSharedDrive`.
+  - "Chọn tất cả" thao tác trên `filteredRows`.
+  - `BulkActionsBar` khi `selectedIds.size > 0`, nút **"Cấp quyền"** → `onBulkSetPermissions` (gửi kèm `isSharedDrive` từng item đã chọn).
+- **`AppsScriptAdminPage.tsx`**:
+  - Khi `selectedAction === 'scanFolders'` và result là mảng folder → render `ScanResultsTable`. Action khác vẫn dùng `ResultPanel`.
+  - State `bulkPermItems: {id; isSharedDrive}[] | null` → mở `Modal` chứa `SetPermissionsForm presetItems={bulkPermItems}`.
+  - Submit → `handleAction('setPermissions', {...})` (qua `ConfirmationModal`).
+- **`SetPermissionsForm.tsx`** (FEAT-031): prop `presetItems?: {id; isSharedDrive}[]`. Khi có: ẩn textarea item, dùng các id này, **suy role + banner lẫn lộn từ `isSharedDrive`** (không gọi `detectDriveTypes`), hiện "Áp dụng cho N folder đã chọn".
+
+### 5. UI/UX
+```
+Kết quả (Hiển thị 8/18 bản ghi)
+[🔍 Tìm theo tên/đường dẫn...]   Cấp: [×1] [×2]   Loại: [Tất cả ▾]
+┌─[✔]─┬─ name ─────────┬─ path ──────┬─ depth ─┬─ Loại ─────────┬─ url ─┐
+│ [✔] │ Báo cáo Team A │ .../Team A  │   1     │ 🟩 Shared Drive │  🔗   │
+│ [ ] │ Báo cáo Team B │ .../Team B  │   1     │ 🟦 My Drive     │  🔗   │
+└─────┴────────────────┴─────────────┴─────────┴────────────────┴───────┘
+        ⌊ (BulkActionsBar nổi dưới) [3] đã chọn | [Cấp quyền] ✕ ⌋
+```
+- Modal "Cấp quyền hàng loạt": note "Áp dụng cho 3 folder đã chọn" + (Đối tượng, email, role từ FEAT-031). Nếu 3 folder lẫn 2 loại Drive → form chỉ cho 3 role chung + banner cảnh báo (theo FEAT-031 §4).
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/components/apps-script/ScanResultsTable.tsx` | **Mới** — bảng tương tác: search, lọc depth, lọc/badge loại Drive, chọn nhiều, BulkActionsBar |
+| `src/pages/AppsScriptAdminPage.tsx` | Render `ScanResultsTable` cho `scanFolders`; state `bulkPermItems`; Modal cấp quyền hàng loạt |
+| `src/components/apps-script/SetPermissionsForm.tsx` | Thêm prop `presetItems?` (gồm `isSharedDrive`) — ẩn textarea item, suy role từ isSharedDrive |
+| `src/types/index.ts` | Type `ScanFolderResult` (gồm `driveId`/`isSharedDrive`) |
+
+### 7. Schema / SQL changes
+Không cần.
+
+### 8. API / Integration changes
+Không đổi Apps Script/Edge Function ở FEAT-032 (đã làm ở FEAT-031). Bulk cấp quyền gọi lại `setPermissions` với mảng `itemIds`; loại Drive lấy từ `driveId` mà `scanFolders` (FEAT-031) đã trả.
+
+### 9. Test Plan
+1. Quét folder ra nhiều cấp → bảng hiện search + lọc cấp + lọc loại Drive + cột Loại (badge) + checkbox.
+2. Gõ search → chỉ hiện dòng khớp name/path. Xóa search → hiện lại đủ.
+3. Lọc "cấp 1" → chỉ hiện depth=1. Chọn thêm "cấp 2" → hiện cả 2.
+4. Lọc Loại = Shared Drive → chỉ hiện folder Shared Drive.
+5. "Chọn tất cả" khi đang lọc → chỉ chọn các dòng đang hiển thị.
+6. Chọn 3 folder cùng Shared Drive → BulkActionsBar "[3] đã chọn" → "Cấp quyền" → Modal note "Áp dụng cho 3 folder", dropdown đủ 5 role.
+7. Chọn folder lẫn 2 loại Drive → Modal chỉ 3 role chung + banner cảnh báo.
+8. Nhập email + role → Cấp quyền → ConfirmationModal → thành công → log đúng itemIds.
+9. Build pass.
+
+### 10. Rollout Plan
+- Pure frontend, deploy chung với FEAT-031. Không cần đổi Apps Script/env.
+
+### 11. Notes
+- **Phụ thuộc FEAT-031** — nên làm FEAT-031 trước (hoặc cùng lúc) vì bulk dùng chung `SetPermissionsForm`.
+- **Rủi ro**: selection lưu theo `id` folder; nếu quét lại data đổi → reset selection (dùng `useEffect` reset khi `data` thay đổi).
+- **Mở rộng tương lai**: thêm bulk Move/Delete vào cùng `BulkActionsBar`.
+- **Rollback**: revert `AppsScriptAdminPage`, xóa `ScanResultsTable`, revert prop `presetItemIds`.
 
 ---
 

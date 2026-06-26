@@ -7,6 +7,29 @@
 
 ## 2026-06-26
 
+### 83. Feature FEAT-031 + FEAT-032: Cấp quyền Drive linh hoạt + Bảng kết quả Quét folder tương tác
+
+**Mô tả:** Mở rộng tab **Cấp quyền** của Google Drive Admin (FEAT-030) thành cấp quyền linh hoạt (tự nhận diện loại Drive, đủ 5 role, đối tượng email/anyone-with-link) và nâng bảng **Kết quả** của tác vụ **Quét folder** thành bảng tương tác (search, lọc theo cấp & loại Drive, chọn nhiều, cấp quyền hàng loạt). Gộp fix BUG-037 (typo "Ngườii" → "Người").
+
+**Files tạo:**
+- `webapp/src/components/apps-script/ScanResultsTable.tsx` (FEAT-032): Bảng tương tác — tìm kiếm theo tên/đường dẫn, lọc theo cấp độ sâu (chips) và loại Drive (Tất cả/My/Shared), chọn nhiều dòng + select-all, `BulkActionsBar` với hành động "Cấp quyền".
+
+**Files sửa:**
+- `webapp/src/types/index.ts`: Thêm `DriveRole` (5 role), `DriveScope` (user/anyone), `ScanFolderResult` (+ `driveId?`, `isSharedDrive`), `DetectDriveTypeResult`, `DetectDriveTypesParams`; `AppsScriptAction` thêm `detectDriveTypes`; `SetPermissionsParams.role` mở rộng + thêm `scope`.
+- `webapp/docs/FEAT-030-apps-script.gs`: Thêm action `detectDriveTypes`; `scanFolders` nhận diện loại Drive 1 lần ở gốc và gắn `driveId`/`isSharedDrive` cho mọi kết quả; viết lại `setPermissions` thành **1 code path** qua `Drive.Permissions.create` (`supportsAllDrives: true`) hỗ trợ user/anyone + validate role chỉ-Shared (`fileOrganizer`/`organizer`).
+- `webapp/supabase/functions/google-apps-script-proxy/index.ts`: Thêm `detectDriveTypes` vào `ALLOWED_ACTIONS`.
+- `webapp/src/components/apps-script/SetPermissionsForm.tsx` (FEAT-031 + BUG-037): Tự phát hiện loại Drive khi rời ô item (gọi `detectDriveTypes`); Select **Đối tượng** (user/anyone) — ẩn email khi anyone; role options suy theo loại Drive (3 role chung / 5 role khi toàn Shared Drive); xử lý lẫn lộn 2 loại Drive (banner cảnh báo + giới hạn 3 role chung); prop `presetItems` cho luồng bulk-from-scan; sửa typo "Ngườii" → "Người".
+- `webapp/src/pages/AppsScriptAdminPage.tsx` (FEAT-032): Render `ScanResultsTable` cho kết quả `scanFolders`; helper `detectDriveTypes`; Modal "Cấp quyền hàng loạt" tái dùng `SetPermissionsForm` với `presetItems`.
+
+**Kết quả:**
+- `npm run build` pass (tsc + vite).
+
+**⚠️ Cần deploy thủ công sau khi merge:**
+1. **Apps Script**: dán lại `docs/FEAT-030-apps-script.gs` vào Code.gs → **Deploy → New version** (URL `/exec` giữ nguyên).
+2. **Edge Function**: `supabase functions deploy google-apps-script-proxy` để cập nhật `ALLOWED_ACTIONS`.
+
+---
+
 ### 82. Feature FEAT-030: Google Apps Script Admin Panel — Drive Operations
 
 **Mô tả:** Tab admin riêng biệt để quản lý Google Drive thông qua Google Apps Script Web App, không phụ thuộc ngôn ngữ lập trình ở tầng Apps Script. Chỉ user có role `admin` mới truy cập được.

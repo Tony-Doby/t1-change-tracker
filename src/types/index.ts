@@ -370,6 +370,13 @@ export type AppsScriptAction =
   | 'moveItem'
   | 'removePermission'
   | 'deleteItem'
+  | 'detectDriveTypes'
+
+// FEAT-031: Drive permission roles. fileOrganizer/organizer chỉ hợp lệ cho item trong Shared Drive.
+export type DriveRole = 'reader' | 'commenter' | 'writer' | 'fileOrganizer' | 'organizer'
+
+// FEAT-031: Đối tượng được cấp quyền. 'anyone' = bất kỳ ai có link (allowFileDiscovery=false).
+export type DriveScope = 'user' | 'anyone'
 
 export interface AppsScriptLog {
   id: string
@@ -389,10 +396,34 @@ export interface ScanFoldersParams {
   pattern?: string
 }
 
+// FEAT-031/032: Một folder trả về từ scanFolders. driveId có khi item nằm trong Shared Drive.
+export interface ScanFolderResult {
+  id: string
+  name: string
+  path: string
+  depth: number
+  url: string
+  driveId?: string | null
+  isSharedDrive: boolean
+}
+
+// FEAT-031: Kết quả phát hiện loại Drive cho từng item.
+export interface DetectDriveTypeResult {
+  id: string
+  name?: string
+  isSharedDrive: boolean
+  error?: string
+}
+
+export interface DetectDriveTypesParams {
+  itemIds: string[]
+}
+
 export interface SetPermissionsParams {
   itemIds: string[]
   emails: string[]
-  role: 'reader' | 'commenter' | 'writer'
+  role: DriveRole
+  scope: DriveScope
 }
 
 export interface CreateFolderParams {
@@ -434,6 +465,7 @@ export type AppsScriptParams =
   | MoveItemParams
   | RemovePermissionParams
   | DeleteItemParams
+  | DetectDriveTypesParams
 
 export interface AppsScriptResponse<T = unknown> {
   success: boolean
