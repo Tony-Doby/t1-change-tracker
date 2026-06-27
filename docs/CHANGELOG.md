@@ -14,6 +14,26 @@
 
 ## 2026-06-27
 
+### 92. Feature FEAT-038: Refactor IA sidebar — gom nhóm + page-tabs
+
+**Mô tả:** Gom 12 mục sidebar phẳng thành **3 nhóm** (Agent Panel / Tools / Settings); mỗi nhóm hiện tính năng con dạng **page-tabs** ở đầu nội dung. Nhãn sidebar đổi sang tiếng Anh. Theo mockup `docs/mockup-ia-redesign.html` đã duyệt.
+
+**Kiến trúc (giữ nguyên route trong `App.tsx`):**
+- `src/config/navigation.ts` (mới): `NAV_GROUPS` + hàm thuần `resolveActiveNav(pathname, role)` → `{ visibleGroups, activeGroupId, activeTabPath }`. Tab `/` khớp tuyệt đối; tab khác khớp prefix → tự phủ detail route (`/agents/:id`, `/requests/:id`).
+- `src/ui/navigation/PageTabs.tsx` (mới): thanh tab tái dùng **điều hướng bằng route** (`<Link>`), style đồng bộ `DriveManagerTabs`; `null` khi ≤1 tab.
+- `src/components/Layout.tsx`: bỏ `navItems` phẳng; sidebar render 3 nhóm (Link tới tab đầu hợp role); page-tabs trên `{children}`; badge `/requests` inject từ `requestCount`; mobile bottom bar map theo nhóm.
+
+**Phân quyền:** nhóm/tab tự ẩn theo role — Settings chỉ admin; Tools với operator chỉ có Excel+Import, với viewer chỉ Excel.
+
+**Files mới/sửa:**
+- `src/config/navigation.ts`, `src/config/navigation.test.ts` (mới)
+- `src/ui/navigation/PageTabs.tsx` (mới)
+- `src/components/Layout.tsx` (viết lại phần nav)
+
+**Kiểm thử:** `npm run lint` sạch · `npm run build` OK · `npm run test` **97/97** (thêm 10 test cho `resolveActiveNav`).
+
+---
+
 ### 91. Bug fix BUG-043: Thanh sticky "đã chọn" trong suốt → làm đục nền
 
 **Mô tả:** Cuộn bảng thì dòng phía sau lộ xuyên qua thanh sticky "đã chọn" (regression của BUG-042).

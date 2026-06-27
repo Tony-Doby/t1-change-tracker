@@ -4,37 +4,19 @@ import { useAuth } from '../hooks/useAuth'
 import { useRealtime } from '../hooks/useRealtime'
 import { useRequestCountQuery } from '../hooks/queries/useRequestCount'
 import {
-  LayoutDashboard,
   Users,
-  ClipboardList,
-  Activity,
-  Mail,
-  Upload,
-  Trash2,
-  Calendar,
   ChevronDown,
   Menu,
   X,
   Search,
-  Award,
-  Building2,
-  FileSpreadsheet,
   PanelLeft,
-  HardDrive,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import type { UserRole } from '../types'
 import CommandPalette from './CommandPalette'
 import NotificationDropdown from './NotificationDropdown'
 import MobileNavigationBar from '../ui/navigation/MobileNavigationBar'
-
-interface NavItem {
-  label: string
-  icon: React.ElementType
-  path: string
-  roles: UserRole[]
-  badge?: number
-}
+import PageTabs from '../ui/navigation/PageTabs'
+import { resolveActiveNav } from '../config/navigation'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth()
@@ -54,24 +36,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const role = user?.role ?? 'viewer'
 
-  const navItems: NavItem[] = [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/', roles: ['admin', 'operator', 'viewer'] },
-    { label: 'Agents', icon: Users, path: '/agents', roles: ['admin', 'operator', 'viewer'] },
-    { label: 'Requests', icon: ClipboardList, path: '/requests', roles: ['admin', 'operator', 'viewer'], badge: requestCount },
-    { label: 'Activity', icon: Activity, path: '/activity', roles: ['admin', 'operator', 'viewer'] },
-    { label: 'Email', icon: Mail, path: '/templates', roles: ['admin'] },
-    { label: 'Google Drive', icon: HardDrive, path: '/admin/google-drive', roles: ['admin'] },
-    { label: 'Upload', icon: Upload, path: '/upload', roles: ['admin', 'operator'] },
-    { label: 'Trash', icon: Trash2, path: '/trash', roles: ['admin'] },
-    { label: 'Holidays', icon: Calendar, path: '/holidays', roles: ['admin'] },
-    { label: 'Ranks', icon: Award, path: '/ranks', roles: ['admin'] },
-    { label: 'Divisions', icon: Building2, path: '/divisions', roles: ['admin'] },
-    { label: 'Excel', icon: FileSpreadsheet, path: '/excel-generator', roles: ['admin', 'operator', 'viewer'] },
-  ]
+  const { visibleGroups, activeGroupId, activeTabPath } = resolveActiveNav(location.pathname, role)
 
-  const visibleNav = navItems.filter((n) => n.roles.includes(role))
+  // Badge động (vd Requests) — inject từ runtime vào tab/nhóm tương ứng.
+  const badgeForPath = (path: string): number | undefined =>
+    path === '/requests' ? requestCount : undefined
+  const groupBadge = (g: (typeof visibleGroups)[number]): number =>
+    g.tabs.reduce((sum, t) => sum + (badgeForPath(t.path) ?? 0), 0)
 
-  const isActive = (path: string) => location.pathname === path
+  const activeGroup = visibleGroups.find((g) => g.id === activeGroupId)
+  const pageTabs =
+    activeGroup?.tabs.map((t) => ({
+      label: t.label,
+      icon: t.icon,
+      path: t.path,
+      badge: badgeForPath(t.path),
+    })) ?? []
 
   return (
     <div className="flex h-screen bg-bg-tertiary">
@@ -110,31 +90,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-          {visibleNav.map((item) => {
-            const active = isActive(item.path)
+          {visibleGroups.map((group) => {
+            const active = group.id === activeGroupId
+            const badge = groupBadge(group)
+            const Icon = group.icon
             return (
               <Link
-                key={item.path}
-                to={item.path}
+                key={group.id}
+                to={group.tabs[0].path}
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-colors ${
                   active
                     ? 'bg-accent-subtle text-accent font-medium'
                     : 'text-text-secondary hover:bg-bg-quaternary'
                 }`}
-                title={sidebarCollapsed ? item.label : undefined}
+                title={sidebarCollapsed ? group.label : undefined}
               >
-                <item.icon className="w-5 h-5 shrink-0" aria-hidden="true" />
+                <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
                 {!sidebarCollapsed && (
                   <>
-                    <span className="flex-1 truncate">{item.label}</span>
-                    {item.badge !== undefined && (
-                      <span
-                        className={`text-xs font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
-                          item.badge > 0 ? 'bg-danger text-white' : 'bg-gray-6 text-white'
-                        }`}
-                      >
-                        {item.badge}
+                    <span className="flex-1 truncate">{group.label}</span>
+                    {badge > 0 && (
+                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full shrink-0 bg-danger text-white">
+                        {badge}
                       </span>
                     )}
                   </>
@@ -228,19 +206,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <CommandPalette />
         {/* Content */}
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10">
-          <div className="max-w-7xl mx-auto">{children}</div>
+          <div className="max-w-7xl mx-auto">
+            <PageTabs tabs={pageTabs} activePath={activeTabPath} />
+            {children}
+          </div>
         </main>
       </div>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav — theo nhóm sidebar */}
       <div className="lg:hidden">
         <MobileNavigationBar
-          items={visibleNav.slice(0, 5).map((item) => ({
-            label: item.label,
-            icon: <item.icon className="w-5 h-5" />,
-            active: isActive(item.path),
-            onClick: () => navigate(item.path),
-          }))}
+          items={visibleGroups.map((group) => {
+            const Icon = group.icon
+            return {
+              label: group.label,
+              icon: <Icon className="w-5 h-5" />,
+              active: group.id === activeGroupId,
+              onClick: () => navigate(group.tabs[0].path),
+            }
+          })}
         />
       </div>
     </div>

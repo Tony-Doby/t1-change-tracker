@@ -4327,3 +4327,62 @@ Không cần. Không thay đổi Apps Script hay Edge Function.
 - **State persistence:** Khi chuyển tab, state drill-down của tab cũ có thể giữ lại để user quay lại đúng chỗ. Ví dụ: đang xem cây X → sang tab Template → quay lại Cây Drive vẫn ở cây X.
 - **Mobile:** Full-page tabs dễ responsive hơn sidebar 2 cột.
 - **Rollback:** Revert `DriveManagerPage.tsx`, xóa các component tab mới. Không ảnh hưởng DB.
+
+---
+
+## FEAT-038: Refactor IA sidebar — Gom nhóm + Page-tabs
+
+- **Đề xuất**: 2026-06-27
+- **Status**: `done` (2026-06-27)
+- **Priority**: `medium`
+
+#### 1. Mô tả feature
+Gom **12 mục sidebar phẳng** thành **3 nhóm** (sidebar = nhóm); mỗi nhóm hiển thị các tính năng con dạng **page-tabs** ở đầu nội dung. Nhãn sidebar đổi sang **tiếng Anh**. User đã duyệt mockup `docs/mockup-ia-redesign.html`.
+
+#### 2. Motivation / Why
+Sidebar 12 dòng khó quét, trộn lẫn nghiệp vụ (agent) với công cụ và cấu hình. Gom nhóm giúp điều hướng gọn, phân tầng rõ theo vai trò.
+
+#### 3. Scope
+**In scope:** lớp điều hướng (config nhóm, page-tabs, sidebar, mobile bar).
+**Out of scope:** route path (giữ nguyên `App.tsx`), nội dung/logic từng page, tab nội-trang (DriveManager/AgentDetail), backend/migration/Apps Script.
+
+#### 4. Technical Design
+- `src/config/navigation.ts` (mới): `NAV_GROUPS` (3 nhóm) + hàm thuần `resolveActiveNav(pathname, role)` → `{ visibleGroups, activeGroupId, activeTabPath }`. Khớp active: tab `/` chỉ khớp tuyệt đối; tab khác khớp prefix thư mục con → tự phủ detail route (`/agents/:id`, `/requests/:id`).
+- `src/ui/navigation/PageTabs.tsx` (mới): thanh tab tái dùng **điều hướng bằng route** (`<Link>`), style đồng bộ `DriveManagerTabs`. Trả `null` khi ≤1 tab.
+- `src/components/Layout.tsx`: bỏ `navItems` phẳng → dùng `resolveActiveNav`; sidebar render 3 nhóm (Link tới tab đầu hợp role); page-tabs trên `{children}`; badge `/requests` inject từ `requestCount`; mobile bottom bar map theo nhóm.
+
+#### 5. UI/UX
+| Nhóm (EN) | Page-tabs |
+|---|---|
+| **Agent Panel** | Dashboard / Agents / Requests(badge) / Activity |
+| **Tools** | Excel / Google Drive 🔒 / Email Templates 🔒 / Import ⚙ |
+| **Settings** 🔒 | Ranks / Divisions / Holidays / Trash |
+
+Nhóm/tab tự ẩn theo role (group hiện nếu có ≥1 tab hợp role).
+
+#### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/config/navigation.ts` | **Mới** — `NAV_GROUPS` + `resolveActiveNav` + `tabMatchesPath` |
+| `src/config/navigation.test.ts` | **Mới** — unit test hàm thuần (detail route, role filter, không đột biến) |
+| `src/ui/navigation/PageTabs.tsx` | **Mới** — page-tabs route-driven |
+| `src/components/Layout.tsx` | Viết lại nav: sidebar nhóm + page-tabs + mobile bar theo nhóm |
+
+#### 7. Schema / SQL changes
+Không.
+
+#### 8. API / Integration changes
+Không.
+
+#### 9. Test Plan
+- Unit (`navigation.test.ts`): `/`→Dashboard, `/agents/123`→Agents, `/requests/9`→Requests, `/admin/google-drive`→Tools/Drive; role lọc admin/operator/viewer; không đột biến `NAV_GROUPS`.
+- Manual: từng vai trò → đúng số nhóm; click nhóm mở tab đầu; chuyển tab đổi route; deep-link `/divisions`, `/agents/<id>` đúng nhóm+tab active; badge Requests realtime; thu gọn sidebar; mobile bottom bar theo nhóm.
+- `npm run lint` + `npm run build` + `npm run test` (97/97) xanh.
+
+#### 10. Rollout Plan
+Pure frontend, deploy chung. Không đổi env/Apps Script/DB.
+
+#### 11. Notes
+- `NAV_GROUPS` là **nguồn điều hướng duy nhất** — thêm/sửa tính năng chỉ cần sửa file này (route vẫn khai báo riêng ở `App.tsx`).
+- `PageTabs` (route-driven) khác `DriveManagerTabs` (state nội-trang) — đừng lẫn.
+- Rollback: revert `Layout.tsx`, xóa `config/navigation.*` + `PageTabs.tsx`.

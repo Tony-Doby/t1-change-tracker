@@ -115,6 +115,13 @@
   - Đã đổi `{{agentCode}}` → `{{staffId}}`.
 - Nếu conflict giữa UI-DESIGN.md và code thực tế → **ưu tiên code thực tế + CHANGELOG.md**.
 
+### 3.4 Điều hướng: `NAV_GROUPS` là nguồn duy nhất + 2 loại page-tabs (FEAT-038)
+- Sidebar gom **3 nhóm** (Agent Panel / Tools / Settings); tính năng con hiện dạng **page-tabs** ở đầu nội dung. Cấu trúc khai báo ở **`src/config/navigation.ts`** (`NAV_GROUPS`) — **đây là nguồn điều hướng duy nhất**. Thêm/sửa mục sidebar → sửa file này; route vẫn khai báo riêng ở `App.tsx` (2 nơi phải khớp path).
+- Active state do hàm thuần `resolveActiveNav(pathname, role)` quyết định: tab `/` khớp **tuyệt đối**; tab khác khớp **prefix thư mục con** (`pathname.startsWith(path + '/')`) → tự phủ detail route như `/agents/:id`, `/requests/:id`. Có unit test `navigation.test.ts`.
+- Phân quyền: nhóm tự ẩn nếu không có tab nào hợp role; tab lọc riêng theo role. Badge động (vd `/requests`) **không** để trong config — inject từ runtime ở `Layout.tsx`.
+- **Hai loại tab, đừng lẫn:** `PageTabs` (`src/ui/navigation/PageTabs.tsx`) điều hướng bằng **route** (`<Link>`, active theo URL) — dùng cho điều hướng cấp nhóm. `DriveManagerTabs`/tab trong `AgentDetailPage` là tab **nội-trang theo state** (`useState`) — không đổi URL. Chọn đúng loại theo nhu cầu.
+- Mobile bottom bar map theo **nhóm** (không phải từng tính năng).
+
 ---
 
 ## 4. Data & Import Constraints
