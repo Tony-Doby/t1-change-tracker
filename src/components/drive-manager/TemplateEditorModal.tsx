@@ -20,7 +20,7 @@ const defaultTemplateRoot: DriveTemplateFolder = {
   name: 'A0 - Báo cáo',
   permissions: [
     { email: 'hos@era.com.vn', role: 'reader' },
-    { email: 'huu.tran@era.com.vn', role: 'organizer' },
+    { email: 'huu.tran@era.com.vn', role: 'fileOrganizer' },
   ],
   children: [
     {
@@ -231,6 +231,13 @@ export default function TemplateEditorModal({
                         ))}
                       </div>
                     )}
+
+                    {/* BUG-041: Giải thích giới hạn role của Google cho folder con. */}
+                    <p className="text-xs text-text-tertiary">
+                      Quyền tối đa cho folder là <strong>Người quản lý nội dung</strong>. Vai trò{' '}
+                      <strong>Người quản lý</strong> chỉ gán được ở cấp Shared Drive (cả ổ), không gán cho
+                      folder con — đây là giới hạn của Google Drive.
+                    </p>
                   </div>
                 </div>
 

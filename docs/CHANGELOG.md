@@ -14,6 +14,32 @@
 
 ## 2026-06-27
 
+### 89. Bug fix BUG-041: Quyền template lệch Shared Drive — bỏ `organizer` chọn được + nổi lỗi áp quyền
+
+**Mô tả:** Quyền trong app lệch với Shared Drive; không set được "Người quản lý" (`organizer`), mức cao nhất chỉ "Người quản lý nội dung" (`fileOrganizer`).
+
+**Root cause:**
+- **Giới hạn Google (không phải bug):** `organizer` chỉ gán được ở cấp Shared Drive (cả ổ), KHÔNG gán được cho folder/file con — API lỗi `Organizer role is only valid for shared drives`. Mức tối đa cho item con là `fileOrganizer`.
+- **UX app:** app vẫn cho chọn `organizer`; khi áp lên folder con thì Google từ chối nhưng lỗi bị nuốt (chỉ ghi `permissionsApplied[].error`), app vẫn báo "thành công" → quyền hiển thị lệch quyền thật.
+
+**Giải pháp (A + B — user duyệt):**
+- **A:** Bỏ `'organizer'` khỏi role chọn được ở editor template & form cấp quyền (giữ tối đa `fileOrganizer`), thêm dòng giải thích giới hạn của Google. Giữ `organizer` trong type + `roleLabel()` cho dữ liệu cũ.
+- **B:** Sau khi tạo folder từ template, đọc `permissionsApplied[].error`; nếu có quyền áp lỗi → toast **cảnh báo** liệt kê folder/email/role lỗi thay vì luôn báo thành công.
+
+**Files sửa:**
+- `src/components/drive-manager/template-editor-utils.ts`: `DRIVE_ROLES` bỏ `'organizer'`; `DEFAULT_TEMPLATE_ROOT` organizer→fileOrganizer.
+- `src/components/drive-manager/TemplateEditorModal.tsx`: default local organizer→fileOrganizer; thêm hint.
+- `src/components/apps-script/SetPermissionsForm.tsx`: `SHARED_ONLY_ROLES` = `['fileOrganizer']`; chỉnh hint/cảnh báo.
+- `src/types/index.ts`: thêm `AppliedPermission`, `CreatedFolderNode`, `CreateFolderTreeResult`.
+- `src/components/drive-manager/create-folder-tree-utils.ts` (mới) + `.test.ts` (mới, 6 test): pure `collectPermissionFailures` / `formatPermissionFailures`.
+- `src/pages/DriveManagerPage.tsx`: `executeAction` thêm `silentSuccess`; `handleCreateFromTemplate` báo warning khi có quyền áp lỗi.
+
+**Không cần sửa `.gs` / redeploy Apps Script** (bản BUG-040 đã trả `permissionsApplied[].error`).
+
+**Kiểm thử:** `npm run build` OK; `npm run test` **87/87 pass** (+6 test mới).
+
+---
+
 ### 88. Bug fix BUG-040: `createFolderTree` — "Template thiếu root folder" + chạy được Shared Drive
 
 **Mô tả:** Tạo folder theo template lỗi. Chuỗi log thật trong tab Lịch sử:

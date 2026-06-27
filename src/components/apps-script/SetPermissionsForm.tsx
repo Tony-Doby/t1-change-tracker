@@ -34,8 +34,11 @@ const scopeOptions = [
 
 // Role hợp lệ trên cả My Drive lẫn Shared Drive.
 const UNIVERSAL_ROLES: DriveRole[] = ['reader', 'commenter', 'writer']
-// Role chỉ áp dụng cho item trong Shared Drive.
-const SHARED_ONLY_ROLES: DriveRole[] = ['fileOrganizer', 'organizer']
+// BUG-041: Role chỉ áp dụng cho item trong Shared Drive. KHÔNG gồm 'organizer':
+// Google chỉ cho gán 'organizer' (Người quản lý) ở cấp Shared Drive, không gán cho
+// folder/file con (lỗi "Organizer role is only valid for shared drives"). Mức tối đa
+// cho item con là 'fileOrganizer' (Người quản lý nội dung).
+const SHARED_ONLY_ROLES: DriveRole[] = ['fileOrganizer']
 
 function roleLabel(role: DriveRole, composition: Composition): string {
   switch (role) {
@@ -192,7 +195,7 @@ export default function SetPermissionsForm({
       {composition === 'mixed' && (
         <div className="rounded-sm border border-warning/30 bg-warning-subtle px-3 py-2 text-sm text-warning">
           Danh sách có cả My Drive và Shared Drive. Chỉ các quyền dùng chung (xem / nhận xét / chỉnh sửa)
-          khả dụng. Để cấp quyền quản lý, hãy tách riêng các item Shared Drive.
+          khả dụng. Để cấp quyền quản lý nội dung, hãy tách riêng các item Shared Drive.
         </div>
       )}
 
@@ -226,8 +229,8 @@ export default function SetPermissionsForm({
         onChange={(e) => setSelectedRole(e.target.value as DriveRole)}
         hint={
           composition === 'allShared'
-            ? 'Item Shared Drive: có thêm quyền quản lý nội dung / quản lý.'
-            : 'Có thêm quyền quản lý khi toàn bộ item nằm trong Shared Drive.'
+            ? 'Item Shared Drive: có thêm quyền quản lý nội dung (mức tối đa cho folder con).'
+            : 'Có thêm quyền quản lý nội dung khi toàn bộ item nằm trong Shared Drive.'
         }
       />
 

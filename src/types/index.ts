@@ -502,6 +502,32 @@ export interface CreateFolderTreeParams {
   template: DriveTemplateFolder
 }
 
+// BUG-041: Kết quả áp 1 quyền cho 1 folder khi tạo cây từ template.
+// `error` có giá trị => quyền đó áp KHÔNG thành công (vd: gán organizer cho folder con
+// trong Shared Drive). Apps Script vẫn tạo folder thành công, lỗi quyền nằm ở đây.
+export interface AppliedPermission {
+  email?: string
+  scope?: DriveScope
+  role: DriveRole
+  error?: string
+}
+
+// BUG-041: 1 folder được tạo từ template.
+export interface CreatedFolderNode {
+  id: string
+  name: string
+  depth: number
+  parentFolderId: string
+  url: string
+  permissionsApplied: AppliedPermission[]
+}
+
+// BUG-041: Kết quả của action createFolderTree.
+export interface CreateFolderTreeResult {
+  parentFolderId: string
+  nodes: CreatedFolderNode[]
+}
+
 export type AppsScriptParams =
   | ScanFoldersParams
   | SetPermissionsParams

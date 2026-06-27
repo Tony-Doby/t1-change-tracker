@@ -42,11 +42,16 @@ import type {
   ScanFoldersParams,
   SetPermissionsParams,
   DriveTemplateFolder,
+  CreateFolderTreeResult,
 } from '../types'
 import type { PresetItem } from '../components/apps-script/SetPermissionsForm'
 import type { DriveTreeNode } from '../components/drive-manager/drive-tree-utils'
 import type { TreeAction } from '../components/drive-manager/DriveTreeTable'
 import { DEFAULT_TEMPLATE_ROOT } from '../components/drive-manager/template-editor-utils'
+import {
+  collectPermissionFailures,
+  formatPermissionFailures,
+} from '../components/drive-manager/create-folder-tree-utils'
 
 // FEAT-037: Drive Manager with full-page tabs, drill-down views, and breadcrumb navigation.
 export default function DriveManagerPage() {
@@ -103,10 +108,14 @@ export default function DriveManagerPage() {
     setActiveTab(tab)
   }
 
-  const executeAction = async (action: AppsScriptAction, params: AppsScriptParams) => {
+  const executeAction = async (
+    action: AppsScriptAction,
+    params: AppsScriptParams,
+    opts?: { silentSuccess?: boolean }
+  ) => {
     try {
       const res = await runAppsScript({ action, params })
-      show('Thao tác thành công', 'success')
+      if (!opts?.silentSuccess) show('Thao tác thành công', 'success')
       void refetchLogs()
       return res.data
     } catch (err: unknown) {
@@ -263,13 +272,29 @@ export default function DriveManagerPage() {
       show('Không tìm thấy template', 'error')
       return
     }
-    await executeAction('createFolderTree', {
-      parentFolderId: params.parentFolderId,
-      templateId: params.templateId,
-      template: template.root,
-    })
+    // BUG-041: createFolderTree tạo folder thành công nhưng từng quyền có thể áp lỗi
+    // (vd organizer cho folder con trong Shared Drive). Đọc kết quả để báo cho người
+    // dùng thay vì luôn báo "thành công" → hết tình trạng âm thầm lệch quyền.
+    const data = (await executeAction(
+      'createFolderTree',
+      {
+        parentFolderId: params.parentFolderId,
+        templateId: params.templateId,
+        template: template.root,
+      },
+      { silentSuccess: true }
+    )) as CreateFolderTreeResult | undefined
     setCreateFromTemplateNode(null)
-    show('Đã tạo folder từ template', 'success')
+
+    const failures = collectPermissionFailures(data)
+    if (failures.length > 0) {
+      show(
+        `Đã tạo folder nhưng ${failures.length} quyền áp KHÔNG thành công: ${formatPermissionFailures(failures)}`,
+        'warning'
+      )
+    } else {
+      show('Đã tạo folder từ template', 'success')
+    }
   }
 
   const handleCopyFolder = async (params: { sourceFolderId: string; destFolderId: string; newName: string }) => {

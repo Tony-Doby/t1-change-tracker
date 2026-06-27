@@ -287,7 +287,7 @@ it('returns ineligible for ASC rank regardless of case', () => {
 ### 8.3 Role `fileOrganizer`/`organizer` chỉ hợp lệ trên Shared Drive
 - 3 role chung cho cả 2 loại Drive: `reader`, `commenter`, `writer`.
 - 2 role chỉ-Shared: `fileOrganizer` (Người quản lý nội dung), `organizer` (Người quản lý). Áp lên item My Drive → API lỗi.
-- UI chỉ mở khóa 5 role khi **toàn bộ** item là Shared Drive; danh sách lẫn 2 loại → giới hạn 3 role chung + banner. Backend `setPermissions` cũng validate lại từng item.
+- ⚠️ **`organizer` còn bị giới hạn sâu hơn — xem 8.8.** App chỉ cho chọn tới `fileOrganizer` ở cấp folder; UI mở khóa role chỉ-Shared khi **toàn bộ** item là Shared Drive. Backend `setPermissions` cũng validate lại từng item.
 
 ### 8.4 "Bất kỳ ai có link" = `type: 'anyone'` + `allowFileDiscovery: false`
 - Cấp public-view-by-link: `Drive.Permissions.create({ type: 'anyone', role, allowFileDiscovery: false }, id, { supportsAllDrives: true })`.
@@ -312,3 +312,12 @@ it('returns ineligible for ASC rank regardless of case', () => {
 - Tạo folder trong cây phải dùng **Advanced Drive Service** `Drive.Files.create({ name, mimeType:'application/vnd.google-apps.folder', parents:[parentId] }, null, { supportsAllDrives: true })`, **KHÔNG** dùng `DriveApp.createFolder` (lỗi/hạn chế trên Shared Drive).
 - Không so sánh quyền kế thừa bằng `DriveApp.getPermissions` (lỗi trên Shared Drive). Drive tự kế thừa cha→con; áp lại quyền template qua `Drive.Permissions.create` là idempotent.
 - ⚠️ `createFolder` (action đơn) HIỆN VẪN dùng `DriveApp` → còn rủi ro Shared Drive tương tự (chưa fix, ngoài scope BUG-040).
+
+### 8.8 `organizer` KHÔNG gán được cho folder/file con trong Shared Drive (BUG-041)
+- **Giới hạn nền tảng Google (không phải bug code):** `organizer` (Người quản lý) chỉ gán được ở **cấp Shared Drive** (cả ổ, qua thành viên của ổ), **KHÔNG** gán được cho folder/file con bên trong. API lỗi: *"Organizer role is only valid for shared drives"*. Mức tối đa cho item con là `fileOrganizer` (Người quản lý nội dung) — đúng như dialog chia sẻ gốc của Google chỉ tới "Người quản lý nội dung".
+- App chỉ thao tác trên folder con (template tạo folder dưới 1 parent), nên `organizer` **không bao giờ áp được** → đã bỏ khỏi role chọn được:
+  - `template-editor-utils.ts` `DRIVE_ROLES` (không còn `organizer`).
+  - `SetPermissionsForm.tsx` `SHARED_ONLY_ROLES = ['fileOrganizer']`.
+  - Vẫn giữ `organizer` trong type `DriveRole` + `roleLabel()` để hiển thị template cũ đã lưu.
+- **Lỗi áp quyền không được nuốt im lặng:** `createFolderTree` trả `nodes[].permissionsApplied[].error` cho từng quyền áp hỏng. `DriveManagerPage.handleCreateFromTemplate` đọc qua pure helper `create-folder-tree-utils.ts` (`collectPermissionFailures`/`formatPermissionFailures`) → toast **warning** liệt kê quyền lỗi thay vì báo "thành công" giả. `executeAction` có cờ `silentSuccess` để bỏ toast success mặc định khi cần tự báo.
+- Nếu thực sự cần cấp **Manager toàn ổ chung** (phương án C, chưa làm): thêm action gán `organizer` với `fileId = ID Shared Drive` (gốc ổ), không phải folder con.

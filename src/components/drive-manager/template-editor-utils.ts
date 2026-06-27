@@ -1,18 +1,23 @@
 import type { DriveTemplateFolder, DriveRole } from '../../types'
 
+// BUG-041: KHÔNG liệt kê 'organizer' ở đây. Template chỉ tạo folder con bên trong
+// Drive, mà Google không cho gán 'organizer' (Người quản lý) cho folder/file con
+// trong Shared Drive — chỉ gán được ở cấp Shared Drive (lỗi API:
+// "Organizer role is only valid for shared drives"). Mức tối đa cho folder là
+// 'fileOrganizer' (Người quản lý nội dung). 'organizer' vẫn giữ trong type DriveRole
+// và roleLabel() để hiển thị dữ liệu template cũ.
 export const DRIVE_ROLES: DriveRole[] = [
   'reader',
   'commenter',
   'writer',
   'fileOrganizer',
-  'organizer',
 ]
 
 export const DEFAULT_TEMPLATE_ROOT: DriveTemplateFolder = {
   name: 'A0 - Báo cáo',
   permissions: [
     { email: 'hos@era.com.vn', role: 'reader' },
-    { email: 'huu.tran@era.com.vn', role: 'organizer' },
+    { email: 'huu.tran@era.com.vn', role: 'fileOrganizer' },
   ],
   children: [
     {

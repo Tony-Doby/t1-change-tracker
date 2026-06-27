@@ -67,6 +67,7 @@
 | 038 | Thanh "đã chọn" trong cây Drive thiếu nút "Tạo folder theo template" | fixed | 2026-06-27 | 2026-06-27 |
 | 039 | Không lưu được template Drive — DB còn cột `levels`, code dùng `root` + lỗi bị nuốt | fixed | 2026-06-27 | 2026-06-27 |
 | 040 | `createFolderTree` lỗi "Template thiếu root folder" + không chạy trên Shared Drive | fixed | 2026-06-27 | 2026-06-27 |
+| 041 | Quyền template lệch với Shared Drive — app cho chọn `organizer` (không gán được cho folder con) và nuốt lỗi áp quyền | fixed | 2026-06-27 | 2026-06-27 |
 
 ---
 
@@ -118,6 +119,63 @@ Không cần.
 - **`createFolder` (action đơn) vẫn dùng `DriveApp`** → còn rủi ro tương tự trên Shared Drive. Nằm ngoài scope BUG-040 (chưa có repro). Ghi nhận làm follow-up nếu cần.
 - Mỗi lần sửa `.gs` phải Deploy → Phiên bản mới mới có hiệu lực (KNOWLEDGE 8.1).
 - Rollback: revert `createFolderTree` về bản DriveApp + Deploy lại.
+
+---
+
+## BUG-041: Quyền template lệch với Shared Drive — app cho chọn `organizer` + nuốt lỗi áp quyền
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed` (2026-06-27)
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+Khi tạo folder từ template / cấp quyền trong Drive Manager:
+1. Quyền hiển thị trong app **lệch** với quyền thật trên Shared Drive.
+2. Không set được vai trò **"Người quản lý"** (`organizer`) cho người khác — trên Shared Drive mức cao nhất chỉ là **"Người quản lý nội dung"** (`fileOrganizer`).
+
+### 2. Root Cause
+**Giới hạn nền tảng của Google (không phải bug code):** Google Drive **không cho gán `organizer` cho folder/file con bên trong Shared Drive** — `organizer` chỉ hợp lệ ở cấp Shared Drive (cả ổ). API trả lỗi `Organizer role is only valid for shared drives`. Mức tối đa cho item con là `fileOrganizer`. Dialog chia sẻ gốc của Google cũng chỉ tới "Người quản lý nội dung".
+
+**Lỗi UX của app (sửa được):**
+- App vẫn cho chọn `organizer` ("Người quản lý") trong editor template (`DRIVE_ROLES`) và form cấp quyền (`SHARED_ONLY_ROLES`).
+- Khi `createFolderTree` áp `organizer` lên folder con, Google từ chối nhưng lỗi bị **bắt và nuốt âm thầm** — chỉ ghi vào `node.permissionsApplied[].error` (`FEAT-030-apps-script.gs`), folder vẫn tạo, app báo "thành công".
+- Hệ quả: app hiển thị **ý định** của template (organizer), Drive thật chỉ nhận mức thấp hơn / không gì → **lệch**.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution (A + B — user duyệt 2026-06-27)
+**A — Bỏ `organizer` khỏi danh sách role chọn được ở cấp folder/template** (giữ tối đa `fileOrganizer`), kèm dòng giải thích giới hạn của Google. Giữ `organizer` trong type `DriveRole` + `roleLabel()` để hiển thị dữ liệu template cũ.
+
+**B — Nổi lỗi áp quyền sau khi tạo folder từ template:** đọc `permissionsApplied[].error` trả về; nếu có quyền áp lỗi → toast cảnh báo (warning) liệt kê folder + email + role lỗi, thay vì luôn báo "thành công".
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/drive-manager/template-editor-utils.ts` | Bỏ `'organizer'` khỏi `DRIVE_ROLES`; đổi `DEFAULT_TEMPLATE_ROOT` organizer→fileOrganizer |
+| `src/components/drive-manager/TemplateEditorModal.tsx` | Đổi default local organizer→fileOrganizer; thêm dòng hint giải thích |
+| `src/components/apps-script/SetPermissionsForm.tsx` | `SHARED_ONLY_ROLES` bỏ `'organizer'` (còn `['fileOrganizer']`); chỉnh hint/cảnh báo |
+| `src/types/index.ts` | Thêm `AppliedPermission`, `CreatedFolderNode`, `CreateFolderTreeResult` |
+| `src/components/drive-manager/create-folder-tree-utils.ts` | **Mới** — pure `collectPermissionFailures` / `formatPermissionFailures` |
+| `src/components/drive-manager/create-folder-tree-utils.test.ts` | **Mới** — regression test (6 case) |
+| `src/pages/DriveManagerPage.tsx` | `executeAction` thêm `silentSuccess`; `handleCreateFromTemplate` báo warning khi có quyền áp lỗi |
+
+> **Không cần sửa `.gs` / redeploy Apps Script.** Bản BUG-040 đã trả `permissionsApplied[].error`; validate `organizer` trong `.gs` giữ nguyên làm phòng vệ cho template cũ.
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. `npm run build` + `npm run test` pass (thêm 6 test pure cho `collectPermissionFailures` / `formatPermissionFailures`).
+2. Editor template: dropdown "Quyền" chỉ còn tới "Người quản lý nội dung", không còn "Người quản lý"; có dòng hint giải thích.
+3. Form cấp quyền cho item Shared Drive: role tối đa = "Người quản lý nội dung".
+4. Tạo folder từ template trên Shared Drive với template (cũ) còn `organizer` → toast **warning** liệt kê quyền áp lỗi (không còn báo "thành công" giả).
+5. Tạo folder từ template mà mọi quyền áp OK → toast "Đã tạo folder từ template".
+
+### 8. Notes
+- Đây chủ yếu là giới hạn của Google + UX; không thay đổi hành vi backend.
+- Nếu sau này cần cấp **Manager toàn ổ chung** (phương án C, user **chưa** duyệt): thêm action riêng gán `organizer` với `fileId = ID Shared Drive` (gốc ổ), không phải folder con.
+- Template cũ đã lưu `organizer` vẫn hiển thị đúng nhãn; khi áp sẽ báo lỗi rõ ràng (plan B) thay vì âm thầm.
 
 ---
 
