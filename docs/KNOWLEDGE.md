@@ -305,3 +305,10 @@ it('returns ineligible for ASC rank regardless of case', () => {
 - Migration gốc `020_drive_manager.sql` tạo cột **`levels`** (flat, NON-NULL) — **lệch với code**. Đã sửa bằng migration `021_drive_templates_root.sql` (`ADD COLUMN root` + `DROP NOT NULL levels`).
 - **Phải chạy tay `021` trên Supabase** (KNOWLEDGE 1.2). Nếu DB còn thiếu cột `root` → insert/update template trả lỗi *"column root does not exist"* → không lưu được template.
 - `handleCreateTemplate`/`handleUpdateTemplate` trong `DriveManagerPage.tsx` đã được bọc try/catch + toast — mọi lỗi DB/RLS giờ hiển thị rõ thay vì nuốt im lặng.
+
+### 8.7 `createFolderTree`: `params.template` LÀ node gốc + phải dùng Advanced Drive Service (BUG-040)
+- Frontend gửi `template: template.root` (`DriveManagerPage.handleCreateFromTemplate`) — tức **chính node gốc** `{ name, permissions, children }`, khớp type `CreateFolderTreeParams.template: DriveTemplateFolder`.
+- Trong `.gs`, `createFolderTree` phải đọc `params.template` **trực tiếp**, **KHÔNG** đọc `params.template.root` (lồng dư 1 lớp → lỗi *"Template thiếu root folder"*).
+- Tạo folder trong cây phải dùng **Advanced Drive Service** `Drive.Files.create({ name, mimeType:'application/vnd.google-apps.folder', parents:[parentId] }, null, { supportsAllDrives: true })`, **KHÔNG** dùng `DriveApp.createFolder` (lỗi/hạn chế trên Shared Drive).
+- Không so sánh quyền kế thừa bằng `DriveApp.getPermissions` (lỗi trên Shared Drive). Drive tự kế thừa cha→con; áp lại quyền template qua `Drive.Permissions.create` là idempotent.
+- ⚠️ `createFolder` (action đơn) HIỆN VẪN dùng `DriveApp` → còn rủi ro Shared Drive tương tự (chưa fix, ngoài scope BUG-040).

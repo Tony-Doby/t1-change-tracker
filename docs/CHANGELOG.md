@@ -14,6 +14,27 @@
 
 ## 2026-06-27
 
+### 88. Bug fix BUG-040: `createFolderTree` — "Template thiếu root folder" + chạy được Shared Drive
+
+**Mô tả:** Tạo folder theo template lỗi. Chuỗi log thật trong tab Lịch sử:
+1. `Unknown action: createFolderTree` — bản Apps Script deploy chưa cập nhật (xử lý bằng Deploy → Phiên bản mới).
+2. `Template thiếu root folder` — lệch contract: frontend gửi `template: template.root` (node gốc, khớp type `CreateFolderTreeParams.template: DriveTemplateFolder`), nhưng `.gs` cũ lại đọc `params.template.root` (lồng dư 1 lớp).
+
+Kèm rủi ro: `createFolderTree` cũ dùng `DriveApp` → hạn chế trên Shared Drive (item test "Text 2" là Shared Drive).
+
+**Files sửa:**
+- `webapp/docs/FEAT-030-apps-script.gs`: Rewrite `createFolderTree` — đọc `params.template` trực tiếp làm node gốc; dùng **Advanced Drive Service** `Drive.Files.create(..., { supportsAllDrives: true })` thay `DriveApp` (chạy cả My Drive + Shared Drive); xóa `getInheritedPermission` (dùng `DriveApp.getPermissions` lỗi trên Shared Drive), áp thẳng quyền template (Drive tự kế thừa, idempotent). Giữ validate role chỉ-Shared + `sendNotificationEmail: false`.
+- `webapp/docs/PLAN-bug-fixes.md`: BUG-040 status = fixed.
+
+**Không sửa code app:** type + payload frontend đã đúng, chỉ `.gs` lệch.
+
+**Lưu ý deploy (BẮT BUỘC):**
+1. Copy `FEAT-030-apps-script.gs` lên project Apps Script → **Triển khai → Phiên bản mới** (sửa `.gs` không tự sync — KNOWLEDGE 8.1).
+2. Đảm bảo secret `APPS_SCRIPT_WEB_APP_URL` của Edge Function trỏ đúng deployment vừa cập nhật (dự án có 2 deployment).
+3. Test trên cả folder My Drive lẫn Shared Drive.
+
+---
+
 ### 87. Bug fix BUG-038 + BUG-039: Drive Manager — lưu template & nút tạo folder theo template
 
 **Mô tả:**

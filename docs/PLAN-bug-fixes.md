@@ -66,6 +66,58 @@
 | 037 | Dropdown "Quyền" (Google Drive Admin) sai chính tả "Ngườii" và thuật ngữ chưa khớp Google Drive | fixed | 2026-06-26 | 2026-06-26 |
 | 038 | Thanh "đã chọn" trong cây Drive thiếu nút "Tạo folder theo template" | fixed | 2026-06-27 | 2026-06-27 |
 | 039 | Không lưu được template Drive — DB còn cột `levels`, code dùng `root` + lỗi bị nuốt | fixed | 2026-06-27 | 2026-06-27 |
+| 040 | `createFolderTree` lỗi "Template thiếu root folder" + không chạy trên Shared Drive | fixed | 2026-06-27 | 2026-06-27 |
+
+---
+
+## BUG-040: `createFolderTree` lỗi "Template thiếu root folder" + không chạy trên Shared Drive
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed` (2026-06-27) — ⚠️ **cần copy `.gs` lên Apps Script + Deploy → Phiên bản mới**
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Trong Drive Manager, chọn 1 folder Shared Drive ("Text 2") → "Tạo folder theo template" → "Tạo folder". Toast báo lỗi generic "Edge Function returned a non-2xx status code". Tab Lịch sử ghi nhận chuỗi lỗi thật:
+1. Ban đầu: `Unknown action: createFolderTree` — do bản Apps Script deploy chưa cập nhật (đã giải quyết bằng Deploy → Phiên bản mới).
+2. Sau đó: **`Template thiếu root folder`** — lỗi logic trong `createFolderTree`.
+
+### 2. Root Cause
+**Lệch contract frontend ↔ Apps Script:**
+- Frontend gửi `template: template.root` (`DriveManagerPage.tsx:258-262`) — tức **chính node gốc** `{ name, permissions, children }`. Khớp type `CreateFolderTreeParams.template: DriveTemplateFolder`.
+- Apps Script lại đọc `params.template.root` (`FEAT-030-apps-script.gs` cũ) — lồng thêm 1 lớp → `undefined` → ném `Template thiếu root folder`.
+
+**Rủi ro Shared Drive (đi kèm):** `createFolderTree` cũ dùng `DriveApp` (`getFolderById` → `createFolder` → `getPermissions`), hạn chế/đổ lỗi trên Shared Drive — trong khi item test là Shared Drive.
+
+### 3. SQL Verify
+Không cần (lỗi ở Apps Script, log trong `apps_script_logs`).
+
+### 4. Solution
+Viết lại `createFolderTree` trong `webapp/docs/FEAT-030-apps-script.gs`:
+1. Đọc `params.template` **trực tiếp** làm node gốc (khớp type + frontend). Validate `rootTemplate.name`.
+2. Thay `DriveApp` → **Advanced Drive Service**: `Drive.Files.create({ name, mimeType:'application/vnd.google-apps.folder', parents:[parentId] }, null, { supportsAllDrives: true })` → tạo folder được trên cả My Drive lẫn Shared Drive.
+3. Bỏ `getInheritedPermission` (dùng `DriveApp.getPermissions`, lỗi trên Shared Drive). Áp thẳng quyền template qua `Drive.Permissions.create` — Drive tự kế thừa nên áp lại là idempotent. Giữ validate role chỉ-Shared (`fileOrganizer`/`organizer`) + `sendNotificationEmail: false`.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `webapp/docs/FEAT-030-apps-script.gs` | Rewrite `createFolderTree` (đọc `params.template` trực tiếp + Advanced Drive Service); xóa `getInheritedPermission` |
+
+> Không sửa code app: type `CreateFolderTreeParams.template: DriveTemplateFolder` và payload frontend `template: template.root` đã đúng — `.gs` là chỗ lệch.
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Copy `webapp/docs/FEAT-030-apps-script.gs` lên project Apps Script → **Triển khai → Phiên bản mới**.
+2. Đảm bảo secret `APPS_SCRIPT_WEB_APP_URL` của Edge Function trỏ đúng deployment vừa cập nhật.
+3. Drive Manager → chọn 1 folder **My Drive** → tạo từ template → verify cây folder + quyền được tạo, tab Lịch sử = Thành công.
+4. Lặp lại với folder **Shared Drive** ("Text 2") → verify thành công (không còn lỗi DriveApp).
+5. Kiểm tra Google Drive thật: cây folder đúng cấu trúc template, quyền áp đúng, **không gửi email** cho người được cấp.
+
+### 8. Notes
+- **`createFolder` (action đơn) vẫn dùng `DriveApp`** → còn rủi ro tương tự trên Shared Drive. Nằm ngoài scope BUG-040 (chưa có repro). Ghi nhận làm follow-up nếu cần.
+- Mỗi lần sửa `.gs` phải Deploy → Phiên bản mới mới có hiệu lực (KNOWLEDGE 8.1).
+- Rollback: revert `createFolderTree` về bản DriveApp + Deploy lại.
 
 ---
 
