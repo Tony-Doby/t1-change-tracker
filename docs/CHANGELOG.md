@@ -47,9 +47,13 @@
 - `webapp/src/components/apps-script/RemovePermissionForm.tsx`
 - `webapp/src/components/apps-script/DeleteItemForm.tsx`
 
+**Files tạo (bổ sung unit test):**
+- `webapp/src/components/drive-manager/drive-tree.test.ts`: Test `buildTree()`.
+- `webapp/src/components/apps-script/utils.test.ts`: Test `extractDriveId()` và `parseList()`.
+
 **Kết quả:**
 - `npm run build` pass.
-- `npm run test` pass (56/56 tests).
+- `npm run test` pass (74/74 tests).
 
 **Lưu ý deploy:**
 1. Chạy migration `020_drive_manager.sql` trong Supabase SQL Editor.

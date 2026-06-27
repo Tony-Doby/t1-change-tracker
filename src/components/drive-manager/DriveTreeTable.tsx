@@ -18,7 +18,7 @@ interface Props {
   expandedIds: Set<string>
 }
 
-function buildTree(results: ScanFolderResult[]): DriveTreeNode[] {
+export function buildTree(results: ScanFolderResult[]): DriveTreeNode[] {
   const rootNodes: DriveTreeNode[] = []
   const nodeMap = new Map<string, DriveTreeNode>()
 
