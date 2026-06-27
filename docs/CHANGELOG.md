@@ -14,6 +14,22 @@
 
 ## 2026-06-27
 
+### 93. Branding: đổi tên app → TDhome + logo ngựa (TD 1990)
+
+**Mô tả:** Đổi thương hiệu hiển thị của app.
+- Tab title trình duyệt + favicon → **TDhome** / `public/logo.png`.
+- Sidebar (trái) + trang Login: logo mới + chữ **TDhome**.
+- Header (phải): chỉ hiển thị chữ **Nhà của Tony!** (bỏ logo ở header).
+- Logo dùng file `TDLg_Fn.png` (ngựa + TD 1990) đặt tại `public/logo.png`.
+
+**Files sửa:** `index.html`, `src/components/Layout.tsx`, `src/pages/LoginPage.tsx`, `public/logo.png` (mới). Gỡ icon `Users` không còn dùng ở Layout/Login.
+
+**Phạm vi:** chỉ đổi phần hiển thị; comment nội bộ trong SQL/scripts/tokens giữ nguyên.
+
+**Kiểm thử:** `npm run lint` sạch · `npm run build` OK.
+
+---
+
 ### 92. Feature FEAT-038: Refactor IA sidebar — gom nhóm + page-tabs
 
 **Mô tả:** Gom 12 mục sidebar phẳng thành **3 nhóm** (Agent Panel / Tools / Settings); mỗi nhóm hiện tính năng con dạng **page-tabs** ở đầu nội dung. Nhãn sidebar đổi sang tiếng Anh. Theo mockup `docs/mockup-ia-redesign.html` đã duyệt.

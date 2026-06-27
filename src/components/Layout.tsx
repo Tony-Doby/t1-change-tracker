@@ -4,7 +4,6 @@ import { useAuth } from '../hooks/useAuth'
 import { useRealtime } from '../hooks/useRealtime'
 import { useRequestCountQuery } from '../hooks/queries/useRequestCount'
 import {
-  Users,
   ChevronDown,
   Menu,
   X,
@@ -70,7 +69,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       >
         <div className="h-14 flex items-center px-4 border-b border-border-light shrink-0">
           {!sidebarCollapsed && (
-            <span className="font-semibold text-accent truncate">T1 Tracker</span>
+            <span className="flex items-center gap-2 font-semibold text-accent truncate">
+              <img src="/logo.png" alt="TDhome" className="w-7 h-7 object-contain shrink-0" />
+              TDhome
+            </span>
           )}
           <button
             className={`${sidebarCollapsed ? 'mx-auto' : 'ml-auto'} min-w-[40px] min-h-[40px] flex items-center justify-center rounded-sm hover:bg-bg-quaternary text-text-tertiary transition-colors hidden lg:flex`}
@@ -132,10 +134,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
 
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-sm bg-accent flex items-center justify-center">
-              <Users className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-semibold text-accent text-lg hidden sm:block">T1 Change Tracker</span>
+            <span className="font-semibold text-accent text-lg">Nhà của Tony!</span>
           </div>
 
           <div className="ml-auto flex items-center gap-3">

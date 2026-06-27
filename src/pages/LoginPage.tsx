@@ -2,7 +2,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
-import { Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { loginSchema, type LoginFormData } from '../lib/form-schemas'
 import Card from '../ui/layout/Card'
@@ -42,10 +41,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-bg-tertiary">
       <Card padding="lg" className="w-full max-w-[400px] shadow-super-heavy">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-md bg-accent flex items-center justify-center mb-4">
-            <Users className="w-7 h-7 text-white" aria-hidden="true" />
-          </div>
-          <h1 className="text-[1.85rem] font-semibold text-text-primary tracking-tight">T1 Change Tracker</h1>
+          <img src="/logo.png" alt="TDhome" className="w-16 h-16 object-contain mb-4" />
+          <h1 className="text-[1.85rem] font-semibold text-text-primary tracking-tight">TDhome</h1>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
