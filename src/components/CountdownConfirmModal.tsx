@@ -31,7 +31,6 @@ export default function CountdownConfirmModal({
       setRemaining(countdownSeconds)
       return
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRemaining(countdownSeconds)
     const timer = setInterval(() => {
       setRemaining((prev) => {

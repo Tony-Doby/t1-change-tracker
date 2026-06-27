@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import TextArea from '../../ui/input/TextArea'
 import Select from '../../ui/input/Select'
@@ -66,7 +66,7 @@ export default function SetPermissionsForm({
 
   const [itemIdsText, setItemIdsText] = useState('')
   const [emailsText, setEmailsText] = useState('')
-  const [role, setRole] = useState<DriveRole>('reader')
+  const [selectedRole, setSelectedRole] = useState<DriveRole>('reader')
   const [scope, setScope] = useState<DriveScope>('user')
   const [error, setError] = useState<string | null>(null)
 
@@ -95,13 +95,13 @@ export default function SetPermissionsForm({
   }, [effectiveItems])
 
   // Chỉ mở khóa 5 role khi CHẮC CHẮN toàn bộ item nằm trong Shared Drive.
-  const availableRoles: DriveRole[] =
-    composition === 'allShared' ? [...UNIVERSAL_ROLES, ...SHARED_ONLY_ROLES] : UNIVERSAL_ROLES
+  const availableRoles: DriveRole[] = useMemo(
+    () => (composition === 'allShared' ? [...UNIVERSAL_ROLES, ...SHARED_ONLY_ROLES] : UNIVERSAL_ROLES),
+    [composition]
+  )
 
-  // Nếu role hiện tại không còn hợp lệ (đổi composition), quay về reader.
-  useEffect(() => {
-    if (!availableRoles.includes(role)) setRole('reader')
-  }, [availableRoles, role])
+  // Nếu role đã chọn không còn hợp lệ (đổi composition), fallback về reader.
+  const role = availableRoles.includes(selectedRole) ? selectedRole : 'reader'
 
   const roleOptions = availableRoles.map((r) => ({ value: r, label: roleLabel(r, composition) }))
 
@@ -223,7 +223,7 @@ export default function SetPermissionsForm({
         label="Quyền"
         options={roleOptions}
         value={role}
-        onChange={(e) => setRole(e.target.value as DriveRole)}
+        onChange={(e) => setSelectedRole(e.target.value as DriveRole)}
         hint={
           composition === 'allShared'
             ? 'Item Shared Drive: có thêm quyền quản lý nội dung / quản lý.'

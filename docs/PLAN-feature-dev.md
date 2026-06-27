@@ -85,6 +85,9 @@
 | 032 | Bảng kết quả Quét folder — Search, Lọc theo cấp, Chọn nhiều + Cấp quyền hàng loạt | done | 2026-06-26 | 2026-06-26 |
 | 033 | Unit Test Policy — Bắt buộc unit test có điều kiện | done | 2026-06-27 | 2026-06-27 |
 | 034 | Drive Manager — Quản lý toàn bộ Drive từ webapp | done | 2026-06-27 | 2026-06-27 |
+| 035 | Drive Manager — Search, Filter by depth/type, and improved bulk selection | done | 2026-06-27 | 2026-06-27 |
+| 036 | Drive Manager Template — UI wizard thay thế JSON editor | done | 2026-06-27 | 2026-06-27 |
+| 037 | Drive Manager — Full-page tabs + drill-down + breadcrumb | done | 2026-06-27 | 2026-06-27 |
 
 ---
 
@@ -3681,3 +3684,646 @@ Migration `020_drive_manager.sql`:
 - **Tree persistence:** Lưu `tree_data` JSONB trong Supabase. Nếu cây lớn, cân nhắc phân trang hoặc lazy load ở phase sau.
 - **Security:** Cả `drive_templates` và `drive_trees` đều RLS admin-only.
 - **Rollback:** Revert code + migration + redeploy Apps Script version cũ.
+
+---
+
+## FEAT-035: Drive Manager — Search, Filter by depth/type, and improved bulk selection
+
+- **Đề xuất**: 2026-06-27
+- **Status**: `done`
+- **Hoàn thành**: 2026-06-27
+- **Priority**: `medium`
+- **Phụ thuộc**: **FEAT-034** (Drive Manager đã hoàn thành)
+
+### 1. Mô tả feature
+Bổ sung khả năng **tìm kiếm và lọc** cho bảng cây folder trong `DriveManagerPage`, đồng thờii cải tiến logic **chọn nhiều dòng** để đảm bảo consistency với `ScanResultsTable` của FEAT-032.
+
+Các filter cần có:
+1. **Search** — ô tìm kiếm lọc theo `name` và `path` (không phân biệt hoa thường).
+2. **Lọc theo cấp folder** — chọn các `depth` muốn hiển thị (chips, multi-select).
+3. **Lọc theo loại Drive** — Tất cả / My Drive / Shared Drive.
+4. **Đếm kết quả** — hiển thị "Hiển thị N/M folder".
+5. **Chọn tất cả theo kết quả đang lọc** — select-all chỉ áp cho các node đang hiển thị.
+6. **Auto-expand khi search** — khi có search text, tự động mở rộng các nhánh có folder con khớp để admin nhìn thấy context.
+
+### 2. Motivation / Why
+- FEAT-034 đã tạo giao diện duyệt cây folder, nhưng khi cây lớn (hàng chục folder nhiều cấp) thì rất khó tìm folder cần thao tác.
+- FEAT-032 đã chứng minh pattern search + filter depth + filter loại Drive rất hữu ích cho admin; Drive Manager cần có pattern tương tự để đồng nhất trải nghiệm.
+- Nếu không lọc được Shared Drive riêng, admin dễ vô tình chọn cả My Drive + Shared Drive rồi cấp quyền role cao — sẽ bị backend từ chối từng item, gây khó hiểu.
+- Chọn tất cả hiện tại áp dụng cho toàn bộ cây, không tôn trọng search/filter.
+
+### 3. Scope
+
+**In scope:**
+- Thêm search input + filter chips depth + filter loại Drive vào `DriveManagerPage` (trên khung bảng cây).
+- Cải tiến `DriveTreeTable` để nhận `filteredNodes` thay vì tự lọc (separation of concerns).
+- Thêm logic lọc trong `DriveManagerPage`:
+  - Search: `name` hoặc `path` chứa query (trim + lowercase).
+  - Depth filter: multi-select từ tập `depth` có trong cây.
+  - Drive type filter: `'all' | 'my' | 'shared'`.
+- Tính derived `filteredFlatRows` và `filteredVisibleNodes`:
+  - `filteredFlatRows`: mảng phẳng các `ScanFolderResult` khớp filter.
+  - `filteredVisibleNodes`: cây được prune — chỉ giữ lại nhánh có ít nhất 1 node khớp filter.
+- Auto-expand các node có con khớp search.
+- Đếm "Hiển thị N/M folder".
+- Select-all chỉ chọn các node trong `filteredFlatRows`.
+- Giữ nguyên behavior expand/collapse, checkbox từng dòng, context action, bulk "Cấp quyền".
+
+**Out of scope:**
+- Không thêm filter theo ngày quét, ngườii tạo, hay metadata khác.
+- Không thêm server-side pagination/lazy load (cây vẫn render client-side).
+- Không thay đổi `ScanResultsTable` (FEAT-032) — giữ nguyên.
+- Không thêm sort cột (có thể làm ở feature sau).
+
+### 4. Technical Design
+
+#### 4.1 Filter state (trong `DriveManagerPage`)
+```ts
+const [search, setSearch] = useState('')
+const [depthFilter, setDepthFilter] = useState<Set<number>>(new Set())
+const [driveTypeFilter, setDriveTypeFilter] = useState<'all' | 'my' | 'shared'>('all')
+```
+
+#### 4.2 Derived filters
+```ts
+const availableDepths = useMemo(
+  () => Array.from(new Set(currentTreeData.map((r) => r.depth))).sort((a, b) => a - b),
+  [currentTreeData]
+)
+
+const filteredFlatRows = useMemo(() => {
+  const q = search.trim().toLowerCase()
+  return currentTreeData.filter((r) => {
+    const matchesSearch =
+      !q || r.name.toLowerCase().includes(q) || r.path.toLowerCase().includes(q)
+    const matchesDepth = depthFilter.size === 0 || depthFilter.has(r.depth)
+    const matchesType =
+      driveTypeFilter === 'all' ||
+      (driveTypeFilter === 'shared' && r.isSharedDrive) ||
+      (driveTypeFilter === 'my' && !r.isSharedDrive)
+    return matchesSearch && matchesDepth && matchesType
+  })
+}, [currentTreeData, search, depthFilter, driveTypeFilter])
+```
+
+#### 4.3 Prune tree để hiển thị
+```ts
+const filteredVisibleNodes = useMemo(() => {
+  const matchedIds = new Set(filteredFlatRows.map((r) => r.id))
+  return pruneTree(tree, matchedIds)
+}, [tree, filteredFlatRows])
+```
+
+`pruneTree` giữ lại node nếu:
+- Node đó khớp filter, **hoặc**
+- Node có con cháu khớp filter (để giữ context path).
+
+Nếu `search` rỗng và không có filter → trả về `tree` nguyên bản.
+
+#### 4.4 Auto-expand khi search
+```ts
+useEffect(() => {
+  if (!search.trim()) return
+  const matchedParentIds = new Set<string>()
+  // Duyệt tree, nếu node có con khớp search → add node.id vào expandedIds
+  setExpandedIds((prev) => {
+    const next = new Set(prev)
+    matchedParentIds.forEach((id) => next.add(id))
+    return next
+  })
+}, [search, filteredVisibleNodes])
+```
+> Chỉ **mở rộng** khi search, không thu gọn tự động khi xóa search (để user kiểm soát).
+
+#### 4.5 Select-all theo filter
+```ts
+const handleSelectAll = (ids: string[]) => {
+  // ids được truyền từ DriveTreeTable, chỉ chứa các node đang render (filteredVisibleNodes)
+  setSelectedIds((prev) => {
+    const next = new Set(prev)
+    const visibleIds = collectIds(filteredVisibleNodes)
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => next.has(id))
+    if (allSelected) {
+      visibleIds.forEach((id) => next.delete(id))
+    } else {
+      visibleIds.forEach((id) => next.add(id))
+    }
+    return next
+  })
+}
+```
+
+#### 4.6 UI Layout
+```
+Kết quả (Hiển thị 8/18 folder)
+[🔍 Tìm theo tên/đường dẫn...]   Cấp: [×1] [×2]   Loại: [Tất cả ▾]
+┌─[✔]─┬─ Tên ─────────┬─ Loại ─┬─ Path ─────┬─ Thao tác ─┐
+│ [✔] │ ▼ 📁 A0       │ Shared │ /A0        │     ⋮      │
+│ [✔] │   ▼ 📁 B1     │ Shared │ /A0/B1     │     ⋮      │
+│ [ ] │   📁 C1       │ Shared │ /A0/C1     │     ⋮      │
+└─────┴───────────────┴────────┴────────────┴────────────┘
+        [2 đã chọn | Cấp quyền]
+```
+
+### 5. UI/UX
+- Search input: placeholder `"Tìm theo tên hoặc đường dẫn folder..."`, icon bên trái, nút × clear.
+- Depth filter: dùng `FilterChips` component sẵn có. Mỗi chip là 1 cấp (`Cấp 1`, `Cấp 2`, ...). Bấm chọn/bỏ chọn.
+- Drive type filter: dùng `Select` hoặc `FilterChips` với 3 option: Tất cả / My Drive / Shared Drive.
+- Badge loại Drive giữ nguyên style hiện tại.
+- Hiển thị đếm `"Hiển thị X/Y folder"` phía trên bảng bên phải search.
+- Khi search đang active, expand tự động các nhánh có kết quả.
+- Empty state khi filter không match: context `filter_empty` với nút "Xóa bộ lọc".
+
+### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `src/pages/DriveManagerPage.tsx` | Thêm state search/depth/type filter; derived `filteredFlatRows` + `filteredVisibleNodes`; truyền xuống `DriveTreeTable`; đếm "Hiển thị X/Y"; xử lý select-all theo filter; auto-expand khi search |
+| `src/components/drive-manager/DriveTreeTable.tsx` | Tách logic lọc ra ngoài; nhận prop `nodes` là cây đã filter; select-all dựa trên `nodes` đang render; giữ expand/collapse/checkbox/context menu |
+| `src/components/drive-manager/drive-tree-utils.ts` (mới) | Pure helpers: `pruneTree()`, `collectIds()`, `collectMatchedParentIds()` — dễ test |
+| `src/components/drive-manager/drive-tree-utils.test.ts` (mới) | Unit test cho `pruneTree` và `collectIds` (theo FEAT-033 Unit Test Policy cho pure functions) |
+
+### 7. Schema / SQL changes
+Không cần.
+
+### 8. API / Integration changes
+Không cần. Không thay đổi Apps Script hay Edge Function.
+
+### 9. Test Plan
+1. Cây có 18 folder 3 cấp → hiển thị đủ 18/18 khi không filter.
+2. Gõ search `"Báo cáo"` → chỉ hiện folder có tên/path chứa từ đó; cây tự động mở rộng các nhánh cha để hiện context.
+3. Chọn filter `Cấp 1` → chỉ hiện folder depth=1.
+4. Chọn thêm `Cấp 2` → hiện cả depth 1 và 2.
+5. Chọn filter `Loại = Shared Drive` → chỉ hiện folder Shared Drive (kèm cha My Drive nếu cần giữ context).
+6. "Chọn tất cả" khi đang filter → chỉ chọn các folder đang hiển thị.
+7. Bulk "Cấp quyền" từ selection sau filter → gửi đúng danh sách filtered folder.
+8. Bấm "Xóa bộ lọc" → reset search + depth + type, hiển thị lại toàn bộ cây.
+9. `npm run test` pass (bao gồm unit test mới cho `drive-tree-utils`).
+10. `npm run verify` pass.
+
+### 10. Rollout Plan
+1. Viết `drive-tree-utils.ts` + unit test.
+2. Refactor `DriveTreeTable` để nhận cây đã filter.
+3. Thêm filter UI + state vào `DriveManagerPage`.
+4. Chạy `npm run test` và `npm run verify`.
+5. Cập nhật `CHANGELOG.md`, `PLAN-feature-dev.md` (status → done), `KNOWLEDGE.md` nếu có gotcha mới.
+
+### 11. Notes
+- **Performance:** `currentTreeData` là mảng phẳng trong bộ nhớ, filter/prune O(n) — chấp nhận được với vài trăm folder. Nếu cây lớn hơn 1000 node, cân nhắc virtualize hoặc lazy load ở feature sau.
+- **Consistency với FEAT-032:** Cố gắng dùng chung visual pattern (`FilterChips`, `TextInput`, badge style) để admin không bị lạc.
+- **Tree prune edge case:** Nếu folder cha không khớp filter nhưng con khớp → cha vẫn hiển thị (grayed hoặc bình thường) để giữ cấu trúc cây. Checkbox của cha không bị auto-check chỉ vì con được chọn.
+- **Expand behavior:** Khi xóa search, không auto-collapse để tránh làm mất vị trí user đang xem.
+- **Rollback:** Revert 3 file, xóa 2 file utils/test. Không ảnh hưởng DB/Apps Script.
+
+---
+
+## FEAT-036: Drive Manager Template — UI wizard thay thế JSON editor
+
+- **Đề xuất**: 2026-06-27
+- **Status**: `done`
+- **Hoàn thành**: 2026-06-27
+- **Priority**: `medium`
+- **Phụ thuộc**: **FEAT-034** (Drive Manager đã hoàn thành)
+
+### 1. Mô tả feature
+Thay thế JSON editor trong `TemplateManager` bằng **UI wizard trực quan**, giúp admin tạo/sửa cây folder template mà không cần viết JSON thủ công. Giữ nguyên data model `DriveTemplateFolder` — chỉ thay đổi giao diện nhập liệu.
+
+**Không làm import/export** theo yêu cầu.
+
+### 2. Motivation / Why
+- JSON editor dễ sai cú pháp, khó quản lý với cây nhiều cấp.
+- Admin cần giao diện trực quan để: thêm/xóa folder, kéo thả sắp xếp, chọn quyền từ dropdown, xem preview cây real-time.
+- Giảm rủi ro nhập sai `scope`/`role` dẫn đến lỗi khi tạo folder.
+
+### 3. Scope
+
+**In scope:**
+- Thay thế textarea JSON trong `TemplateEditorModal` bằng UI wizard gồm:
+  - **Tree navigator** bên trái: hiển thị cây folder, cho phép chọn node đang sửa.
+  - **Form bên phải** cho node đang chọn:
+    - Tên folder (input).
+    - Danh sách permissions: mỗi dòng gồm loại (`user` / `anyone`), email (ẩn nếu anyone), role dropdown.
+    - Nút thêm/xóa permission.
+  - Nút **Thêm folder con**, **Xóa folder** (có confirm nếu có con).
+  - **Preview cây** real-time ở dưới hoặc tab riêng.
+- Validate cơ bản trước khi save:
+  - Tên folder không rỗng, không trùng trong cùng 1 cấp.
+  - Permission `user` phải có email hợp lệ.
+  - Role hợp lệ theo whitelist.
+- Giữ lại nút **"Xem JSON"** read-only hoặc toggle để power user vẫn kiểm tra.
+
+**Out of scope:**
+- Không làm import/export template (theo yêu cầu).
+- Không làm drag-and-drop sắp xếp thứ tự folder (có thể làm phase 2).
+- Không đổi backend `createFolderTree` — data model giữ nguyên.
+- Không đổi `CreateFromTemplateModal` — chỉ cần nhận template đã hợp lệ.
+
+### 4. Technical Design
+
+#### 4.1 Component structure
+```
+TemplateEditorModal (refactor)
+├── TemplateTreeNav        // Bên trái: danh sách cây + nút thêm/xóa
+│   └── RecursiveTreeItem
+├── TemplateNodeForm       // Bên phải: form tên + permissions
+│   ├── FolderNameInput
+│   ├── PermissionList
+│   │   └── PermissionRow (type + email + role + delete)
+│   └── AddPermissionButton
+└── TemplatePreview        // Preview cây + đếm folder/permission
+```
+
+#### 4.2 State management
+```ts
+const [root, setRoot] = useState<DriveTemplateFolder>(initialRoot)
+const [selectedPath, setSelectedPath] = useState<number[]>([]) // path indices đến node đang chọn
+```
+
+Các helper pure để thao tác cây bất biến:
+- `findNode(root, path)` — lấy node theo path.
+- `updateNode(root, path, updater)` — trả về cây mới với node được cập nhật.
+- `addChild(root, parentPath)` — thêm folder con mới.
+- `removeNode(root, path)` — xóa node và con cháu.
+- `validateTemplate(root)` — kiểm tra lỗi toàn cây.
+
+#### 4.3 Permission row UI
+```ts
+interface PermissionRowValue {
+  type: 'user' | 'anyone'
+  email?: string
+  role: DriveRole
+}
+```
+
+- Select **Loại**: `Ngườii dùng` / `Bất kỳ ai có link`.
+- Nếu `type === 'user'`: hiện input email.
+- Select **Quyền**: `reader`, `commenter`, `writer`, `fileOrganizer`, `organizer`.
+  - Có thể hiện cảnh báo nếu chọn `fileOrganizer`/`organizer` mà không biết target là Shared Drive hay My Drive (vì backend sẽ validate sau).
+
+#### 4.4 Validation
+Trước khi `onSave`:
+1. Tất cả folder phải có `name.trim().length > 0`.
+2. Không có 2 folder con cùng tên trong 1 parent.
+3. Permission `user` phải có email hợp lệ (regex cơ bản).
+4. Role phải nằm trong whitelist.
+
+Nếu lỗi → hiện inline error và không cho save.
+
+### 5. UI/UX
+
+```
+┌─ Sửa template: Báo cáo 2026 ─────────────────────────┐
+│                                                        │
+│  ┌─ Cây folder ─────┐  ┌─ Chi tiết folder ──────────┐ │
+│  │ ▼ A0 - Báo cáo   │  │ Tên folder                 │ │
+│  │   ▶ B1 - Public  │  │ [A0 - Báo cáo           ] │ │
+│  │   ▼ C1 - Mkt     │  │                            │ │
+│  │     D2 - Camp    │  │ Quyền truy cập             │ │
+│  │ [+ Thêm folder con]│ │ ┌─ Loại ─┬─ Email/Scope ─┬─ Role ─┐ │
+│  │                   │  │ │ user   │ hos@era...  │ reader │ │
+│  │                   │  │ │ anyone │ —           │ reader │ │
+│  │                   │  │ [+ Thêm quyền]            │ │
+│  └───────────────────┘  │                            │ │
+│                         │ [+ Thêm folder con]        │ │
+│                         │ [Xóa folder này]           │ │
+│                         └────────────────────────────┘ │
+│  [Xem JSON]  [Hủy]                          [Lưu]      │
+└────────────────────────────────────────────────────────┘
+```
+
+- Click node trong cây → form bên phải cập nhật.
+- Nút **"+ Thêm folder con"** trong cây hoặc form đều được.
+- Nút **"Xóa folder"** chỉ hiện khi node không phải root, có confirm nếu node có con.
+- Toggle **"Xem JSON"** hiện JSON read-only để kiểm tra.
+
+### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `src/components/drive-manager/TemplateManager.tsx` | Thay `TemplateEditorModal` inline JSON bằng component wizard mới; giữ list template và CRUD handler |
+| `src/components/drive-manager/TemplateEditorModal.tsx` (mới) | UI wizard chính: tree nav + node form + preview + validation |
+| `src/components/drive-manager/template-editor-utils.ts` (mới) | Pure helpers: `findNode`, `updateNode`, `addChild`, `removeNode`, `validateTemplate` |
+| `src/components/drive-manager/template-editor-utils.test.ts` (mới) | Unit test cho helpers pure (theo FEAT-033) |
+| `src/types/index.ts` | Có thể thêm type helper `DriveRole` nếu chưa có |
+
+### 7. Schema / SQL changes
+Không cần. Data model `DriveTemplateFolder` giữ nguyên.
+
+### 8. API / Integration changes
+Không cần. `CreateFromTemplateModal` vẫn nhận `template.root` như cũ.
+
+### 9. Test Plan
+1. Mở "Thêm template mới" → UI wizard hiển thị với root folder mặc định.
+2. Đổi tên root → bấm sang folder khác → quay lại → tên vẫn được lưu.
+3. Thêm folder con → nhập tên + thêm permission user với email + role → preview cây cập nhật.
+4. Thử thêm 2 folder con cùng tên → hiện lỗi, không cho save.
+5. Thử permission `user` không có email → hiện lỗi.
+6. Chọn role `fileOrganizer` → hiện cảnh báo "Chỉ áp dụng cho Shared Drive".
+7. Xóa folder có con → confirm modal → folder và con bị xóa.
+8. Toggle "Xem JSON" → JSON hiển thị đúng cấu trúc `DriveTemplateFolder`.
+9. Lưu template → đóng modal → list template cập nhật.
+10. Dùng template vừa tạo trong `CreateFromTemplateModal` → tạo folder thành công với đúng quyền.
+11. `npm run test` pass (bao gồm unit test `template-editor-utils`).
+12. `npm run verify` pass.
+
+### 10. Rollout Plan
+1. Tạo `template-editor-utils.ts` + unit test.
+2. Tạo `TemplateEditorModal.tsx` với UI wizard.
+3. Refactor `TemplateManager.tsx` để dùng wizard mới, bỏ JSON editor inline.
+4. Chạy `npm run test` và `npm run verify`.
+5. Cập nhật `CHANGELOG.md`, `PLAN-feature-dev.md` (status → done), `KNOWLEDGE.md` nếu có gotcha mới.
+
+### 11. Notes
+- **Backward compat:** Data model `DriveTemplateFolder` không đổi → các template đã lưu vẫn hoạt động.
+- **JSON fallback:** Giữ nút "Xem JSON" read-only để admin có thể copy/share thủ công nếu cần (nhưng không làm import/export theo yêu cầu).
+- **Drag-and-drop:** Không làm trong scope này. Nếu sau này cần sắp xếp lại thứ tự folder con → tách thành feature riêng.
+- **Shared Drive warning:** Vì template chưa biết sẽ áp vào My Drive hay Shared Drive, role `fileOrganizer`/`organizer` chỉ hiện cảnh báo chứ không chặn hard. Backend `createFolderTree` vẫn validate thực tế khi chạy.
+- **State immutability:** Dùng immutable update helpers để tránh mutate state React.
+- **Rollback:** Revert `TemplateManager.tsx`, xóa `TemplateEditorModal.tsx` + utils/test. Không ảnh hưởng DB/Apps Script.
+
+---
+
+## FEAT-037: Drive Manager — Full-page tabs + drill-down + breadcrumb
+
+- **Đề xuất**: 2026-06-27
+- **Status**: `done`
+- **Hoàn thành**: 2026-06-27
+- **Priority**: `high`
+- **Phụ thuộc**: **FEAT-034** (Drive Manager đã hoàn thành). **Nên làm trước FEAT-035 và FEAT-036** vì nó định nghĩa container layout cho 2 feature đó.
+
+### 1. Mô tả feature
+Tái cấu trúc `DriveManagerPage` từ layout 2 cột (sidebar danh sách cây + main area dài) sang **full-page tab navigation** với 4 tab chính:
+
+1. **Cây Drive** — quản lý các cây đã lưu.
+2. **Quét folder** — quét folder mới và xem kết quả.
+3. **Template** — quản lý template tạo folder.
+4. **Lịch sử** — xem logs các thao tác (flat view, không drill-down).
+
+Mỗi tab (trừ Lịch sử) có **2-level drill-down**: danh sách → chi tiết, với **breadcrumb** hỗ trợ điều hướng.
+
+### 2. Motivation / Why
+- Trang hiện tại quá dài, phải cuộn nhiều để tới Template và Logs.
+- Scan form và ScanResultsTable bị chèn cuối trang, không rõ workflow.
+- Không có trang danh sách cây/template rõ ràng; user bị đẩy thẳng vào detail.
+- Breadcrumb giúp user biết vị trí trong hệ thống phân cấp tab → list → detail.
+
+### 3. Scope
+
+**In scope:**
+- Chuyển `DriveManagerPage` sang full-page tabs.
+- Tab navigation bar cố định ở top: `Cây Drive` | `Quét folder` | `Template` | `Lịch sử`.
+- **Tab Cây Drive**:
+  - Level 1: Grid/list các cây đã lưu (card: tên, loại Drive, depth, số folder, lần refresh).
+  - Level 2: Chi tiết cây — tree table + toolbar + bulk actions + filters (FEAT-035).
+  - Breadcrumb: `Drive Manager / Cây Drive / {tên cây}`.
+- **Tab Quét folder**:
+  - Level 1: Form quét (URL/ID gốc + depth + nút Quét).
+  - Level 2: Kết quả quét — `ScanResultsTable` với search/filter/chọn nhiều + bulk cấp quyền.
+  - Nút "Lưu thành cây Drive" ở kết quả quét → tạo record `drive_trees` → tự động chuyển sang tab Cây Drive và mở cây mới.
+  - Nút "Quét folder mới" / "Quay lại form".
+  - Breadcrumb: `Drive Manager / Quét folder / Kết quả`.
+- **Tab Template**:
+  - Level 1: List template (card: tên, số folder, số permission).
+  - Level 2: Template wizard/editor (FEAT-036).
+  - Breadcrumb: `Drive Manager / Template / {tên template}`.
+- **Tab Lịch sử**:
+  - Single-level: bảng logs với search/filter theo action/status.
+  - Không drill-down.
+- Breadcrumb toàn cục, click được ở các cấp cha.
+
+**Out of scope:**
+- Không đổi data model `drive_trees`, `drive_templates`, `apps_script_logs`.
+- Không đổi Apps Script `createFolderTree`.
+- Không làm drag-and-drop sắp xếp cây/template.
+- Không làm nested tabs hoặc sub-sidebar.
+
+### 4. Technical Design
+
+#### 4.1 State structure
+```ts
+type DriveManagerTab = 'trees' | 'scan' | 'templates' | 'logs'
+
+const [activeTab, setActiveTab] = useState<DriveManagerTab>('trees')
+
+// Drill-down states
+const [selectedTreeId, setSelectedTreeId] = useState<string | null>(null)
+const [scanResults, setScanResults] = useState<ScanFolderResult[] | null>(null)
+const [scanParams, setScanParams] = useState<ScanFoldersParams | null>(null)
+const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+```
+
+#### 4.2 Tab content routing (no react-router)
+```tsx
+function DriveManagerPage() {
+  return (
+    <PageContainer>
+      <DriveManagerTabs activeTab={activeTab} onChange={setActiveTab} />
+      {activeTab === 'trees' && <TreesTab />}
+      {activeTab === 'scan' && <ScanTab />}
+      {activeTab === 'templates' && <TemplatesTab />}
+      {activeTab === 'logs' && <LogsTab />}
+    </PageContainer>
+  )
+}
+```
+
+Hoặc tách mỗi tab thành file component riêng:
+- `src/components/drive-manager/tabs/TreesTab.tsx`
+- `src/components/drive-manager/tabs/ScanTab.tsx`
+- `src/components/drive-manager/tabs/TemplatesTab.tsx`
+- `src/components/drive-manager/tabs/LogsTab.tsx`
+
+#### 4.3 Breadcrumb component
+```tsx
+<Breadcrumb items={[
+  { label: 'Drive Manager', onClick: () => setActiveTab('trees') },
+  { label: 'Cây Drive', onClick: () => setSelectedTreeId(null) },
+  { label: tree.name, active: true }
+]} />
+```
+
+#### 4.4 Tab Cây Drive — detail flow
+```ts
+if (!selectedTreeId) {
+  // Level 1: list
+  return <TreeListView trees={savedTrees} onSelect={setSelectedTreeId} />
+}
+// Level 2: detail
+return <TreeDetailView treeId={selectedTreeId} onBack={() => setSelectedTreeId(null)} />
+```
+
+`TreeDetailView` chứa:
+- Breadcrumb
+- Toolbar: Refresh, Expand all, Collapse all
+- Search + filter (FEAT-035)
+- `DriveTreeTable`
+- Bulk action bar
+
+#### 4.5 Tab Quét folder — flow
+```ts
+if (!scanResults) {
+  // Level 1: form
+  return <ScanForm onScan={(params, results) => { setScanParams(params); setScanResults(results) }} />
+}
+// Level 2: results
+return <ScanResultsView
+  results={scanResults}
+  onBack={() => { setScanResults(null); setScanParams(null) }}
+  onSaveAsTree={handleSaveScanAsTree}
+/>
+```
+
+**Save as tree:**
+```ts
+const handleSaveScanAsTree = async (name: string) => {
+  const created = await createTree.mutateAsync({
+    name,
+    root_url: buildDriveUrl(scanParams.rootFolderId),
+    root_folder_id: scanParams.rootFolderId,
+    depth: scanParams.depth,
+    tree_data: scanResults,
+    is_shared_drive: scanResults[0]?.isSharedDrive ?? null,
+  })
+  setActiveTab('trees')
+  setSelectedTreeId(created.id)
+  setScanResults(null)
+  setScanParams(null)
+}
+```
+
+#### 4.6 Tab Template — flow
+```ts
+if (!selectedTemplateId) {
+  // Level 1: list
+  return <TemplateListView templates={templates} onSelect={setSelectedTemplateId} />
+}
+// Level 2: wizard
+const template = templates.find(t => t.id === selectedTemplateId)
+return <TemplateEditorModalInline
+  template={template}
+  onBack={() => setSelectedTemplateId(null)}
+/>
+```
+
+#### 4.7 Quick-run scan từ "Cây Drive"
+Trong `TreeListView`, mỗi card có thêm nút **"Quét lại / Quick scan"** — click sẽ:
+1. Gọi `scanFolders` với `rootFolderId` + `depth` của cây.
+2. Chuyển sang tab **Quét folder** với kết quả hiển thị.
+3. User có thể lưu thành cây mới hoặc chỉ xem.
+
+```ts
+const handleQuickScan = async (tree: DriveTree) => {
+  const params: ScanFoldersParams = {
+    rootFolderId: tree.root_folder_id,
+    depth: tree.depth,
+    matchType: 'contains',
+    pattern: '',
+  }
+  const results = await runAppsScript('scanFolders', params)
+  setScanParams(params)
+  setScanResults(results)
+  setActiveTab('scan')
+}
+```
+
+### 5. UI/UX
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Drive Manager                                                  │
+│  [Cây Drive] [Quét folder] [Template] [Lịch sử]                │
+├─────────────────────────────────────────────────────────────────┤
+│  Breadcrumb: Drive Manager / Cây Drive / Báo cáo 2026          │
+│                                                                 │
+│  [← Quay lại danh sách]  [Refresh] [Mở rộng] [Thu gọn]         │
+│  [🔍 Tìm...]  Cấp: [×1] [×2]  Loại: [Tất cả ▾]                 │
+│                                                                 │
+│  ┌─ DriveTreeTable ──────────────────────────────────────────┐ │
+│  │ ...                                                       │ │
+│  └───────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Tab Cây Drive — Level 1 (list):**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [+ Thêm cây mới]                                              │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐               │
+│  │ Báo cáo 2026│ │ Marketing   │ │ Team A      │               │
+│  │ Shared • 18 │ │ My Drive • 5│ │ Shared • 12 │               │
+│  │ [Mở] [Quét] │ │ [Mở] [Quét] │ │ [Mở] [Quét] │               │
+│  └─────────────┘ └─────────────┘ └─────────────┘               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Tab Quét folder — Level 1 (form):**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Link/ID folder gốc: [____________________________]             │
+│  Độ sâu:             [▾ 2]                                      │
+│  [Quét folder]                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Tab Lịch sử (flat):**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [🔍 Tìm action...]  Trạng thái: [Tất cả ▾]                    │
+│  ┌─ Logs table ──────────────────────────────────────────────┐ │
+│  │ Thờii gian    │ Tác vụ           │ Trạng thái              │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `src/pages/DriveManagerPage.tsx` | Refactor thành container tabs + breadcrumb; tách logic các tab ra component con |
+| `src/components/drive-manager/DriveManagerTabs.tsx` (mới) | Tab navigation bar |
+| `src/components/drive-manager/BreadcrumbNav.tsx` (mới) | Reusable breadcrumb component |
+| `src/components/drive-manager/tabs/TreesTab.tsx` (mới) | Level 1 list + Level 2 detail của cây Drive |
+| `src/components/drive-manager/tabs/ScanTab.tsx` (mới) | Level 1 scan form + Level 2 results |
+| `src/components/drive-manager/tabs/TemplatesTab.tsx` (mới) | Level 1 list + Level 2 wizard |
+| `src/components/drive-manager/tabs/LogsTab.tsx` (mới) | Flat logs view |
+| `src/components/drive-manager/TreeListView.tsx` (mới) | Grid/card list cây Drive |
+| `src/components/drive-manager/TreeDetailView.tsx` (mới) | Chi tiết 1 cây — gồm tree table + filters |
+| `src/components/drive-manager/ScanFormView.tsx` (mới) | Form quét folder |
+| `src/components/drive-manager/ScanResultsView.tsx` (mới) | Kết quả quét + nút "Lưu thành cây" |
+| `src/components/drive-manager/TemplateListView.tsx` (mới) | List template |
+| `src/components/drive-manager/TemplateDetailView.tsx` (mới) | Container cho template wizard |
+| `src/components/drive-manager/LogsView.tsx` (mới) | Logs table với search/filter |
+| `src/components/drive-manager/CreateTreeDialog.tsx` | Giữ nguyên, dùng trong TreesTab Level 1 |
+| `src/components/drive-manager/TemplateManager.tsx` | Có thể giữ hoặc refactor để tách list/wizard |
+
+### 7. Schema / SQL changes
+Không cần.
+
+### 8. API / Integration changes
+Không cần. Không thay đổi Apps Script hay Edge Function.
+
+### 9. Test Plan
+1. Vào Drive Manager → mặc định tab **Cây Drive** active.
+2. Tab Cây Drive Level 1: hiển thị card list các cây đã lưu.
+3. Click "Mở" 1 cây → chuyển Level 2 detail, breadcrumb hiển thị đúng.
+4. Click breadcrumb "Cây Drive" → quay lại Level 1.
+5. Tab Quét folder: nhập URL → quét → hiện Level 2 results.
+6. Bấm "Lưu thành cây Drive" → tạo cây mới → tự chuyển tab Cây Drive và mở cây mới.
+7. Tab Template: list → click sửa → Level 2 wizard → breadcrumb đúng.
+8. Tab Lịch sử: hiển thị logs, không có drill-down.
+9. Từ card cây ở Level 1, bấm "Quét lại" → chuyển tab Quét folder với kết quả.
+10. `npm run verify` pass.
+
+### 10. Rollout Plan
+1. Tạo các component tabs + breadcrumb + list/detail view.
+2. Refactor `DriveManagerPage` sang container pattern.
+3. Di chuyển logic scan/template/logs từ `DriveManagerPage` cũ vào các tab mới.
+4. Chạy `npm run verify`.
+5. Cập nhật `CHANGELOG.md`, `PLAN-feature-dev.md` (status → done).
+
+### 11. Notes
+- **Dependencies:** FEAT-037 nên làm trước FEAT-035/036 vì nó là container layout. Sau khi xong, FEAT-035 chỉ cần thêm filter vào `TreeDetailView`, FEAT-036 chỉ cần thay wizard trong `TemplateDetailView`.
+- **Alternative:** Có thể gộp FEAT-035 + 036 + 037 thành 1 lần refactor lớn nếu bạn muốn deploy 1 lần. Tuy nhiên tách ra giúp review từng phần dễ hơn.
+- **State persistence:** Khi chuyển tab, state drill-down của tab cũ có thể giữ lại để user quay lại đúng chỗ. Ví dụ: đang xem cây X → sang tab Template → quay lại Cây Drive vẫn ở cây X.
+- **Mobile:** Full-page tabs dễ responsive hơn sidebar 2 cột.
+- **Rollback:** Revert `DriveManagerPage.tsx`, xóa các component tab mới. Không ảnh hưởng DB.

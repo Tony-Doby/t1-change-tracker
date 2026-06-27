@@ -1,11 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { HardDrive, Loader2, Plus, RefreshCw, Trash2, Edit3 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { HardDrive } from 'lucide-react'
 import PageContainer from '../ui/layout/PageContainer'
 import PageHeader from '../ui/layout/PageHeader'
-import Card from '../ui/layout/Card'
-import EmptyState from '../ui/display/EmptyState'
-import Badge from '../ui/display/Badge'
-import Modal from '../ui/layout/Modal'
 import ConfirmationModal from '../ui/feedback/ConfirmationModal'
 import { useToast } from '../components/Toast'
 import {
@@ -24,18 +20,23 @@ import {
   useUpdateDriveTemplateMutation,
   useDeleteDriveTemplateMutation,
 } from '../hooks/queries/useDriveTemplates'
-import ScanFoldersForm from '../components/apps-script/ScanFoldersForm'
-import SetPermissionsForm from '../components/apps-script/SetPermissionsForm'
-import ScanResultsTable from '../components/apps-script/ScanResultsTable'
-import DriveTreeTable, { useDriveTree, type DriveTreeNode, type TreeAction } from '../components/drive-manager/DriveTreeTable'
+import DriveManagerTabs, { type DriveManagerTab } from '../components/drive-manager/DriveManagerTabs'
+import TreeListView from '../components/drive-manager/TreeListView'
+import TreeDetailView from '../components/drive-manager/TreeDetailView'
+import ScanFormView from '../components/drive-manager/ScanFormView'
+import ScanResultsView from '../components/drive-manager/ScanResultsView'
+import TemplateListView from '../components/drive-manager/TemplateListView'
+import TemplateDetailView from '../components/drive-manager/TemplateDetailView'
+import TemplateEditorModal from '../components/drive-manager/TemplateEditorModal'
+import LogsView from '../components/drive-manager/LogsView'
 import CreateTreeDialog from '../components/drive-manager/CreateTreeDialog'
-import TemplateManager from '../components/drive-manager/TemplateManager'
 import CreateFromTemplateModal from '../components/drive-manager/CreateFromTemplateModal'
 import CopyFolderDialog from '../components/drive-manager/CopyFolderDialog'
 import MoveItemDialog from '../components/drive-manager/MoveItemDialog'
+import SetPermissionsForm from '../components/apps-script/SetPermissionsForm'
+import Modal from '../ui/layout/Modal'
 import type {
   AppsScriptAction,
-  AppsScriptLog,
   AppsScriptParams,
   ScanFolderResult,
   ScanFoldersParams,
@@ -43,8 +44,11 @@ import type {
   DriveTemplateFolder,
 } from '../types'
 import type { PresetItem } from '../components/apps-script/SetPermissionsForm'
+import type { DriveTreeNode } from '../components/drive-manager/drive-tree-utils'
+import type { TreeAction } from '../components/drive-manager/DriveTreeTable'
+import { DEFAULT_TEMPLATE_ROOT } from '../components/drive-manager/template-editor-utils'
 
-// FEAT-034: Drive Manager — replaces AppsScriptAdminPage.
+// FEAT-037: Drive Manager with full-page tabs, drill-down views, and breadcrumb navigation.
 export default function DriveManagerPage() {
   const { show } = useToast()
   const { mutateAsync: runAppsScript, isPending: isAppsScriptPending } = useAppsScriptMutation()
@@ -60,19 +64,23 @@ export default function DriveManagerPage() {
   const updateTemplate = useUpdateDriveTemplateMutation()
   const deleteTemplate = useDeleteDriveTemplateMutation()
 
-  const [activeTreeId, setActiveTreeId] = useState<string | null>(null)
+  // Tab state.
+  const [activeTab, setActiveTab] = useState<DriveManagerTab>('trees')
+
+  // Drill-down states.
+  const [selectedTreeId, setSelectedTreeId] = useState<string | null>(null)
+  const [scanResults, setScanResults] = useState<ScanFolderResult[] | null>(null)
+  const [scanParams, setScanParams] = useState<ScanFoldersParams | null>(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+
+  // Modals.
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [treeToDelete, setTreeToDelete] = useState<string | null>(null)
   const [treeToRename, setTreeToRename] = useState<{ id: string; name: string } | null>(null)
+  const [editingTemplate, setEditingTemplate] = useState<{ id: string; name: string; root: DriveTemplateFolder } | null>(null)
+  const [templateToDelete, setTemplateToDelete] = useState<string | null>(null)
 
-  // Results from a fresh scan (not yet saved).
-  const [scanResults, setScanResults] = useState<ScanFolderResult[] | null>(null)
-  const [scanParams, setScanParams] = useState<ScanFoldersParams | null>(null)
-
-  // Selection state for tree table.
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-
-  // Modals.
+  // Context action modals.
   const [grantNode, setGrantNode] = useState<DriveTreeNode | null>(null)
   const [bulkGrantItems, setBulkGrantItems] = useState<PresetItem[] | null>(null)
   const [createFromTemplateNode, setCreateFromTemplateNode] = useState<DriveTreeNode | null>(null)
@@ -81,30 +89,19 @@ export default function DriveManagerPage() {
   const [deleteNode, setDeleteNode] = useState<DriveTreeNode | null>(null)
 
   const activeTree = useMemo(
-    () => savedTrees?.find((t) => t.id === activeTreeId) ?? null,
-    [savedTrees, activeTreeId]
+    () => savedTrees?.find((t) => t.id === selectedTreeId) ?? null,
+    [savedTrees, selectedTreeId]
   )
 
-  // Auto-select first tree on load.
-  useEffect(() => {
-    if (!activeTreeId && savedTrees && savedTrees.length > 0) {
-      setActiveTreeId(savedTrees[0].id)
-    }
-  }, [activeTreeId, savedTrees])
+  const activeTemplate = useMemo(
+    () => templates?.find((t) => t.id === selectedTemplateId) ?? null,
+    [templates, selectedTemplateId]
+  )
 
-  // Reset selection when active tree changes.
-  useEffect(() => {
-    setSelectedIds(new Set())
-    setScanResults(null)
-  }, [activeTreeId])
-
-  const currentTreeData = useMemo(() => {
-    if (scanResults) return scanResults
-    if (activeTree?.tree_data) return activeTree.tree_data as ScanFolderResult[]
-    return []
-  }, [scanResults, activeTree])
-
-  const { tree, expandedIds, toggleExpand, expandAll, collapseAll } = useDriveTree(currentTreeData)
+  // Reset drill-down when tab changes.
+  const handleTabChange = (tab: DriveManagerTab) => {
+    setActiveTab(tab)
+  }
 
   const executeAction = async (action: AppsScriptAction, params: AppsScriptParams) => {
     try {
@@ -118,30 +115,38 @@ export default function DriveManagerPage() {
     }
   }
 
-  const handleScan = async (params: ScanFoldersParams) => {
-    setScanParams(params)
-    const data = (await executeAction('scanFolders', params)) as ScanFolderResult[]
-    setScanResults(data)
-  }
-
-  const handleRefresh = async () => {
-    if (!activeTree) return
+  // Tree operations.
+  const handleRefreshTreeById = async (treeId: string) => {
+    const tree = savedTrees?.find((t) => t.id === treeId)
+    if (!tree) return
     const params: ScanFoldersParams = {
-      rootFolderId: activeTree.root_folder_id,
-      depth: activeTree.depth,
+      rootFolderId: tree.root_folder_id,
+      depth: tree.depth,
       matchType: 'contains',
       pattern: '',
     }
     const data = (await executeAction('scanFolders', params)) as ScanFolderResult[]
     await updateTree.mutateAsync({
-      id: activeTree.id,
+      id: tree.id,
       updates: {
         tree_data: data,
         refreshed_at: new Date().toISOString(),
       },
     })
-    setScanResults(null)
     show('Đã làm mới cây Drive', 'success')
+  }
+
+  const handleQuickScan = async (tree: { id: string; root_folder_id: string; depth: number }) => {
+    const params: ScanFoldersParams = {
+      rootFolderId: tree.root_folder_id,
+      depth: tree.depth,
+      matchType: 'contains',
+      pattern: '',
+    }
+    const data = (await executeAction('scanFolders', params)) as ScanFolderResult[]
+    setScanParams(params)
+    setScanResults(data)
+    setActiveTab('scan')
   }
 
   const handleCreateTree = async (input: {
@@ -165,8 +170,8 @@ export default function DriveManagerPage() {
       tree_data: data,
       is_shared_drive: data[0]?.isSharedDrive ?? null,
     })
-    setActiveTreeId(created.id)
-    setScanResults(null)
+    setActiveTab('trees')
+    setSelectedTreeId(created.id)
     setCreateDialogOpen(false)
     show('Đã thêm cây Drive mới', 'success')
   }
@@ -174,9 +179,8 @@ export default function DriveManagerPage() {
   const handleDeleteTree = async () => {
     if (!treeToDelete) return
     await deleteTree.mutateAsync(treeToDelete)
-    if (activeTreeId === treeToDelete) {
-      setActiveTreeId(null)
-      setScanResults(null)
+    if (selectedTreeId === treeToDelete) {
+      setSelectedTreeId(null)
     }
     setTreeToDelete(null)
     show('Đã xóa cây Drive', 'success')
@@ -193,47 +197,58 @@ export default function DriveManagerPage() {
     show('Đã đổi tên cây Drive', 'success')
   }
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  // Scan operations.
+  const handleScan = async (params: ScanFoldersParams) => {
+    setScanParams(params)
+    const data = (await executeAction('scanFolders', params)) as ScanFolderResult[]
+    setScanResults(data)
   }
 
-  const selectAll = (ids: string[]) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      const allSelected = ids.every((id) => next.has(id))
-      if (allSelected) {
-        ids.forEach((id) => next.delete(id))
-      } else {
-        ids.forEach((id) => next.add(id))
-      }
-      return next
+  const handleSaveScanAsTree = async (name: string, params: ScanFoldersParams, results: ScanFolderResult[]) => {
+    const created = await createTree.mutateAsync({
+      name,
+      root_url: `https://drive.google.com/drive/folders/${params.rootFolderId}`,
+      root_folder_id: params.rootFolderId,
+      depth: params.depth,
+      tree_data: results,
+      is_shared_drive: results[0]?.isSharedDrive ?? null,
     })
+    setActiveTab('trees')
+    setSelectedTreeId(created.id)
+    setScanResults(null)
+    setScanParams(null)
+    show('Đã lưu cây Drive mới', 'success')
   }
 
+  // Template operations.
   const handleCreateTemplate = async (data: { name: string; root: DriveTemplateFolder }) => {
     await createTemplate.mutateAsync({
       name: data.name,
       root: data.root,
       created_by: null,
     })
+    setEditingTemplate(null)
     show('Đã tạo template', 'success')
   }
 
-  const handleUpdateTemplate = async (id: string, updates: { name?: string; root?: DriveTemplateFolder }) => {
-    await updateTemplate.mutateAsync({ id, updates })
+  const handleUpdateTemplate = async (data: { name: string; root: DriveTemplateFolder }) => {
+    if (!editingTemplate) return
+    await updateTemplate.mutateAsync({ id: editingTemplate.id, updates: data })
+    setEditingTemplate(null)
     show('Đã cập nhật template', 'success')
   }
 
-  const handleDeleteTemplate = async (id: string) => {
-    await deleteTemplate.mutateAsync(id)
+  const handleDeleteTemplate = async () => {
+    if (!templateToDelete) return
+    await deleteTemplate.mutateAsync(templateToDelete)
+    if (selectedTemplateId === templateToDelete) {
+      setSelectedTemplateId(null)
+    }
+    setTemplateToDelete(null)
     show('Đã xóa template', 'success')
   }
 
+  // Context actions.
   const handleCreateFromTemplate = async (params: { parentFolderId: string; templateId: string }) => {
     const template = templates?.find((t) => t.id === params.templateId)
     if (!template) {
@@ -285,10 +300,6 @@ export default function DriveManagerPage() {
     }
   }
 
-  const handleBulkGrantFromScan = (items: PresetItem[]) => {
-    setBulkGrantItems(items)
-  }
-
   const handleGrantSubmit = async (params: SetPermissionsParams) => {
     await executeAction('setPermissions', params)
     setGrantNode(null)
@@ -306,217 +317,93 @@ export default function DriveManagerPage() {
     updateTemplate.isPending ||
     deleteTemplate.isPending
 
+  // Render tabs.
+  const renderTreesTab = () => {
+    if (selectedTreeId && activeTree) {
+      return (
+        <TreeDetailView
+          tree={activeTree}
+          onBack={() => setSelectedTreeId(null)}
+          onRefresh={() => void handleRefreshTreeById(activeTree.id)}
+          onAction={handleTreeAction}
+          onBulkGrant={setBulkGrantItems}
+          isLoading={isLoading}
+        />
+      )
+    }
+
+    return (
+      <TreeListView
+        trees={savedTrees ?? []}
+        isLoading={treesLoading}
+        onSelect={setSelectedTreeId}
+        onRefresh={(tree) => void handleRefreshTreeById(tree.id)}
+        onQuickScan={(tree) => void handleQuickScan(tree)}
+        onRename={(tree) => setTreeToRename({ id: tree.id, name: tree.name || '' })}
+        onDelete={setTreeToDelete}
+        onCreate={() => setCreateDialogOpen(true)}
+      />
+    )
+  }
+
+  const renderScanTab = () => {
+    if (scanResults && scanParams) {
+      return (
+        <ScanResultsView
+          results={scanResults}
+          params={scanParams}
+          onBack={() => {
+            setScanResults(null)
+            setScanParams(null)
+          }}
+          onSaveAsTree={(name, params, results) => void handleSaveScanAsTree(name, params, results)}
+          onBulkGrant={setBulkGrantItems}
+          isSaving={createTree.isPending}
+        />
+      )
+    }
+
+    return <ScanFormView onSubmit={(p) => void handleScan(p)} isLoading={isAppsScriptPending} />
+  }
+
+  const renderTemplatesTab = () => {
+    if (selectedTemplateId && activeTemplate) {
+      return (
+        <TemplateDetailView
+          template={activeTemplate}
+          onBack={() => setSelectedTemplateId(null)}
+          onEdit={() => setEditingTemplate({ id: activeTemplate.id, name: activeTemplate.name, root: activeTemplate.root })}
+          onDelete={() => setTemplateToDelete(activeTemplate.id)}
+        />
+      )
+    }
+
+    return (
+      <TemplateListView
+        templates={templates ?? []}
+        isLoading={templatesLoading}
+        onSelect={setSelectedTemplateId}
+        onCreate={() => setEditingTemplate({ id: '', name: '', root: DEFAULT_TEMPLATE_ROOT })}
+        onDelete={setTemplateToDelete}
+      />
+    )
+  }
+
+  const renderLogsTab = () => {
+    return <LogsView logs={logs} isLoading={logsLoading} onRefresh={() => void refetchLogs()} />
+  }
+
   return (
     <PageContainer>
       <PageHeader title="Drive Manager" icon={<HardDrive className="w-7 h-7" />} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
-        {/* Sidebar: saved trees */}
-        <Card className="h-fit" padding="sm">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-text-primary">Cây Drive đã lưu</h3>
-            <button
-              type="button"
-              onClick={() => setCreateDialogOpen(true)}
-              className="p-1.5 rounded-sm hover:bg-bg-secondary text-accent"
-              aria-label="Thêm cây mới"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
+      <DriveManagerTabs activeTab={activeTab} onChange={handleTabChange} />
 
-          {treesLoading ? (
-            <div className="flex items-center justify-center py-6 text-text-tertiary">
-              <Loader2 className="w-4 h-4 animate-spin mr-2" /> Đang tải...
-            </div>
-          ) : !savedTrees || savedTrees.length === 0 ? (
-            <EmptyState
-              context="no_data"
-              title="Chưa có cây Drive"
-              subtitle="Bấm + để thêm cây mới."
-            />
-          ) : (
-            <nav className="space-y-1">
-              {savedTrees.map((tree) => (
-                <div
-                  key={tree.id}
-                  className={`group flex items-center gap-2 px-2 py-2 rounded-sm text-sm cursor-pointer ${
-                    activeTreeId === tree.id
-                      ? 'bg-accent-subtle text-accent font-medium'
-                      : 'text-text-secondary hover:bg-bg-secondary'
-                  }`}
-                  onClick={() => setActiveTreeId(tree.id)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <span className="block truncate">{tree.name || tree.root_folder_id}</span>
-                    <span className={`block text-xs truncate ${
-                      activeTreeId === tree.id ? 'text-accent/80' : 'text-text-tertiary'
-                    }`}>
-                      {tree.root_url}
-                    </span>
-                  </div>
-                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setTreeToRename({ id: tree.id, name: tree.name || '' })
-                      }}
-                      className="p-1 rounded-sm hover:bg-bg-tertiary text-text-tertiary"
-                      aria-label="Đổi tên"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setTreeToDelete(tree.id)
-                      }}
-                      className="p-1 rounded-sm hover:bg-bg-tertiary text-danger"
-                      aria-label="Xóa"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </nav>
-          )}
-        </Card>
-
-        {/* Main area */}
-        <div className="space-y-6">
-          <Card>
-            <h2 className="text-[1.23rem] font-medium text-text-primary mb-4">
-              {scanResults ? 'Kết quả quét mới' : activeTree ? activeTree.name || activeTree.root_folder_id : 'Chọn hoặc thêm cây Drive'}
-            </h2>
-
-            {!activeTree && !scanResults ? (
-              <EmptyState
-                context="no_data"
-                title="Chưa chọn cây Drive"
-                subtitle="Chọn một cây từ sidebar hoặc thêm cây mới để bắt đầu."
-              />
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <button
-                    type="button"
-                    onClick={expandAll}
-                    className="px-3 h-8 text-sm border border-border-hairline rounded-sm hover:bg-bg-secondary transition-colors"
-                  >
-                    Mở rộng tất cả
-                  </button>
-                  <button
-                    type="button"
-                    onClick={collapseAll}
-                    className="px-3 h-8 text-sm border border-border-hairline rounded-sm hover:bg-bg-secondary transition-colors"
-                  >
-                    Thu gọn tất cả
-                  </button>
-                  {activeTree && !scanResults && (
-                    <button
-                      type="button"
-                      onClick={() => void handleRefresh()}
-                      disabled={isLoading}
-                      className="inline-flex items-center gap-1.5 px-3 h-8 text-sm border border-border-hairline rounded-sm hover:bg-bg-secondary transition-colors disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                      Làm mới
-                    </button>
-                  )}
-                  {scanResults && scanParams && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScanResults(null)
-                        setScanParams(null)
-                      }}
-                      className="px-3 h-8 text-sm border border-border-hairline rounded-sm hover:bg-bg-secondary transition-colors"
-                    >
-                      Quay lại cây đã lưu
-                    </button>
-                  )}
-                </div>
-
-                {currentTreeData.length === 0 ? (
-                  <EmptyState context="no_data" title="Không có folder" subtitle="Cây này chưa có folder con hoặc quét chưa có kết quả." />
-                ) : (
-                  <DriveTreeTable
-                    nodes={tree}
-                    selectedIds={selectedIds}
-                    onToggleSelect={toggleSelect}
-                    onSelectAll={selectAll}
-                    onAction={handleTreeAction}
-                    onToggleExpand={toggleExpand}
-                    expandedIds={expandedIds}
-                  />
-                )}
-
-                {selectedIds.size > 0 && (
-                  <div className="mt-4 flex items-center gap-3 p-3 rounded-sm bg-accent-subtle border border-accent/20">
-                    <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-pill bg-accent text-white text-xs font-medium">
-                      {selectedIds.size}
-                    </span>
-                    <span className="text-sm text-text-secondary">đã chọn</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const items = currentTreeData
-                          .filter((r) => selectedIds.has(r.id))
-                          .map((r) => ({ id: r.id, isSharedDrive: r.isSharedDrive }))
-                        setBulkGrantItems(items)
-                      }}
-                      className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
-                    >
-                      Cấp quyền
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </Card>
-
-          {/* Scan form for new tree or re-scan */}
-          <Card>
-            <h3 className="text-[1.23rem] font-medium text-text-primary mb-4">Quét folder mới</h3>
-            <ScanFoldersForm onSubmit={(p) => void handleScan(p)} isLoading={isLoading} />
-            {scanResults && (
-              <div className="mt-4">
-                <ScanResultsTable results={scanResults} onBulkGrant={handleBulkGrantFromScan} />
-              </div>
-            )}
-          </Card>
-
-          {/* Template manager */}
-          <TemplateManager
-            templates={templates ?? []}
-            isLoading={templatesLoading}
-            onCreate={handleCreateTemplate}
-            onUpdate={handleUpdateTemplate}
-            onDelete={handleDeleteTemplate}
-            createPending={createTemplate.isPending}
-            updatePending={updateTemplate.isPending}
-            deletePending={deleteTemplate.isPending}
-          />
-
-          {/* Logs */}
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[1.23rem] font-medium text-text-primary">Lịch sử thao tác</h3>
-              <button
-                type="button"
-                onClick={() => void refetchLogs()}
-                disabled={logsLoading}
-                className="text-sm text-accent hover:text-accent-hover disabled:opacity-50"
-              >
-                Làm mới
-              </button>
-            </div>
-            <LogsTable logs={logs} isLoading={logsLoading} />
-          </Card>
-        </div>
+      <div className="min-h-[24rem]">
+        {activeTab === 'trees' && renderTreesTab()}
+        {activeTab === 'scan' && renderScanTab()}
+        {activeTab === 'templates' && renderTemplatesTab()}
+        {activeTab === 'logs' && renderLogsTab()}
       </div>
 
       <CreateTreeDialog
@@ -561,6 +448,32 @@ export default function DriveManagerPage() {
         </Modal>
       )}
 
+      <ConfirmationModal
+        open={!!templateToDelete}
+        onClose={() => setTemplateToDelete(null)}
+        onConfirm={() => void handleDeleteTemplate()}
+        title="Xác nhận xóa template"
+        description="Bạn có chắc muốn xóa template này?"
+        confirmText="Xóa"
+        confirmType="danger"
+        loading={deleteTemplate.isPending}
+      />
+
+      {editingTemplate && (
+        <TemplateEditorModal
+          template={editingTemplate.id ? { id: editingTemplate.id, name: editingTemplate.name, root: editingTemplate.root, created_by: null, created_at: '', updated_at: '' } : null}
+          onClose={() => setEditingTemplate(null)}
+          onSave={(data) => {
+            if (editingTemplate.id) {
+              void handleUpdateTemplate(data)
+            } else {
+              void handleCreateTemplate(data)
+            }
+          }}
+          isPending={createTemplate.isPending || updateTemplate.isPending}
+        />
+      )}
+
       {(grantNode || bulkGrantItems) && (
         <Modal
           title={bulkGrantItems ? 'Cấp quyền hàng loạt' : 'Cấp quyền'}
@@ -590,6 +503,7 @@ export default function DriveManagerPage() {
           onSubmit={(p) => void handleCreateFromTemplate(p)}
         />
       )}
+
       {copyNode && (
         <CopyFolderDialog
           node={{ id: copyNode.id, name: copyNode.name }}
@@ -625,51 +539,5 @@ export default function DriveManagerPage() {
         loading={isAppsScriptPending}
       />
     </PageContainer>
-  )
-}
-
-function LogsTable({ logs, isLoading }: { logs?: AppsScriptLog[]; isLoading: boolean }) {
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8 text-text-tertiary">
-        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-        Đang tải lịch sử...
-      </div>
-    )
-  }
-
-  if (!logs || logs.length === 0) {
-    return <EmptyState context="no_data" title="Chưa có lịch sử" subtitle="Các thao tác sẽ được ghi lại ở đây." />
-  }
-
-  return (
-    <div className="overflow-auto max-h-64 border border-border-hairline rounded-sm">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-bg-secondary sticky top-0">
-          <tr>
-            <th className="px-3 py-2 font-medium text-text-tertiary border-b border-border-hairline">Thờii gian</th>
-            <th className="px-3 py-2 font-medium text-text-tertiary border-b border-border-hairline">Tác vụ</th>
-            <th className="px-3 py-2 font-medium text-text-tertiary border-b border-border-hairline">Trạng thái</th>
-          </tr>
-        </thead>
-        <tbody>
-          {logs.map((log) => (
-            <tr key={log.id} className="border-b border-border-hairline">
-              <td className="px-3 py-2 text-text-secondary">
-                {log.created_at ? new Date(log.created_at).toLocaleString('vi-VN') : '-'}
-              </td>
-              <td className="px-3 py-2 text-text-primary">{log.action}</td>
-              <td className="px-3 py-2">
-                {log.success ? (
-                  <Badge variant="success">Thành công</Badge>
-                ) : (
-                  <Badge variant="danger">Thất bại</Badge>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   )
 }

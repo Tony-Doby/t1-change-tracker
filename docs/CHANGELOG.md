@@ -64,6 +64,45 @@
 
 ## 2026-06-27
 
+### 86b. Features FEAT-035 + FEAT-036 + FEAT-037: Drive Manager — Filters, Template UI wizard, Full-page tabs
+
+**Mô tả:** Nâng cấp Drive Manager (FEAT-034) theo 3 hướng: (1) bộ lọc cây Drive, (2) UI wizard thay thế JSON editor cho template, (3) tái cấu trúc trang thành full-page tabs với drill-down và breadcrumb.
+
+**FEAT-037 — Full-page tabs + drill-down + breadcrumb:**
+- `src/pages/DriveManagerPage.tsx`: Tái cấu trúc từ layout 2 cột sang container tabs 4 tab: Cây Drive, Quét folder, Template, Lịch sử. Tab Cây Drive / Quét folder / Template có 2-level drill-down (list → detail); tab Lịch sử flat.
+- `src/components/drive-manager/DriveManagerTabs.tsx` (mới): Thanh tab điều hướng.
+- `src/components/drive-manager/BreadcrumbNav.tsx` (mới): Breadcrumb reusable, click được để quay lại cấp cha.
+- `src/components/drive-manager/TreeListView.tsx` (mới): Grid/list các cây Drive đã lưu.
+- `src/components/drive-manager/ScanFormView.tsx` (mới): Form quét folder.
+- `src/components/drive-manager/ScanResultsView.tsx` (mới): Kết quả quét với nút "Lưu thành cây Drive".
+- `src/components/drive-manager/TemplateListView.tsx` (mới): List template dạng card.
+- `src/components/drive-manager/TemplateDetailView.tsx` (mới): Chi tiết template + nút sửa/xóa.
+- `src/components/drive-manager/LogsView.tsx` (mới): Bảng logs phẳng với search + lọc status.
+
+**FEAT-035 — Search, Filter by depth/type, improved bulk selection:**
+- `src/components/drive-manager/TreeDetailView.tsx`: Thêm search theo tên/path, filter chips theo cấp độ sâu, filter loại Drive (Tất cả/My/Shared), hiển thị "Hiển thị X/Y folder", auto-expand nhánh có kết quả khi search/filter.
+- `src/components/drive-manager/drive-tree-utils.ts` (mới): Pure helpers `buildTree`, `useDriveTree`, `pruneTree`, `collectMatchedParentIds`, `collectIds` — tách logic cây khỏi UI.
+- `src/components/drive-manager/DriveTreeTable.tsx`: Nhận cây đã filter từ bên ngoài, select-all theo node đang render.
+- `src/components/drive-manager/drive-tree.test.ts`: Bổ sung unit test cho `pruneTree` và `collectMatchedParentIds`.
+
+**FEAT-036 — Template UI wizard thay thế JSON editor:**
+- `src/components/drive-manager/TemplateEditorModal.tsx`: Viết lại hoàn toàn: tree navigator bên trái, form tên + permissions bên phải, preview cây real-time, toggle JSON read-only, validate tên/email/role trước khi lưu.
+- `src/components/drive-manager/template-editor-utils.ts` (mới): Pure helpers `findNode`, `updateNode`, `addChild`, `removeNode`, `validateTemplate`, `countFolders`, `countPermissions`, `DEFAULT_TEMPLATE_ROOT`.
+
+**Files sửa khác:**
+- `src/components/apps-script/SetPermissionsForm.tsx`: Fix ESLint `set-state-in-effect` bằng derived state.
+- `src/components/CountdownConfirmModal.tsx`: Gọn lại eslint-disable, giữ lại 1 disable hợp lệ cho setState reset countdown.
+
+**Kết quả:**
+- `npm run verify` pass (tsc + build + eslint, chỉ còn warning chunk size).
+- `npm run test` pass (81/81 tests).
+
+**Lưu ý deploy:** Không cần thay đổi DB/Apps Script/Edge Function. Pure frontend.
+
+---
+
+## 2026-06-27
+
 ### 85. Policy FEAT-033: Unit Test Policy — Bắt buộc unit test có điều kiện
 
 **Mô tả:** Thiết lập quy tắc rõ ràng về việc khi nào phải viết unit test, khi nào không, và tiêu chí chất lượng test. Thay vì bắt buộc mọi feature đều có unit test, policy tập trung vào code có rủi ro cao: pure functions trong `src/lib/`, business rules, và bug fix regression.

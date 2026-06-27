@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react'
 import { ChevronRight, ChevronDown, Folder, MoreVertical } from 'lucide-react'
-import type { ScanFolderResult } from '../../types'
-
-export interface DriveTreeNode extends ScanFolderResult {
-  children: DriveTreeNode[]
-}
+import { collectIds } from './drive-tree-utils'
+import type { DriveTreeNode } from './drive-tree-utils'
 
 export type TreeAction = 'grant' | 'createFromTemplate' | 'copy' | 'move' | 'delete'
+
+export type { DriveTreeNode }
 
 interface Props {
   nodes: DriveTreeNode[]
@@ -16,73 +15,6 @@ interface Props {
   onAction: (action: TreeAction, node: DriveTreeNode) => void
   onToggleExpand: (id: string) => void
   expandedIds: Set<string>
-}
-
-export function buildTree(results: ScanFolderResult[]): DriveTreeNode[] {
-  const rootNodes: DriveTreeNode[] = []
-  const nodeMap = new Map<string, DriveTreeNode>()
-
-  // Create nodes.
-  results.forEach((r) => {
-    nodeMap.set(r.id, { ...r, children: [] })
-  })
-
-  // Build parent-child relationships based on path.
-  results.forEach((r) => {
-    const node = nodeMap.get(r.id)
-    if (!node) return
-
-    if (r.depth === 0) {
-      rootNodes.push(node)
-      return
-    }
-
-    // Find parent: the folder whose path is the immediate parent of this node's path.
-    const parentPath = r.path.split('/').slice(0, -1).join('/')
-    const parent = results.find(
-      (candidate) =>
-        candidate.depth === r.depth - 1 &&
-        (candidate.path === parentPath || (parentPath === '' && candidate.depth === 0))
-    )
-
-    if (parent) {
-      const parentNode = nodeMap.get(parent.id)
-      if (parentNode) parentNode.children.push(node)
-    } else {
-      // Fallback: attach to root if parent not found.
-      rootNodes.push(node)
-    }
-  })
-
-  return rootNodes
-}
-
-export function useDriveTree(results: ScanFolderResult[]) {
-  const tree = useMemo(() => buildTree(results), [results])
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
-    const allIds = new Set<string>()
-    results.forEach((r) => allIds.add(r.id))
-    return allIds
-  })
-
-  const toggleExpand = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const expandAll = () => {
-    const allIds = new Set<string>()
-    results.forEach((r) => allIds.add(r.id))
-    setExpandedIds(allIds)
-  }
-
-  const collapseAll = () => setExpandedIds(new Set())
-
-  return { tree, expandedIds, toggleExpand, expandAll, collapseAll }
 }
 
 export default function DriveTreeTable({
@@ -140,8 +72,8 @@ function TreeRow({
   node,
   depth,
   selectedIds,
-  onToggleSelect,
   onAction,
+  onToggleSelect,
   onToggleExpand,
   expandedIds,
 }: {
@@ -287,13 +219,4 @@ function ActionItem({
       {label}
     </button>
   )
-}
-
-function collectIds(nodes: DriveTreeNode[]): string[] {
-  const ids: string[] = []
-  nodes.forEach((n) => {
-    ids.push(n.id)
-    ids.push(...collectIds(n.children))
-  })
-  return ids
 }
