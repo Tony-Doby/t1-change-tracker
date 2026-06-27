@@ -68,6 +68,7 @@
 | 039 | Không lưu được template Drive — DB còn cột `levels`, code dùng `root` + lỗi bị nuốt | fixed | 2026-06-27 | 2026-06-27 |
 | 040 | `createFolderTree` lỗi "Template thiếu root folder" + không chạy trên Shared Drive | fixed | 2026-06-27 | 2026-06-27 |
 | 041 | Quyền template lệch với Shared Drive — app cho chọn `organizer` (không gán được cho folder con) và nuốt lỗi áp quyền | fixed | 2026-06-27 | 2026-06-27 |
+| 042 | Thanh "đã chọn" trong cây Drive đặt dưới bảng, không sticky — lệch pattern FEAT-032 | fixed | 2026-06-27 | 2026-06-27 |
 
 ---
 
@@ -176,6 +177,45 @@ Không cần.
 - Đây chủ yếu là giới hạn của Google + UX; không thay đổi hành vi backend.
 - Nếu sau này cần cấp **Manager toàn ổ chung** (phương án C, user **chưa** duyệt): thêm action riêng gán `organizer` với `fileId = ID Shared Drive` (gốc ổ), không phải folder con.
 - Template cũ đã lưu `organizer` vẫn hiển thị đúng nhãn; khi áp sẽ báo lỗi rõ ràng (plan B) thay vì âm thầm.
+
+---
+
+## BUG-042: Thanh "đã chọn" trong cây Drive đặt dưới bảng, không sticky (lệch pattern FEAT-032)
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed` (2026-06-27)
+- **Severity**: `low`
+
+### 1. Mô tả bug
+Trong `TreeDetailView` (cây Drive), khi tick chọn folder, thanh hành động "đã chọn" (Cấp quyền / Tạo folder theo template) hiện **bên dưới bảng**, không sticky. Cây dài (vd 21 folder) → thanh trôi xuống đáy trang, xa điểm tick → khó thấy/khó thao tác. Không nhất quán với bảng Quét folder (FEAT-032) vốn cho thanh **dính đỉnh khung bảng**.
+
+### 2. Root Cause
+`TreeDetailView` render thanh trong block riêng sau `<DriveTreeTable>` (`mt-4 … bg-accent-subtle`), nằm ngoài hộp cuộn của bảng nên không thể sticky theo bảng. `ScanResultsTable` (FEAT-032) ngược lại đặt thanh `sticky top-0 z-20` **bên trong** hộp cuộn, header tụt `top-11`.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution (user duyệt 2026-06-27 — phương án "Sticky đỉnh bảng giống FEAT-032")
+Chuyển thanh vào trong `DriveTreeTable` (nơi có hộp cuộn), `sticky top-0 z-20`, ngay trên `<thead>`; khi có chọn → `<thead>` dùng `top-11`. Thanh gồm: chip số lượng + **Cấp quyền** + **Tạo folder theo template** (chỉ khi chọn đúng 1, kèm hint khi ≠1) + **Bỏ chọn (✕)** — sao chép pattern FEAT-032.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/drive-manager/DriveTreeTable.tsx` | Thêm thanh sticky-top trong hộp cuộn; props mới `onBulkGrant`/`onCreateFromTemplate`/`onClearSelection`; `<thead>` → `top-11` khi có chọn; import `FolderPlus`, `X` |
+| `src/components/drive-manager/TreeDetailView.tsx` | Bỏ block thanh cũ dưới bảng; truyền 3 handler xuống `DriveTreeTable` (`onClearSelection` = `setSelectedIds(new Set())`); bỏ import `FolderPlus` thừa |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. `npm run build` + `npm run lint` xanh; `npm run test` 87/87 (UI thuần, không thêm test — FEAT-033).
+2. Cây Drive dài: tick 1 folder gần đầu → thanh "đã chọn" dính đỉnh bảng, luôn thấy khi cuộn.
+3. Chọn 1 folder → có nút "Tạo folder theo template"; chọn ≠1 → đổi thành hint; nút "Bỏ chọn" xóa lựa chọn.
+4. So sánh trực quan với tab Quét folder → cùng pattern.
+
+### 8. Notes
+- Thay đổi UI thuần, không đụng logic chọn/filter/action menu.
+- `DriveTreeTable` chỉ có 1 consumer (`TreeDetailView`) nên props mới để required, không phá vỡ chỗ khác.
 
 ---
 

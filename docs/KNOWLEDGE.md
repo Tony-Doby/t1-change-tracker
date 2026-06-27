@@ -321,3 +321,7 @@ it('returns ineligible for ASC rank regardless of case', () => {
   - Vẫn giữ `organizer` trong type `DriveRole` + `roleLabel()` để hiển thị template cũ đã lưu.
 - **Lỗi áp quyền không được nuốt im lặng:** `createFolderTree` trả `nodes[].permissionsApplied[].error` cho từng quyền áp hỏng. `DriveManagerPage.handleCreateFromTemplate` đọc qua pure helper `create-folder-tree-utils.ts` (`collectPermissionFailures`/`formatPermissionFailures`) → toast **warning** liệt kê quyền lỗi thay vì báo "thành công" giả. `executeAction` có cờ `silentSuccess` để bỏ toast success mặc định khi cần tự báo.
 - Nếu thực sự cần cấp **Manager toàn ổ chung** (phương án C, chưa làm): thêm action gán `organizer` với `fileId = ID Shared Drive` (gốc ổ), không phải folder con.
+
+### 8.9 Convention: thanh hành động hàng loạt "đã chọn" dính ĐỈNH khung bảng (BUG-042)
+- Mọi bảng có "tick chọn nhiều dòng → hành động" trong Drive Manager đặt thanh hành động **`sticky top-0 z-20` BÊN TRONG hộp cuộn của bảng**, ngay trên `<thead>`; khi thanh hiện → `<thead>` dùng `top-11` (chiều cao thanh = `h-11`). KHÔNG đặt thanh dưới bảng (sẽ trôi xuống cuối trang khi cây/bảng dài).
+- Mẫu chuẩn: `ScanResultsTable.tsx` (FEAT-032) và `DriveTreeTable.tsx` (BUG-042). Thanh gồm: chip số lượng → "đã chọn" → divider → các nút hành động → "Bỏ chọn (✕)".

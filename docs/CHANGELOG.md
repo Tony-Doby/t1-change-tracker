@@ -14,6 +14,20 @@
 
 ## 2026-06-27
 
+### 90. Bug fix BUG-042: Thanh "đã chọn" cây Drive dính đỉnh bảng (đồng nhất FEAT-032)
+
+**Mô tả:** Thanh hành động "đã chọn" trong cây Drive (`TreeDetailView`) đặt dưới bảng, không sticky → cây dài thì trôi xuống đáy trang, lệch pattern với bảng Quét folder (FEAT-032 cho thanh dính đỉnh khung bảng).
+
+**Giải pháp (user duyệt — "Sticky đỉnh bảng giống FEAT-032"):** Chuyển thanh vào trong `DriveTreeTable` (hộp cuộn), `sticky top-0 z-20` ngay trên `<thead>` (header tụt `top-11`). Thanh gồm chip số lượng + Cấp quyền + Tạo folder theo template (chỉ khi chọn đúng 1) + Bỏ chọn (✕).
+
+**Files sửa:**
+- `src/components/drive-manager/DriveTreeTable.tsx`: thêm thanh sticky-top; props mới `onBulkGrant`/`onCreateFromTemplate`/`onClearSelection`; `<thead>` `top-11` khi có chọn.
+- `src/components/drive-manager/TreeDetailView.tsx`: bỏ thanh cũ dưới bảng; truyền 3 handler xuống (`onClearSelection` = clear `selectedIds`).
+
+**Kiểm thử:** `npm run build` + `npm run lint` xanh; `npm run test` 87/87. UI thuần → không thêm unit test (FEAT-033).
+
+---
+
 ### 89. Bug fix BUG-041: Quyền template lệch Shared Drive — bỏ `organizer` chọn được + nổi lỗi áp quyền
 
 **Mô tả:** Quyền trong app lệch với Shared Drive; không set được "Người quản lý" (`organizer`), mức cao nhất chỉ "Người quản lý nội dung" (`fileOrganizer`).

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronRight, ChevronDown, Folder, MoreVertical } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FolderPlus, MoreVertical, X } from 'lucide-react'
 import { collectIds } from './drive-tree-utils'
 import type { DriveTreeNode } from './drive-tree-utils'
 
@@ -15,6 +15,10 @@ interface Props {
   onAction: (action: TreeAction, node: DriveTreeNode) => void
   onToggleExpand: (id: string) => void
   expandedIds: Set<string>
+  // BUG-042: thanh hành động "đã chọn" dính đỉnh bảng (đồng nhất với FEAT-032).
+  onBulkGrant: () => void
+  onCreateFromTemplate: () => void
+  onClearSelection: () => void
 }
 
 export default function DriveTreeTable({
@@ -25,15 +29,55 @@ export default function DriveTreeTable({
   onAction,
   onToggleExpand,
   expandedIds,
+  onBulkGrant,
+  onCreateFromTemplate,
+  onClearSelection,
 }: Props) {
   const allIds = useMemo(() => collectIds(nodes), [nodes])
 
   const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id))
+  const selectedCount = selectedIds.size
+  const showBar = selectedCount > 0
 
   return (
-    <div className="border border-border-hairline rounded-sm overflow-auto max-h-[32rem]">
+    <div className="border border-border-hairline rounded-sm overflow-auto max-h-[32rem] relative">
+      {/* BUG-042: thanh "đã chọn" dính đỉnh khung bảng (giống FEAT-032), không trôi xuống cuối trang. */}
+      {showBar && (
+        <div className="sticky top-0 z-20 flex items-center gap-3 h-11 px-4 bg-accent-subtle border-b border-accent/20 whitespace-nowrap">
+          <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-pill bg-accent text-white text-xs font-medium">
+            {selectedCount}
+          </span>
+          <span className="text-sm text-text-secondary">đã chọn</span>
+          <div className="h-4 w-px bg-accent/20" />
+          <button
+            type="button"
+            onClick={onBulkGrant}
+            className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
+          >
+            Cấp quyền
+          </button>
+          {selectedCount === 1 ? (
+            <button
+              type="button"
+              onClick={onCreateFromTemplate}
+              className="inline-flex items-center gap-1.5 px-3 h-8 border border-accent/30 text-accent rounded-sm text-sm hover:bg-accent-subtle/70 transition-colors"
+            >
+              <FolderPlus className="w-4 h-4" /> Tạo folder theo template
+            </button>
+          ) : (
+            <span className="text-xs text-text-tertiary">Chọn đúng 1 folder để tạo theo template</span>
+          )}
+          <button
+            type="button"
+            onClick={onClearSelection}
+            className="inline-flex items-center gap-1 px-2 h-8 text-sm text-text-secondary hover:text-text-primary transition-colors ml-auto"
+          >
+            <X className="w-3.5 h-3.5" /> Bỏ chọn
+          </button>
+        </div>
+      )}
       <table className="w-full text-left text-sm">
-        <thead className="bg-bg-secondary sticky top-0 z-10">
+        <thead className={`bg-bg-secondary sticky z-10 ${showBar ? 'top-11' : 'top-0'}`}>
           <tr>
             <th className="px-3 py-2 w-10 border-b border-border-hairline">
               <input

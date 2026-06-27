@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, FolderPlus, RefreshCw, Search, X } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Search, X } from 'lucide-react'
 import Card from '../../ui/layout/Card'
 import TextInput from '../../ui/input/TextInput'
 import BreadcrumbNav from './BreadcrumbNav'
@@ -275,36 +275,10 @@ export default function TreeDetailView({
             onAction={onAction}
             onToggleExpand={toggleExpand}
             expandedIds={expandedIds}
+            onBulkGrant={handleBulkGrant}
+            onCreateFromTemplate={handleCreateFromTemplate}
+            onClearSelection={() => setSelectedIds(new Set())}
           />
-        )}
-
-        {selectedIds.size > 0 && (
-          <div className="mt-4 flex items-center gap-3 p-3 rounded-sm bg-accent-subtle border border-accent/20">
-            <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-pill bg-accent text-white text-xs font-medium">
-              {selectedIds.size}
-            </span>
-            <span className="text-sm text-text-secondary">đã chọn</span>
-            <button
-              type="button"
-              onClick={handleBulkGrant}
-              className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
-            >
-              Cấp quyền
-            </button>
-            {selectedIds.size === 1 ? (
-              <button
-                type="button"
-                onClick={handleCreateFromTemplate}
-                className="inline-flex items-center gap-1.5 px-3 h-8 border border-accent/30 text-accent rounded-sm text-sm hover:bg-accent-subtle/70 transition-colors"
-              >
-                <FolderPlus className="w-4 h-4" /> Tạo folder theo template
-              </button>
-            ) : (
-              <span className="text-xs text-text-tertiary">
-                Chọn đúng 1 folder để tạo theo template
-              </span>
-            )}
-          </div>
         )}
       </Card>
     </div>
