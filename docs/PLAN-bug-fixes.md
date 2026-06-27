@@ -64,6 +64,122 @@
 | 035 | RequestsPage không tự cập nhật khi tạo / thay đổi request | fixed | 2026-06-19 | 2026-06-19 |
 | 036 | Dashboard B2 chờ phản hồi chấp thuận không cập nhật khi active B2 | fixed | 2026-06-19 | 2026-06-19 |
 | 037 | Dropdown "Quyền" (Google Drive Admin) sai chính tả "Ngườii" và thuật ngữ chưa khớp Google Drive | fixed | 2026-06-26 | 2026-06-26 |
+| 038 | Thanh "đã chọn" trong cây Drive thiếu nút "Tạo folder theo template" | fixed | 2026-06-27 | 2026-06-27 |
+| 039 | Không lưu được template Drive — DB còn cột `levels`, code dùng `root` + lỗi bị nuốt | fixed | 2026-06-27 | 2026-06-27 |
+
+---
+
+## BUG-038: Thanh "đã chọn" trong cây Drive thiếu nút "Tạo folder theo template"
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed` (2026-06-27)
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+Trong **Drive Manager → Cây Drive → [mở 1 cây]**, khi tick checkbox chọn folder, thanh hành động cuối bảng chỉ hiển thị **1 nút "Cấp quyền"**. Không có nút "Tạo folder theo template" cho folder đang chọn. Chức năng tạo từ template hiện chỉ truy cập được qua menu `⋮` của từng dòng.
+
+### 2. Root Cause
+`TreeDetailView.tsx:272-286` — khối render thanh selection chỉ có nút "Cấp quyền" (`handleBulkGrant`). Action `createFromTemplate` chỉ được expose trong `DriveTreeTable.tsx:190` (menu `⋮` từng dòng), không có ở thanh bulk.
+
+> Lưu ý kỹ thuật: `createFolderTree` của Apps Script tạo cây con bên trong **1 folder cha duy nhất** (`parentFolderId`). Vì vậy nút này chỉ hợp lý khi chọn **đúng 1 folder**; chọn nhiều → ẩn nút hoặc disable kèm tooltip.
+
+### 3. SQL Verify
+Không cần (thuần frontend).
+
+### 4. Solution
+1. Thêm prop `onCreateFromTemplate: (node: { id: string; name: string }) => void` vào `TreeDetailView`.
+2. Trong thanh selection: khi `selectedIds.size === 1`, hiển thị thêm nút **"Tạo folder theo template"**. Lấy row tương ứng từ `currentTreeData` (đã có `id`, `name`) và gọi `onCreateFromTemplate`.
+3. Khi `selectedIds.size > 1`: không hiển thị nút này (hoặc disable + tooltip "Chỉ chọn 1 folder để tạo từ template").
+4. Trong `DriveManagerPage.tsx`: truyền `onCreateFromTemplate={(node) => setCreateFromTemplateNode(...)}` — tái dùng modal `CreateFromTemplateModal` sẵn có. Vì `createFromTemplateNode` đang kiểu `DriveTreeNode`, sẽ dựng node tối thiểu từ `currentTreeData` hoặc nới kiểu state để nhận `{ id, name }` (modal chỉ dùng `id` + `name`).
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/drive-manager/TreeDetailView.tsx` | Thêm prop + nút "Tạo folder theo template" trong thanh selection (chỉ khi chọn đúng 1 folder) |
+| `src/pages/DriveManagerPage.tsx` | Truyền `onCreateFromTemplate` xuống `TreeDetailView`, mở `CreateFromTemplateModal` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Mở 1 cây Drive → tick 1 folder → verify thanh dưới có cả "Cấp quyền" và "Tạo folder theo template".
+2. Bấm "Tạo folder theo template" → `CreateFromTemplateModal` mở đúng folder đã chọn → tạo thành công.
+3. Tick 2+ folder → verify nút bị ẩn/disable.
+4. Build pass.
+
+### 8. Notes
+- Phụ thuộc gián tiếp: muốn tạo được folder từ template thì template phải lưu được (xem **BUG-039**). Nên fix BUG-039 trước hoặc cùng đợt.
+- Rollback: revert 2 file.
+
+---
+
+## BUG-039: Không lưu được template Drive — DB còn cột `levels`, code dùng `root` + lỗi bị nuốt
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed` (2026-06-27) — ⚠️ **cần chạy tay migration `021_drive_templates_root.sql` trên Supabase**
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Trong **Drive Manager → Template**, mở editor tạo/sửa template, bấm **Lưu** không có tác dụng: template không được lưu, không có thông báo lỗi. Modal đứng im.
+
+### 2. Root Cause
+Lệch schema giữa code và DB:
+- Code dùng cột **`root`** (cây nested `{ name, permissions, children }`):
+  - `src/types/index.ts:478` — `DriveTemplate.root`
+  - `src/hooks/queries/useDriveTemplates.ts:24` — `insert({ name, root, created_by })`
+- DB bảng `drive_templates` (migration `020_drive_manager.sql:9`) chỉ có cột **`levels JSONB NOT NULL`**, **không có cột `root`**. (Đã xác nhận qua Supabase Table Editor: 6 cột `id, name, levels, created_by, created_at, updated_at`.)
+
+→ `insert`/`update` cột `root` bị PostgREST từ chối (*column "root" does not exist*); thêm nữa `levels NOT NULL` không có giá trị cũng chặn insert.
+
+Lỗi không hiển thị vì `handleCreateTemplate` / `handleUpdateTemplate` (`DriveManagerPage.tsx:224-239`) **không có try/catch** và được gọi qua `void` → promise rejection bị nuốt, không có toast.
+
+### 3. SQL Verify
+```sql
+-- Xem cấu trúc cột hiện tại
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'drive_templates';
+
+-- Đếm số row đang có (kiểm tra trước khi đụng cột levels)
+SELECT count(*) FROM public.drive_templates;
+```
+
+### 4. Solution
+**Phần A — DB (chạy tay trong Supabase SQL Editor, theo KNOWLEDGE.md 1.2):**
+Tạo migration mới `021_drive_templates_root.sql` và chạy tay:
+```sql
+ALTER TABLE public.drive_templates
+  ADD COLUMN IF NOT EXISTS root JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+-- Cột levels không còn được code dùng tới. Bỏ ràng buộc NOT NULL để an toàn;
+-- nếu count(*) = 0 (hoặc dữ liệu cũ không cần giữ) có thể DROP hẳn.
+ALTER TABLE public.drive_templates ALTER COLUMN levels DROP NOT NULL;
+-- ALTER TABLE public.drive_templates DROP COLUMN levels;   -- tùy chọn, sau khi xác nhận không còn dữ liệu cần giữ
+```
+
+**Phần B — Frontend (bắt lỗi để không nuốt im lặng):**
+Bọc try/catch + toast lỗi trong `handleCreateTemplate` và `handleUpdateTemplate` (`DriveManagerPage.tsx`), để mọi lỗi DB/RLS lần sau hiển thị rõ thay vì im lặng.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `webapp/supabase/migrations/021_drive_templates_root.sql` | **MỚI** — ADD COLUMN `root`, DROP NOT NULL `levels`. Chạy tay trong Supabase. |
+| `src/pages/DriveManagerPage.tsx` | Thêm try/catch + `show(err.message, 'error')` cho `handleCreateTemplate` / `handleUpdateTemplate` |
+
+### 6. Schema / SQL changes
+Có — xem mục 4 phần A. **Bắt buộc chạy tay** trên Supabase production; file migration local không tự sync.
+
+### 7. Test Plan
+1. Chạy ALTER trong Supabase SQL Editor → verify cột `root` tồn tại.
+2. Reload app → Template → "Thêm template" → điền tên + cây → Lưu → toast "Đã tạo template", template xuất hiện trong danh sách.
+3. Sửa template đã có → Lưu → toast "Đã cập nhật template", thay đổi được lưu.
+4. (Negative) Tạm thu hồi quyền/đổi tên cột để ép lỗi → verify giờ có toast báo lỗi thay vì im lặng.
+5. Build pass.
+
+### 8. Notes
+- Sau khi lưu được template, nút ở **BUG-038** mới thực sự dùng được (cần có template để chọn).
+- Cập nhật `020_drive_manager.sql` (hoặc ghi chú) cho khớp `root` để migration mới không lệch tài liệu.
+- Rollback: DROP COLUMN `root` + revert `DriveManagerPage.tsx`. (Cẩn trọng nếu đã có template lưu vào `root`.)
 
 ---
 

@@ -14,6 +14,30 @@
 
 ## 2026-06-27
 
+### 87. Bug fix BUG-038 + BUG-039: Drive Manager — lưu template & nút tạo folder theo template
+
+**Mô tả:**
+- **BUG-039 (high):** Không lưu được template trong tab Template. Code lưu cây template vào cột `root` (nested) nhưng bảng `drive_templates` chỉ có cột `levels` (flat, NON-NULL) theo migration `020`. Insert/update `root` bị PostgREST từ chối; lỗi lại bị nuốt im lặng (`handleCreateTemplate`/`handleUpdateTemplate` không có try/catch, gọi qua `void`).
+- **BUG-038 (medium):** Thanh "đã chọn" trong cây Drive chỉ có nút "Cấp quyền", thiếu nút tạo folder theo template cho folder đang chọn (chức năng chỉ có trong menu `⋮` từng dòng).
+
+**Files tạo:**
+- `webapp/supabase/migrations/021_drive_templates_root.sql`: `ADD COLUMN root JSONB` + `DROP NOT NULL` cho `levels`.
+
+**Files sửa:**
+- `webapp/src/pages/DriveManagerPage.tsx`: Bọc try/catch + toast lỗi cho `handleCreateTemplate`/`handleUpdateTemplate` (BUG-039); nới kiểu `createFromTemplateNode` về `{ id, name }` và truyền prop `onCreateFromTemplate` xuống `TreeDetailView` (BUG-038).
+- `webapp/src/components/drive-manager/TreeDetailView.tsx`: Thêm prop `onCreateFromTemplate` + nút "Tạo folder theo template" trong thanh selection — chỉ bật khi chọn đúng 1 folder, nhiều hơn thì hiện gợi ý (BUG-038).
+- `webapp/docs/PLAN-bug-fixes.md`: BUG-038/039 status = fixed.
+
+**Kết quả:**
+- `npm run build` pass.
+- `npm run test` pass (81/81 tests).
+
+**Lưu ý deploy (BẮT BUỘC):**
+1. Chạy migration `021_drive_templates_root.sql` trong Supabase SQL Editor — nếu chưa chạy thì vẫn KHÔNG lưu được template.
+2. Không cần redeploy Apps Script (không đổi backend `.gs`).
+
+---
+
 ### 86. Feature FEAT-034: Drive Manager — Quản lý toàn bộ Drive từ webapp
 
 **Mô tả:** Thay thế tab **Google Drive Admin** (8 action độc lập) bằng **Drive Manager** — giao diện quản lý Drive trực tiếp từ webapp. Hỗ trợ lưu nhiều cây folder, duyệt cây đa cấp, tạo folder từ template kèm phân quyền, và các context action Copy/Move/Delete.

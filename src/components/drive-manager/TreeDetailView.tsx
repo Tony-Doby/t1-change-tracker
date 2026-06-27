@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, RefreshCw, Search, X } from 'lucide-react'
+import { ArrowLeft, FolderPlus, RefreshCw, Search, X } from 'lucide-react'
 import Card from '../../ui/layout/Card'
 import TextInput from '../../ui/input/TextInput'
 import BreadcrumbNav from './BreadcrumbNav'
@@ -19,6 +19,7 @@ interface TreeDetailViewProps {
   onRefresh: () => void
   onAction: (action: TreeAction, node: DriveTreeNode) => void
   onBulkGrant: (items: PresetItem[]) => void
+  onCreateFromTemplate: (node: { id: string; name: string }) => void
   isLoading: boolean
 }
 
@@ -30,6 +31,7 @@ export default function TreeDetailView({
   onRefresh,
   onAction,
   onBulkGrant,
+  onCreateFromTemplate,
   isLoading,
 }: TreeDetailViewProps) {
   const [search, setSearch] = useState('')
@@ -114,6 +116,13 @@ export default function TreeDetailView({
       .filter((r) => selectedIds.has(r.id))
       .map((r) => ({ id: r.id, isSharedDrive: r.isSharedDrive }))
     if (items.length > 0) onBulkGrant(items)
+  }
+
+  const handleCreateFromTemplate = () => {
+    if (selectedIds.size !== 1) return
+    const [id] = [...selectedIds]
+    const row = currentTreeData.find((r) => r.id === id)
+    if (row) onCreateFromTemplate({ id: row.id, name: row.name })
   }
 
   const toggleDepth = (d: number) => {
@@ -282,6 +291,19 @@ export default function TreeDetailView({
             >
               Cấp quyền
             </button>
+            {selectedIds.size === 1 ? (
+              <button
+                type="button"
+                onClick={handleCreateFromTemplate}
+                className="inline-flex items-center gap-1.5 px-3 h-8 border border-accent/30 text-accent rounded-sm text-sm hover:bg-accent-subtle/70 transition-colors"
+              >
+                <FolderPlus className="w-4 h-4" /> Tạo folder theo template
+              </button>
+            ) : (
+              <span className="text-xs text-text-tertiary">
+                Chọn đúng 1 folder để tạo theo template
+              </span>
+            )}
           </div>
         )}
       </Card>

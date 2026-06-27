@@ -299,3 +299,9 @@ it('returns ineligible for ASC rank regardless of case', () => {
 - `createFolderTree` tận dụng điều này: tạo cây folder đệ quy trước, sau đó chỉ apply những quyền **khác với quyền đã kế thừa**.
 - Nếu sau này thêm quyền mới vào folder cha đã tồn tại, các con cũ **không** tự động nhận thêm quyền mới.
 - Template lưu dạng **cây nested** (`{ name, permissions, children }`), không phải flat levels.
+
+### 8.6 `drive_templates` — cột là `root` (nested), KHÔNG phải `levels` (BUG-039)
+- Code (`types/index.ts` `DriveTemplate.root`, `useDriveTemplates.ts`) lưu cây template vào cột **`root` JSONB** (nested `{ name, permissions, children }`).
+- Migration gốc `020_drive_manager.sql` tạo cột **`levels`** (flat, NON-NULL) — **lệch với code**. Đã sửa bằng migration `021_drive_templates_root.sql` (`ADD COLUMN root` + `DROP NOT NULL levels`).
+- **Phải chạy tay `021` trên Supabase** (KNOWLEDGE 1.2). Nếu DB còn thiếu cột `root` → insert/update template trả lỗi *"column root does not exist"* → không lưu được template.
+- `handleCreateTemplate`/`handleUpdateTemplate` trong `DriveManagerPage.tsx` đã được bọc try/catch + toast — mọi lỗi DB/RLS giờ hiển thị rõ thay vì nuốt im lặng.

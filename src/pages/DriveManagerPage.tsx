@@ -83,7 +83,7 @@ export default function DriveManagerPage() {
   // Context action modals.
   const [grantNode, setGrantNode] = useState<DriveTreeNode | null>(null)
   const [bulkGrantItems, setBulkGrantItems] = useState<PresetItem[] | null>(null)
-  const [createFromTemplateNode, setCreateFromTemplateNode] = useState<DriveTreeNode | null>(null)
+  const [createFromTemplateNode, setCreateFromTemplateNode] = useState<{ id: string; name: string } | null>(null)
   const [copyNode, setCopyNode] = useState<DriveTreeNode | null>(null)
   const [moveNode, setMoveNode] = useState<DriveTreeNode | null>(null)
   const [deleteNode, setDeleteNode] = useState<DriveTreeNode | null>(null)
@@ -222,20 +222,28 @@ export default function DriveManagerPage() {
 
   // Template operations.
   const handleCreateTemplate = async (data: { name: string; root: DriveTemplateFolder }) => {
-    await createTemplate.mutateAsync({
-      name: data.name,
-      root: data.root,
-      created_by: null,
-    })
-    setEditingTemplate(null)
-    show('Đã tạo template', 'success')
+    try {
+      await createTemplate.mutateAsync({
+        name: data.name,
+        root: data.root,
+        created_by: null,
+      })
+      setEditingTemplate(null)
+      show('Đã tạo template', 'success')
+    } catch (err: unknown) {
+      show((err as Error).message ?? 'Lỗi khi lưu template', 'error')
+    }
   }
 
   const handleUpdateTemplate = async (data: { name: string; root: DriveTemplateFolder }) => {
     if (!editingTemplate) return
-    await updateTemplate.mutateAsync({ id: editingTemplate.id, updates: data })
-    setEditingTemplate(null)
-    show('Đã cập nhật template', 'success')
+    try {
+      await updateTemplate.mutateAsync({ id: editingTemplate.id, updates: data })
+      setEditingTemplate(null)
+      show('Đã cập nhật template', 'success')
+    } catch (err: unknown) {
+      show((err as Error).message ?? 'Lỗi khi cập nhật template', 'error')
+    }
   }
 
   const handleDeleteTemplate = async () => {
@@ -327,6 +335,7 @@ export default function DriveManagerPage() {
           onRefresh={() => void handleRefreshTreeById(activeTree.id)}
           onAction={handleTreeAction}
           onBulkGrant={setBulkGrantItems}
+          onCreateFromTemplate={setCreateFromTemplateNode}
           isLoading={isLoading}
         />
       )
