@@ -69,6 +69,7 @@
 | 040 | `createFolderTree` lỗi "Template thiếu root folder" + không chạy trên Shared Drive | fixed | 2026-06-27 | 2026-06-27 |
 | 041 | Quyền template lệch với Shared Drive — app cho chọn `organizer` (không gán được cho folder con) và nuốt lỗi áp quyền | fixed | 2026-06-27 | 2026-06-27 |
 | 042 | Thanh "đã chọn" trong cây Drive đặt dưới bảng, không sticky — lệch pattern FEAT-032 | fixed | 2026-06-27 | 2026-06-27 |
+| 043 | Thanh sticky "đã chọn" trong suốt (nền alpha 0.1) — dòng cuộn lộ xuyên qua | fixed | 2026-06-27 | 2026-06-27 |
 
 ---
 
@@ -216,6 +217,43 @@ Không cần.
 ### 8. Notes
 - Thay đổi UI thuần, không đụng logic chọn/filter/action menu.
 - `DriveTreeTable` chỉ có 1 consumer (`TreeDetailView`) nên props mới để required, không phá vỡ chỗ khác.
+
+---
+
+## BUG-043: Thanh sticky "đã chọn" trong suốt — dòng cuộn lộ xuyên qua
+
+- **Phát hiện**: 2026-06-27 (regression của BUG-042)
+- **Status**: `fixed` (2026-06-27)
+- **Severity**: `low`
+
+### 1. Mô tả bug
+Khi cuộn bảng, nội dung các dòng phía sau **lộ xuyên qua** thanh sticky "đã chọn" (nhìn chồng chữ).
+
+### 2. Root Cause
+Thanh dùng nền `bg-accent-subtle` = token `--accent-primary-subtle: rgba(74, 56, 245, 0.1)` (`tokens.css:22`) — **alpha 0.1**, trong suốt 90% → dòng cuộn hiện xuyên qua. Cả `DriveTreeTable` (BUG-042) lẫn `ScanResultsTable` (FEAT-032) đều dính.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution (user duyệt 2026-06-27 — "sửa đi, làm kèm luôn")
+Bọc 2 lớp: ngoài `sticky top-0 z-20 bg-bg-primary` (đục, theo theme) → trong giữ `h-11 … bg-accent-subtle border-b border-accent/20` (tint 0.1 đè lên nền đục → vẫn tím nhạt nhưng đục hoàn toàn). Box-border nên tổng cao vẫn 44px, offset `top-11` của `<thead>` không đổi.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/drive-manager/DriveTreeTable.tsx` | Bọc thanh sticky bằng lớp ngoài `bg-bg-primary` đục |
+| `src/components/apps-script/ScanResultsTable.tsx` | Sửa y hệt (FEAT-032) cho đồng nhất |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. `npm run build` + `npm run lint` + `npm run test` (87/87) xanh.
+2. Cuộn cây Drive khi đang chọn → thanh sticky đục, không còn lộ chữ phía sau.
+3. Lặp lại ở tab Quét folder (FEAT-032).
+
+### 8. Notes
+- Bài học: token `*-subtle` có alpha → không dùng trực tiếp làm nền cho phần tử sticky/overlay; phải có lớp nền đục bên dưới. Đã ghi KNOWLEDGE 8.9.
 
 ---
 

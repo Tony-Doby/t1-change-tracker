@@ -325,3 +325,4 @@ it('returns ineligible for ASC rank regardless of case', () => {
 ### 8.9 Convention: thanh hành động hàng loạt "đã chọn" dính ĐỈNH khung bảng (BUG-042)
 - Mọi bảng có "tick chọn nhiều dòng → hành động" trong Drive Manager đặt thanh hành động **`sticky top-0 z-20` BÊN TRONG hộp cuộn của bảng**, ngay trên `<thead>`; khi thanh hiện → `<thead>` dùng `top-11` (chiều cao thanh = `h-11`). KHÔNG đặt thanh dưới bảng (sẽ trôi xuống cuối trang khi cây/bảng dài).
 - Mẫu chuẩn: `ScanResultsTable.tsx` (FEAT-032) và `DriveTreeTable.tsx` (BUG-042). Thanh gồm: chip số lượng → "đã chọn" → divider → các nút hành động → "Bỏ chọn (✕)".
+- ⚠️ **Thanh sticky phải có nền ĐỤC (BUG-043).** Token `*-subtle` (vd `--accent-primary-subtle: rgba(74,56,245,0.1)`) có **alpha** → nếu dùng trực tiếp làm nền thanh sticky thì dòng cuộn lộ xuyên qua. Bọc lớp ngoài `bg-bg-primary` (đục) rồi mới đặt lớp tint `bg-accent-subtle` bên trong.

@@ -42,38 +42,41 @@ export default function DriveTreeTable({
   return (
     <div className="border border-border-hairline rounded-sm overflow-auto max-h-[32rem] relative">
       {/* BUG-042: thanh "đã chọn" dính đỉnh khung bảng (giống FEAT-032), không trôi xuống cuối trang. */}
+      {/* BUG-043: nền đục (bg-bg-primary) phủ dưới lớp tint accent-subtle (alpha 0.1) để dòng cuộn không lộ qua. */}
       {showBar && (
-        <div className="sticky top-0 z-20 flex items-center gap-3 h-11 px-4 bg-accent-subtle border-b border-accent/20 whitespace-nowrap">
-          <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-pill bg-accent text-white text-xs font-medium">
-            {selectedCount}
-          </span>
-          <span className="text-sm text-text-secondary">đã chọn</span>
-          <div className="h-4 w-px bg-accent/20" />
-          <button
-            type="button"
-            onClick={onBulkGrant}
-            className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
-          >
-            Cấp quyền
-          </button>
-          {selectedCount === 1 ? (
+        <div className="sticky top-0 z-20 bg-bg-primary">
+          <div className="flex items-center gap-3 h-11 px-4 bg-accent-subtle border-b border-accent/20 whitespace-nowrap">
+            <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-pill bg-accent text-white text-xs font-medium">
+              {selectedCount}
+            </span>
+            <span className="text-sm text-text-secondary">đã chọn</span>
+            <div className="h-4 w-px bg-accent/20" />
             <button
               type="button"
-              onClick={onCreateFromTemplate}
-              className="inline-flex items-center gap-1.5 px-3 h-8 border border-accent/30 text-accent rounded-sm text-sm hover:bg-accent-subtle/70 transition-colors"
+              onClick={onBulkGrant}
+              className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
             >
-              <FolderPlus className="w-4 h-4" /> Tạo folder theo template
+              Cấp quyền
             </button>
-          ) : (
-            <span className="text-xs text-text-tertiary">Chọn đúng 1 folder để tạo theo template</span>
-          )}
-          <button
-            type="button"
-            onClick={onClearSelection}
-            className="inline-flex items-center gap-1 px-2 h-8 text-sm text-text-secondary hover:text-text-primary transition-colors ml-auto"
-          >
-            <X className="w-3.5 h-3.5" /> Bỏ chọn
-          </button>
+            {selectedCount === 1 ? (
+              <button
+                type="button"
+                onClick={onCreateFromTemplate}
+                className="inline-flex items-center gap-1.5 px-3 h-8 border border-accent/30 text-accent rounded-sm text-sm hover:bg-accent-subtle/70 transition-colors"
+              >
+                <FolderPlus className="w-4 h-4" /> Tạo folder theo template
+              </button>
+            ) : (
+              <span className="text-xs text-text-tertiary">Chọn đúng 1 folder để tạo theo template</span>
+            )}
+            <button
+              type="button"
+              onClick={onClearSelection}
+              className="inline-flex items-center gap-1 px-2 h-8 text-sm text-text-secondary hover:text-text-primary transition-colors ml-auto"
+            >
+              <X className="w-3.5 h-3.5" /> Bỏ chọn
+            </button>
+          </div>
         </div>
       )}
       <table className="w-full text-left text-sm">

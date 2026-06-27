@@ -134,27 +134,30 @@ export default function ScanResultsTable({ results, onBulkGrant }: Props) {
       ) : (
         <div className="overflow-auto max-h-[28rem] border border-border-hairline rounded-sm relative">
           {/* FEAT-032: thanh cấp quyền hàng loạt — dính đỉnh khung bảng, không trôi xuống Lịch sử */}
+          {/* BUG-043: nền đục (bg-bg-primary) phủ dưới lớp tint accent-subtle (alpha 0.1) để dòng cuộn không lộ qua. */}
           {selected.size > 0 && (
-            <div className="sticky top-0 z-20 flex items-center gap-3 h-11 px-4 bg-accent-subtle border-b border-accent/20">
-              <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-pill bg-accent text-white text-xs font-medium">
-                {selected.size}
-              </span>
-              <span className="text-sm text-text-secondary">đã chọn</span>
-              <div className="h-4 w-px bg-accent/20" />
-              <button
-                type="button"
-                onClick={handleBulkGrant}
-                className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
-              >
-                Cấp quyền
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelected(new Set())}
-                className="inline-flex items-center gap-1 px-2 h-8 text-sm text-text-secondary hover:text-text-primary transition-colors"
-              >
-                <X className="w-3.5 h-3.5" /> Bỏ chọn
-              </button>
+            <div className="sticky top-0 z-20 bg-bg-primary">
+              <div className="flex items-center gap-3 h-11 px-4 bg-accent-subtle border-b border-accent/20">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-pill bg-accent text-white text-xs font-medium">
+                  {selected.size}
+                </span>
+                <span className="text-sm text-text-secondary">đã chọn</span>
+                <div className="h-4 w-px bg-accent/20" />
+                <button
+                  type="button"
+                  onClick={handleBulkGrant}
+                  className="px-3 h-8 bg-accent text-white rounded-sm text-sm hover:bg-accent-hover transition-colors"
+                >
+                  Cấp quyền
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  className="inline-flex items-center gap-1 px-2 h-8 text-sm text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" /> Bỏ chọn
+                </button>
+              </div>
             </div>
           )}
           <table className="w-full text-left text-sm">

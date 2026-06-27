@@ -14,6 +14,21 @@
 
 ## 2026-06-27
 
+### 91. Bug fix BUG-043: Thanh sticky "đã chọn" trong suốt → làm đục nền
+
+**Mô tả:** Cuộn bảng thì dòng phía sau lộ xuyên qua thanh sticky "đã chọn" (regression của BUG-042).
+
+**Root cause:** Nền `bg-accent-subtle` = `rgba(74,56,245,0.1)` (alpha 0.1, `tokens.css:22`) → trong suốt. Cả `DriveTreeTable` lẫn `ScanResultsTable` (FEAT-032) đều dính.
+
+**Giải pháp (user duyệt — "sửa đi, làm kèm luôn"):** Bọc lớp ngoài `bg-bg-primary` đục, giữ lớp trong `bg-accent-subtle` tint. Tổng cao vẫn 44px nên `<thead>` `top-11` không đổi.
+
+**Files sửa:**
+- `src/components/drive-manager/DriveTreeTable.tsx`, `src/components/apps-script/ScanResultsTable.tsx`: bọc thanh sticky bằng nền đục.
+
+**Kiểm thử:** build + lint + test (87/87) xanh.
+
+---
+
 ### 90. Bug fix BUG-042: Thanh "đã chọn" cây Drive dính đỉnh bảng (đồng nhất FEAT-032)
 
 **Mô tả:** Thanh hành động "đã chọn" trong cây Drive (`TreeDetailView`) đặt dưới bảng, không sticky → cây dài thì trôi xuống đáy trang, lệch pattern với bảng Quét folder (FEAT-032 cho thanh dính đỉnh khung bảng).
