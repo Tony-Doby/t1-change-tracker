@@ -151,6 +151,54 @@
   ```
 - Sau khi hoàn thành task hiện tại, quét toàn bộ `TODO` để chuyển thành plan chính thức.
 
+### 5.4 Unit Test Policy
+
+> Xem `AGENTS.md` section 3 — "Quy tắc Unit Test (bắt buộc có điều kiện)". Phần này bổ sung chi tiết kỹ thuật và ví dụ.
+
+#### Bắt buộc viết unit test khi:
+
+- Thêm/sửa hàm **pure** trong `src/lib/` liên quan đến:
+  - Logic tính toán (ví dụ: `addBusinessDays`, `daysSince`).
+  - Validation / business rules (ví dụ: `checkEligibility`, `getT1Capacity`).
+  - Transform / parse dữ liệu (ví dụ: `evaluateExpression`, `replaceExpressionsInCell`).
+- **Bug fix**: phải thêm regression test tái hiện bug trước khi fix.
+- Hàm utility được dùng ở nhiều nơi.
+
+#### Không bắt buộc unit test khi:
+
+- Thay đổi UI thuần túy: màu sắc, layout, text, tooltip.
+- Config, constant, type-only changes.
+- Prototype / feature thử nghiệm (phải ghi nhận rõ trong plan).
+- React component đơn giản.
+
+#### Tiêu chí chất lượng test
+
+- Tên test mô tả rõ behavior.
+- Test độc lập, không phụ thuộc thứ tự chạy.
+- Test output/behavior, không test implementation detail.
+- Mock ít nhất có thể; ưu tiên hàm pure không cần mock.
+- Mỗi test chỉ assert một khái niệm chính.
+
+#### Chạy test trước khi coi task xong
+
+```bash
+cd track-t1-changes/webapp
+npm run test        # unit tests
+npm run verify      # tsc + build + eslint
+```
+
+#### Ví dụ regression test
+
+```ts
+// src/lib/eligibility.test.ts
+it('returns ineligible for ASC rank regardless of case', () => {
+  expect(checkEligibility({ rank_name: 'asc', hire_date: '2020-01-01', last_t1_change: null })).toEqual({
+    eligible: false,
+    reason: '(không được là ASC)',
+  });
+});
+```
+
 ---
 
 ## 6. Excel Generator Constraints (FEAT-019)
@@ -245,3 +293,9 @@
 - Cấp public-view-by-link: `Drive.Permissions.create({ type: 'anyone', role, allowFileDiscovery: false }, id, { supportsAllDrives: true })`.
 - `allowFileDiscovery: false` = có link mới xem được (không bị tìm thấy/lập chỉ mục công khai).
 - `setPermissions` dùng **1 code path duy nhất** (`Drive.Permissions.create`) cho cả My Drive lẫn Shared Drive, cả scope user lẫn anyone — không dùng `DriveApp.addEditor/setSharing`.
+
+### 8.5 Drive Manager (FEAT-034) — Permission inheritance khi tạo folder
+- Khi tạo folder mới bên trong folder đã được share, Google Drive **tự động kế thừa** quyền từ cha xuống con.
+- `createFolderTree` tận dụng điều này: tạo cây folder đệ quy trước, sau đó chỉ apply những quyền **khác với quyền đã kế thừa**.
+- Nếu sau này thêm quyền mới vào folder cha đã tồn tại, các con cũ **không** tự động nhận thêm quyền mới.
+- Template lưu dạng **cây nested** (`{ name, permissions, children }`), không phải flat levels.

@@ -83,6 +83,8 @@
 | 030 | Google Apps Script Admin Panel — Drive Operations | done | 2026-06-26 | 2026-06-26 |
 | 031 | Cấp quyền Drive linh hoạt — Loại Drive + Đối tượng (email / anyone-with-link) + đủ 5 role | done | 2026-06-26 | 2026-06-26 |
 | 032 | Bảng kết quả Quét folder — Search, Lọc theo cấp, Chọn nhiều + Cấp quyền hàng loạt | done | 2026-06-26 | 2026-06-26 |
+| 033 | Unit Test Policy — Bắt buộc unit test có điều kiện | done | 2026-06-27 | 2026-06-27 |
+| 034 | Drive Manager — Quản lý toàn bộ Drive từ webapp | done | 2026-06-27 | 2026-06-27 |
 
 ---
 
@@ -3316,3 +3318,366 @@ CREATE POLICY "apps_script_logs_admin_all"
   | Apps Script tài khoản cá nhân bị khóa | Dùng tài khoản dịch vụ chung của tổ chức |
 
 
+---
+
+---
+
+## FEAT-033: Unit Test Policy — Bắt buộc unit test có điều kiện
+
+- **Đề xuất**: 2026-06-27
+- **Status**: `done`
+- **Priority**: `high`
+- **Hoàn thành**: 2026-06-27
+
+### 1. Mô tả feature
+Thiết lập quy tắc rõ ràng về việc khi nào **bắt buộc** viết unit test, khi nào **không bắt buộc**, và tiêu chí chất lượng test. Thay vì bắt buộc mọi feature đều phải có unit test (gây overhead), policy áp dụng theo mức độ rủi ro và loại code.
+
+### 2. Motivation / Why
+- Project đã có Vitest + 56 tests nhưng chưa có quy định rõ ràng về bắt buộc unit test.
+- Bắt buộc “mọi feature” sẽ tạo test kém chất lượng, khó maintain, làm chậm iteration.
+- Cần tập trung unit test vào nơi có giá trị nhất: logic nghiệp vụ, pure functions, regression test.
+
+### 3. Scope
+
+**In scope:**
+- Thêm quy tắc Unit Test Policy vào `AGENTS.md`.
+- Thêm hướng dẫn chi tiết vào `KNOWLEDGE.md`.
+- Cập nhật `CHANGELOG.md`.
+
+**Out of scope:**
+- Viết thêm test mới cho code hiện tại.
+- Thay đổi CI/CD.
+- Thêm E2E test hoặc visual test.
+
+### 4. Technical Design
+N/A — docs/policy change.
+
+### 5. UI/UX
+N/A.
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `webapp/docs/AGENTS.md` | Thêm Unit Test Policy vào section workflow rules |
+| `webapp/docs/KNOWLEDGE.md` | Thêm section hướng dẫn chi tiết + ví dụ |
+| `webapp/docs/CHANGELOG.md` | Ghi nhận policy mới |
+
+### 7. Schema / SQL changes
+Không.
+
+### 8. API / Integration changes
+Không.
+
+### 9. Test Plan
+1. Đọc lại `AGENTS.md` và `KNOWLEDGE.md` sau khi sửa → nội dung rõ ràng, không mâu thuẫn.
+2. `npm run test` vẫn pass.
+3. `npm run build` pass.
+
+### 10. Rollout Plan
+1. Merge docs update.
+2. Áp dụng cho các feature/dev tiếp theo.
+
+### 11. Notes
+- Policy này không áp dụng retroactive — các feature cũ không cần bổ sung test trừ khi refactor/sửa.
+- Reviewer cần kiểm tra policy khi review PR có thay đổi logic.
+
+---
+
+---
+
+## FEAT-034: Drive Manager — Quản lý toàn bộ Drive từ webapp
+
+- **Đề xuất**: 2026-06-27
+- **Status**: `done`
+- **Priority**: `high`
+- **Hoàn thành**: 2026-06-27
+
+### 1. Mô tả feature
+Thay thế tab **Google Drive Admin** hiện tại (8 action độc lập) bằng một **Drive Manager** thực sự trong webapp. Admin có thể:
+- Lưu và quản lý **nhiều cây folder Drive** khác nhau (mỗi cây từ một link Drive gốc + độ sâu tùy chọn).
+- Duyệt cây folder đa cấp, refresh để cập nhật cấu trúc thờii điểm hiện tại.
+- **Tạo folder từ template** đã thiết lập sẵn, kèm phân quyền tự động theo từng cấp.
+- Thực hiện context actions trên từng folder: **Cấp quyền**, **Copy**, **Move**, **Delete**.
+- Cấp quyền hàng loạt từ kết quả quét (giữ FEAT-032).
+
+Tab **Cấp quyền thủ công** (dán ID) sẽ bị loại bỏ vì không còn phù hợp luồng mới.
+
+### 2. Motivation / Why
+- Panel 8 action hiện tại rồi ràm, nhiều action không dùng đến (Copy, List Items, Move, Remove Permission, Delete) khi mục đích chính là **quét + cấp quyền + tạo folder từ template**.
+- Admin muốn quản lý Drive **trực tiếp từ webapp** thay vì phải vào Google Drive.
+- Cần khả năng **tạo folder từ template** với phân quyền sẵn theo cấp — giảm thao tác lặp lại.
+- Cần lưu nhiều cây folder để theo dõi nhiều nhóm/nhiều dự án khác nhau.
+
+### 3. Scope
+
+**In scope:**
+- Lưu nhiều cây folder Drive trong Supabase (`drive_trees`).
+- UI duyệt cây folder đa cấp với expand/collapse.
+- Quét/refresh cây với URL gốc + độ sâu tùy chọn.
+- Template manager (`drive_templates`) lưu trong Supabase.
+- Tạo folder từ template (có thể tạo ở root hoặc subfolder của folder được chọn).
+- Context actions: Cấp quyền, Copy, Move, Delete trên folder trong cây.
+- Cấp quyền hàng loạt từ bảng quét (giữ FEAT-032, nhưng chuyển vào Drive Manager).
+- Bỏ tab "Cấp quyền" độc lập (dán ID thủ công).
+- Xử lý hạn chế Shared Drive trong Move/Delete.
+
+**Out of scope:**
+- Quản lý file (chỉ quản lý folder).
+- Preview nội dung file.
+- Đồng bộ 2 chiều liên tục với Drive (chỉ manual refresh).
+- Permission inheritance tự động của Google Drive (ta chủ động apply theo template).
+- E2E / visual test.
+
+### 4. Technical Design
+
+#### 4.1 Data model
+
+**`drive_templates`** — lưu template tạo folder:
+```sql
+CREATE TABLE drive_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  root JSONB NOT NULL,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+`root` JSONB structure (nested tree):
+```json
+{
+  "name": "A0 - Báo cáo",
+  "permissions": [
+    { "email": "hos@era.com.vn", "role": "reader" },
+    { "email": "huu.tran@era.com.vn", "role": "organizer" }
+  ],
+  "children": [
+    {
+      "name": "B1 - Public",
+      "permissions": [{ "scope": "anyone", "role": "reader" }],
+      "children": []
+    },
+    {
+      "name": "C1 - Marketing",
+      "permissions": [
+        { "email": "ps@era.com.vn", "role": "fileOrganizer" },
+        { "email": "mkt@era.com.vn", "role": "reader" }
+      ],
+      "children": [
+        {
+          "name": "D2 - Campaign",
+          "permissions": [
+            { "email": "mkt@era.com.vn", "role": "fileOrganizer" },
+            { "email": "agent@era.com.vn", "role": "reader" }
+          ],
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+**`drive_trees`** — lưu các cây folder đã quét:
+```sql
+CREATE TABLE drive_trees (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT,
+  root_url TEXT NOT NULL,
+  root_folder_id TEXT NOT NULL,
+  depth INTEGER NOT NULL,
+  tree_data JSONB NOT NULL,
+  is_shared_drive BOOLEAN,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  refreshed_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+`tree_data` lưu kết quả `scanFolders` dạng mảng phẳng hoặc nested.
+
+#### 4.2 Apps Script actions
+
+Giữ và mở rộng:
+
+| Action | Thay đổi |
+|---|---|
+| `scanFolders` | Giữ nguyên, trả `driveId`/`isSharedDrive` (đã có từ FEAT-031). |
+| `detectDriveTypes` | Giữ nguyên. |
+| `setPermissions` | Giữ nguyên (FEAT-031). |
+| `createFolder` | Giữ nguyên. |
+| `createFolderTree` | **Mới** — tạo cây folder từ template + apply permission từng level. |
+| `copyFolder` | Giữ nguyên. Permission của folder copy = permission folder đích. |
+| `moveItem` | Giữ nguyên. UI cần validate trước khi gọi. |
+| `deleteItem` | Giữ nguyên. |
+
+Xóa khỏi UI (có thể giữ backend nếu cần sau này):
+- Tab "Liệt kê items" — không còn trong Drive Manager.
+- Tab "Xóa quyền" độc lập — thay bằng context action Cấp quyền trên folder.
+
+#### 4.3 `createFolderTree` implementation
+
+Input:
+```json
+{
+  "parentFolderId": "id_folder_được_chọn",
+  "templateId": "uuid_template",
+  "template": {
+    "name": "A0 - Báo cáo",
+    "permissions": [...],
+    "children": [...]
+  }
+}
+```
+
+Flow:
+1. Validate template có `root` (nested tree).
+2. **Tạo cây folder đệ quy**: với mỗi node template, tạo folder bên trong parent.
+   - Google Drive tự động kế thừa quyền từ folder cha xuống folder con mới tạo.
+3. **Apply override permissions**: sau khi tạo folder, kiểm tra permission trong template so với permission kế thừa từ parent. Chỉ cấp những quyền **khác với quyền đã kế thừa**.
+   - Ví dụ: `D2` kế thừa `reader` từ `C1`, template định nghĩa `fileOrganizer` → cấp thêm `fileOrganizer`.
+4. Trả về cây folder đã tạo kèm status từng permission.
+
+> **Lưu ý về inheritance:** Google Drive chỉ tự động kế thừa quyền khi **tạo folder mới bên trong folder đã được share**. Nếu sau này thêm quyền mới vào folder cha đã tồn tại, các con cũ sẽ **không** tự động nhận quyền mới.
+
+#### 4.4 Frontend architecture
+
+**Page:** `DriveManagerPage` (thay thế `AppsScriptAdminPage`).
+
+**Layout:**
+- **Top bar**: Nút "Thêm cây mới" (nhập URL + depth) + tên cây.
+- **Sidebar / Tabs**: Danh sách các cây đã lưu.
+- **Main area**:
+  - Toolbar của cây đang chọn: Refresh, Xóa cây, đổi tên.
+  - `DriveTreeTable`: bảng cây folder với expand/collapse.
+  - `BulkActionsBar`: Cấp quyền hàng loạt (khi chọn nhiều folder).
+
+**Components:**
+- `DriveTreeTable`: render cây, hỗ trợ checkbox, expand/collapse, context menu.
+- `CreateTreeDialog`: nhập URL + depth + tên cây.
+- `TemplateManager`: CRUD template.
+- `CreateFromTemplateModal`: chọn template + preview cây sẽ tạo.
+- `SetPermissionsModal`: tái dùng `SetPermissionsForm` (FEAT-031) cho 1 hoặc nhiều folder.
+- `MoveItemDialog`: chọn folder đích, validate trước submit.
+- `ConfirmationModal`: cho Delete, Move, Copy.
+
+#### 4.5 Permission granting flow
+
+- ❌ Bỏ tab "Cấp quyền" độc lập.
+- ✅ Cấp quyền hàng loạt từ bảng quét (giữ FEAT-032).
+- ✅ Cấp quyền context action trên 1 hoặc nhiều folder đã chọn trong cây.
+
+### 5. UI/UX
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ [Drive Manager]                              [+ Thêm cây]   │
+├───────────────┬─────────────────────────────────────────────┤
+│ Báo cáo 2026  │  [Refresh] [× Xóa cây] [✎ Đổi tên]          │
+│ Marketing     │                                                             │
+│ Team A        │  [🔍 Tìm...]  [Template ▾]  [Cấp quyền ▾]    │
+│ [+ Thêm]      │                                                             │
+├───────────────┤  ┌─[✔]─ Tên ────────┬─ Loại ─┬─ Path ─────┐  │
+│ [Quản lý       │  │ [✔] │ 📁 A0      │ Shared │ /A0        │  │
+│  template]     │  │  ▶  │   📁 B1    │ Shared │ /A0/B1     │  │
+│                │  │ [ ] │   📁 C1    │ Shared │ /A0/C1     │  │
+│                │  │ [✔] │ 📁 A1      │ My     │ /A1        │  │
+│                │  └─────┴────────────┴────────┴────────────┘  │
+│                │        [2 đã chọn | Cấp quyền | Copy | Move | Xóa] │
+└───────────────┴─────────────────────────────────────────────┘
+```
+
+**Context menu trên row:**
+- Tạo folder từ template
+- Cấp quyền
+- Copy
+- Move
+- Delete
+
+### 6. Files cần sửa / tạo
+
+| File | Thay đổi |
+|------|----------|
+| `webapp/supabase/migrations/020_drive_manager.sql` | **Mới** — bảng `drive_templates`, `drive_trees`, update `apps_script_logs` CHECK constraint |
+| `webapp/docs/FEAT-030-apps-script.gs` | Thêm `createFolderTree`; refactor để tái dùng `setPermissions` |
+| `webapp/supabase/functions/google-apps-script-proxy/index.ts` | Thêm `createFolderTree` vào `ALLOWED_ACTIONS` |
+| `webapp/src/types/index.ts` | Thêm `DriveTemplate`, `DriveTree`, `CreateFolderTreeParams` |
+| `webapp/src/hooks/queries/useDriveTrees.ts` | **Mới** — query/mutation cho `drive_trees` |
+| `webapp/src/hooks/queries/useDriveTemplates.ts` | **Mới** — query/mutation cho `drive_templates` |
+| `webapp/src/pages/DriveManagerPage.tsx` | **Mới / thay thế** `AppsScriptAdminPage` |
+| `webapp/src/components/drive-manager/DriveTreeTable.tsx` | **Mới** — bảng cây folder |
+| `webapp/src/components/drive-manager/CreateTreeDialog.tsx` | **Mới** — thêm cây mới |
+| `webapp/src/components/drive-manager/TemplateManager.tsx` | **Mới** — CRUD template |
+| `webapp/src/components/drive-manager/CreateFromTemplateModal.tsx` | **Mới** — tạo folder từ template |
+| `webapp/src/components/drive-manager/CopyFolderDialog.tsx` | **Mới** — copy folder |
+| `webapp/src/components/drive-manager/MoveItemDialog.tsx` | **Mới** — di chuyển folder |
+| `webapp/src/components/apps-script/index.ts` | Chỉ export các component còn dùng |
+| `webapp/src/App.tsx` | Đổi route `/admin/google-drive` → `DriveManagerPage` |
+| `webapp/src/pages/AppsScriptAdminPage.tsx` | **Xóa** |
+| `webapp/src/components/apps-script/CreateFolderForm.tsx` | **Xóa** |
+| `webapp/src/components/apps-script/CopyFolderForm.tsx` | **Xóa** |
+| `webapp/src/components/apps-script/ListItemsForm.tsx` | **Xóa** |
+| `webapp/src/components/apps-script/MoveItemForm.tsx` | **Xóa** |
+| `webapp/src/components/apps-script/RemovePermissionForm.tsx` | **Xóa** |
+| `webapp/src/components/apps-script/DeleteItemForm.tsx` | **Xóa** |
+
+### 7. Schema / SQL changes
+
+Migration `020_drive_manager.sql`:
+- Tạo `drive_templates`.
+- Tạo `drive_trees`.
+- RLS policies admin-only cho cả 2 bảng.
+- Indexes: `drive_trees.created_by`, `drive_templates.created_by`.
+
+### 8. API / Integration changes
+
+- Apps Script: thêm `createFolderTree`, deploy lại version mới.
+- Edge Function: thêm `createFolderTree` vào `ALLOWED_ACTIONS`, redeploy.
+- Không thay đổi URL/env.
+
+### 9. Test Plan
+
+1. Thêm cây mới từ URL Shared Drive, depth=2 → cây hiển thị đúng cấu trúc.
+2. Thêm cây mới từ URL My Drive, depth=1 → hiển thị đúng.
+3. Refresh cây → cập nhật nếu có folder mới/xóa.
+4. Tạo template với 3 cấp + permissions → lưu vào DB.
+5. Chọn folder trong cây → "Tạo folder từ template" → cây con được tạo đúng tên + quyền.
+6. Chọn nhiều folder → "Cấp quyền" → quyền áp dụng đúng.
+7. Copy folder → folder mới có permission từ folder đích.
+8. Move folder hợp lệ (cùng loại Drive) → thành công.
+9. Move folder không hợp lệ (Shared Drive → My Drive) → báo lỗi rõ ràng.
+10. Delete folder → move vào trash, cây refresh đúng.
+11. Build pass, tests pass.
+
+### 10. Rollout Plan
+
+**Phase 1 — Core Drive Manager**
+- Migration DB.
+- `DriveManagerPage` + `DriveTreeTable`.
+- Thêm/xóa/đổi tên/lưu nhiều cây.
+- Quét/refresh cây.
+
+**Phase 2 — Template + Create from template**
+- `TemplateManager` CRUD.
+- `createFolderTree` Apps Script.
+- `CreateFromTemplateModal`.
+
+**Phase 3 — Context actions**
+- Cấp quyền từ cây.
+- Copy / Move / Delete.
+- Xử lý hạn chế Shared Drive.
+
+**Phase 4 — Cleanup**
+- Bỏ `AppsScriptAdminPage` và các form component không còn dùng.
+- Cập nhật `CHANGELOG.md`, `KNOWLEDGE.md` nếu có gotcha mới.
+
+### 11. Notes
+
+- **Permission inheritance:** Khi tạo folder mới bên trong folder đã được share, Google Drive tự động kế thừa quyền từ cha xuống con. `createFolderTree` tận dụng điều này: tạo cây trước, rồi chỉ apply các quyền **khác với quyền kế thừa**. Template vẫn định nghĩa đầy đủ quyền ở mỗi level để dễ đọc, nhưng code sẽ optimize bỏ qua quyền trùng lặp.
+- **Shared Drive limitation:** Move cross-Drive type sẽ bị chặn. UI cần disable hoặc báo lỗi trước khi gọi API.
+- **Copy permission:** Theo yêu cầu, copy folder chỉ kế thừa permission từ folder đích, không giữ permission folder nguồn.
+- **Template name:** Giữ nguyên tên template, không cho phép đổi tên động trong lần đầu. Có thể mở rộng sau.
+- **Tree persistence:** Lưu `tree_data` JSONB trong Supabase. Nếu cây lớn, cân nhắc phân trang hoặc lazy load ở phase sau.
+- **Security:** Cả `drive_templates` và `drive_trees` đều RLS admin-only.
+- **Rollback:** Revert code + migration + redeploy Apps Script version cũ.

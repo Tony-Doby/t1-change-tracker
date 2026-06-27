@@ -5,6 +5,79 @@
 
 ---
 
+# Changelog - T1 Change Tracker
+
+> File này dùng để tracking toàn bộ thay đổi/fix trong project.  
+> Mỗi lần sửa code phải ghi vào đây để AI/agent sau có thể đọc lại context.
+
+---
+
+## 2026-06-27
+
+### 86. Feature FEAT-034: Drive Manager — Quản lý toàn bộ Drive từ webapp
+
+**Mô tả:** Thay thế tab **Google Drive Admin** (8 action độc lập) bằng **Drive Manager** — giao diện quản lý Drive trực tiếp từ webapp. Hỗ trợ lưu nhiều cây folder, duyệt cây đa cấp, tạo folder từ template kèm phân quyền, và các context action Copy/Move/Delete.
+
+**Files tạo:**
+- `webapp/supabase/migrations/020_drive_manager.sql`: Bảng `drive_templates`, `drive_trees`, update `apps_script_logs` CHECK constraint.
+- `webapp/src/hooks/queries/useDriveTrees.ts`: Query/mutation cho `drive_trees`.
+- `webapp/src/hooks/queries/useDriveTemplates.ts`: Query/mutation cho `drive_templates`.
+- `webapp/src/pages/DriveManagerPage.tsx`: Trang Drive Manager mới.
+- `webapp/src/components/drive-manager/DriveTreeTable.tsx`: Bảng cây folder với expand/collapse, checkbox, context menu.
+- `webapp/src/components/drive-manager/CreateTreeDialog.tsx`: Dialog thêm cây Drive mới.
+- `webapp/src/components/drive-manager/TemplateManager.tsx`: CRUD template (JSON editor).
+- `webapp/src/components/drive-manager/CreateFromTemplateModal.tsx`: Tạo folder từ template.
+- `webapp/src/components/drive-manager/CopyFolderDialog.tsx`: Copy folder.
+- `webapp/src/components/drive-manager/MoveItemDialog.tsx`: Di chuyển folder.
+
+**Files sửa:**
+- `webapp/docs/FEAT-030-apps-script.gs`: Thêm action `createFolderTree` (tạo cây folder đệ quy + apply override permissions theo template).
+- `webapp/supabase/functions/google-apps-script-proxy/index.ts`: Thêm `createFolderTree` vào `ALLOWED_ACTIONS`.
+- `webapp/src/types/index.ts`: Thêm `DriveTemplate`, `DriveTree`, `DriveTemplateFolder`, `CreateFolderTreeParams`.
+- `webapp/src/App.tsx`: Route `/admin/google-drive` → `DriveManagerPage`.
+- `webapp/src/components/apps-script/index.ts`: Chỉ export `ScanFoldersForm`, `SetPermissionsForm`, `ScanResultsTable`.
+- `webapp/docs/PLAN-feature-dev.md`: Cập nhật FEAT-034 status = done.
+
+**Files xóa:**
+- `webapp/src/pages/AppsScriptAdminPage.tsx`
+- `webapp/src/components/apps-script/CreateFolderForm.tsx`
+- `webapp/src/components/apps-script/CopyFolderForm.tsx`
+- `webapp/src/components/apps-script/ListItemsForm.tsx`
+- `webapp/src/components/apps-script/MoveItemForm.tsx`
+- `webapp/src/components/apps-script/RemovePermissionForm.tsx`
+- `webapp/src/components/apps-script/DeleteItemForm.tsx`
+
+**Kết quả:**
+- `npm run build` pass.
+- `npm run test` pass (56/56 tests).
+
+**Lưu ý deploy:**
+1. Chạy migration `020_drive_manager.sql` trong Supabase SQL Editor.
+2. Deploy lại Apps Script (`docs/FEAT-030-apps-script.gs`) → **Deploy → New version**.
+3. Redeploy Edge Function: `supabase functions deploy google-apps-script-proxy`.
+
+---
+
+## 2026-06-27
+
+### 85. Policy FEAT-033: Unit Test Policy — Bắt buộc unit test có điều kiện
+
+**Mô tả:** Thiết lập quy tắc rõ ràng về việc khi nào phải viết unit test, khi nào không, và tiêu chí chất lượng test. Thay vì bắt buộc mọi feature đều có unit test, policy tập trung vào code có rủi ro cao: pure functions trong `src/lib/`, business rules, và bug fix regression.
+
+**Files sửa:**
+- `webapp/docs/AGENTS.md`: Thêm quy tắc Unit Test Policy vào section workflow.
+- `webapp/docs/KNOWLEDGE.md`: Thêm section 5.4 hướng dẫn chi tiết + ví dụ.
+- `webapp/docs/PLAN-feature-dev.md`: Thêm FEAT-033 plan.
+
+**Kết quả:** Docs sync hoàn tất. `npm run test` pass. `npm run build` pass.
+
+**Quy tắc tóm tắt:**
+- ✅ Bắt buộc: `src/lib/` pure functions, business logic, bug fix regression.
+- ❌ Không bắt buộc: UI thuần túy, config, type, constant, prototype.
+- 🔄 Luồng UI/nghiệp vụ mới: cập nhật smoke test checklist hoặc E2E test.
+
+---
+
 ## 2026-06-26
 
 ### 84. UX FEAT-032: Đổi thanh "Cấp quyền" hàng loạt từ floating sang sticky trong khung bảng

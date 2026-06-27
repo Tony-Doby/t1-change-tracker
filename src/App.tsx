@@ -18,7 +18,7 @@ import HolidaysPage from './pages/HolidaysPage'
 import RanksPage from './pages/RanksPage'
 import DivisionsPage from './pages/DivisionsPage'
 import ExcelGeneratorPage from './pages/ExcelGeneratorPage'
-import AppsScriptAdminPage from './pages/AppsScriptAdminPage'
+import DriveManagerPage from './pages/DriveManagerPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuth()
@@ -111,7 +111,7 @@ export default function App() {
         <Route path="/ranks" element={<ProtectedRoute><RanksPage /></ProtectedRoute>} />
         <Route path="/divisions" element={<ProtectedRoute><DivisionsPage /></ProtectedRoute>} />
         <Route path="/excel-generator" element={<ProtectedRoute><ExcelGeneratorPage /></ProtectedRoute>} />
-        <Route path="/admin/google-drive" element={<AdminRoute><AppsScriptAdminPage /></AdminRoute>} />
+        <Route path="/admin/google-drive" element={<AdminRoute><DriveManagerPage /></AdminRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </ErrorBoundary>

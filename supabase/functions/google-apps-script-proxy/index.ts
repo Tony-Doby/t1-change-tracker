@@ -9,6 +9,7 @@ const ALLOWED_ACTIONS = new Set([
   'scanFolders',
   'setPermissions',
   'createFolder',
+  'createFolderTree',
   'copyFolder',
   'listItems',
   'moveItem',

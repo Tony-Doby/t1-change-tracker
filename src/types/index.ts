@@ -365,6 +365,7 @@ export type AppsScriptAction =
   | 'scanFolders'
   | 'setPermissions'
   | 'createFolder'
+  | 'createFolderTree'
   | 'copyFolder'
   | 'listItems'
   | 'moveItem'
@@ -456,10 +457,56 @@ export interface DeleteItemParams {
   itemId: string
 }
 
+// FEAT-034: Template permission entry for a folder in a template tree.
+export interface DriveTemplatePermission {
+  email?: string
+  scope?: DriveScope
+  role: DriveRole
+}
+
+// FEAT-034: A folder node inside a template tree (nested).
+export interface DriveTemplateFolder {
+  name: string
+  permissions: DriveTemplatePermission[]
+  children: DriveTemplateFolder[]
+}
+
+// FEAT-034: Saved folder tree template.
+export interface DriveTemplate {
+  id: string
+  name: string
+  root: DriveTemplateFolder
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// FEAT-034: A saved scanned Drive tree.
+export interface DriveTree {
+  id: string
+  name: string | null
+  root_url: string
+  root_folder_id: string
+  depth: number
+  tree_data: ScanFolderResult[]
+  is_shared_drive: boolean | null
+  created_by: string | null
+  created_at: string
+  refreshed_at: string
+}
+
+// FEAT-034: Params for creating a folder tree from a template.
+export interface CreateFolderTreeParams {
+  parentFolderId: string
+  templateId: string
+  template: DriveTemplateFolder
+}
+
 export type AppsScriptParams =
   | ScanFoldersParams
   | SetPermissionsParams
   | CreateFolderParams
+  | CreateFolderTreeParams
   | CopyFolderParams
   | ListItemsParams
   | MoveItemParams

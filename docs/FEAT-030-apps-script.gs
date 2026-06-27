@@ -39,6 +39,9 @@ function doPost(e) {
       case 'createFolder':
         data = createFolder(params)
         break
+      case 'createFolderTree':
+        data = createFolderTree(params)
+        break
       case 'copyFolder':
         data = copyFolder(params)
         break
@@ -235,6 +238,117 @@ function createFolder(params) {
     parentFolderId: parentFolderId,
     url: 'https://drive.google.com/drive/folders/' + newFolder.getId(),
   }
+}
+
+// FEAT-034: Create a folder tree from a template.
+// Template shape: { name, root: { name, permissions, children: [{ name, permissions, children }] } }
+// Folders are created recursively; Google Drive automatically inherits parent permissions.
+// We then apply only permissions that differ from what would be inherited.
+function createFolderTree(params) {
+  const parentFolderId = params.parentFolderId
+  const template = params.template || {}
+  const rootTemplate = template.root
+
+  if (!rootTemplate) {
+    throw new Error('Template thiếu root folder')
+  }
+
+  const parentFolder = DriveApp.getFolderById(parentFolderId)
+  const createdNodes = []
+
+  // Step 1 + 2 combined: create folder recursively and apply override permissions.
+  function createNode(templateNode, parent, depth) {
+    const newFolder = parent.createFolder(templateNode.name)
+    const node = {
+      id: newFolder.getId(),
+      name: newFolder.getName(),
+      depth: depth,
+      parentFolderId: parent.getId(),
+      url: 'https://drive.google.com/drive/folders/' + newFolder.getId(),
+      permissionsApplied: [],
+    }
+    createdNodes.push(node)
+
+    // Apply permissions that differ from inherited parent permissions.
+    const permissions = templateNode.permissions || []
+    permissions.forEach(function (perm) {
+      try {
+        const inherited = getInheritedPermission(parent, perm)
+        if (inherited && inherited.role === perm.role) {
+          return
+        }
+
+        // Validate Shared Drive-only roles.
+        const SHARED_ONLY = { fileOrganizer: true, organizer: true }
+        if (SHARED_ONLY[perm.role]) {
+          const meta = Drive.Files.get(node.id, { fields: 'driveId', supportsAllDrives: true })
+          if (!meta.driveId) {
+            throw new Error('Role "' + perm.role + '" chỉ áp dụng cho item trong Shared Drive')
+          }
+        }
+
+        if (perm.scope === 'anyone') {
+          Drive.Permissions.create(
+            { type: 'anyone', role: perm.role, allowFileDiscovery: false },
+            node.id,
+            { supportsAllDrives: true }
+          )
+        } else {
+          Drive.Permissions.create(
+            { type: 'user', role: perm.role, emailAddress: perm.email },
+            node.id,
+            { supportsAllDrives: true, sendNotificationEmail: false }
+          )
+        }
+
+        node.permissionsApplied.push({ email: perm.email, scope: perm.scope, role: perm.role })
+      } catch (e) {
+        node.permissionsApplied.push({
+          email: perm.email,
+          scope: perm.scope,
+          role: perm.role,
+          error: String(e),
+        })
+      }
+    })
+
+    // Recursively create children.
+    const children = templateNode.children || []
+    children.forEach(function (child) {
+      createNode(child, newFolder, depth + 1)
+    })
+
+    return node
+  }
+
+  createNode(rootTemplate, parentFolder, 0)
+
+  return {
+    parentFolderId: parentFolderId,
+    nodes: createdNodes,
+  }
+}
+
+// Helper: check if a parent folder already has an equivalent permission.
+function getInheritedPermission(parentFolder, perm) {
+  if (perm.scope === 'anyone') {
+    const permissions = parentFolder.getPermissions()
+    while (permissions.hasNext()) {
+      const p = permissions.next()
+      if (p.getType() === 'anyone' && p.getRole() === perm.role) {
+        return { scope: 'anyone', role: p.getRole() }
+      }
+    }
+  } else {
+    const permissions = parentFolder.getPermissions()
+    while (permissions.hasNext()) {
+      const p = permissions.next()
+      if (p.getType() === 'user' && p.getEmailAddress() === perm.email && p.getRole() === perm.role) {
+        return { email: perm.email, role: p.getRole() }
+      }
+    }
+  }
+  return null
 }
 
 function copyFolder(params) {
