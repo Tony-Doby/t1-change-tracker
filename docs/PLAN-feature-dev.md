@@ -88,6 +88,61 @@
 | 035 | Drive Manager — Search, Filter by depth/type, and improved bulk selection | done | 2026-06-27 | 2026-06-27 |
 | 036 | Drive Manager Template — UI wizard thay thế JSON editor | done | 2026-06-27 | 2026-06-27 |
 | 037 | Drive Manager — Full-page tabs + drill-down + breadcrumb | done | 2026-06-27 | 2026-06-27 |
+| 038 | Refactor IA sidebar — gom nhóm + page-tabs | done | 2026-06-27 | 2026-06-27 |
+| REFACTOR-007 | Chuẩn hóa runtime contract, Upload Agent và date formatting | backlog | 2026-08-13 | — |
+
+---
+
+## REFACTOR-007: Chuẩn hóa runtime contract, Upload Agent và date formatting
+
+- **Đề xuất**: 2026-08-13
+- **Status**: `backlog`
+- **Priority**: `high`
+
+### 1. Mô tả feature
+Khép khác biệt giữa business rule/documentation và source runtime: `agent_code` legacy, request state `step4`/`step5`, Upload Agent CSV/main-thread/single-upsert, và các điểm format ngày trực tiếp.
+
+### 2. Motivation / Why
+Review ngày 2026-08-13 xác nhận các khác biệt này là thật. Cần plan riêng để tránh break data cũ, mất số 0 trong CSV hoặc lệch timezone.
+
+### 3. Scope
+**In scope:** SQL audit trước khi đổi legacy contract; CSV raw-text parser dùng chung; Web Worker + batch import; chuyển call site sang helper GMT+7; regression tests và docs.
+
+**Out of scope:** đổi business flow B1 → B2 → B3, thay thế Excel Generator hoặc Drive Manager.
+
+### 4. Technical Design
+Không xóa column/state trước SQL audit và migration rollback được. Upload dùng worker, CSV raw-text, batch có báo cáo lỗi; date helper tập trung trước khi đổi call site.
+
+### 5. UI/UX
+Giữ UI 3 bước. Upload vẫn có preview/progress nhưng progress phản ánh parse và từng batch.
+
+### 6. Files cần sửa / tạo
+| File | Thay đổi |
+|------|----------|
+| `src/types/index.ts` | Chuẩn hóa/làm rõ legacy contract |
+| `src/pages/UploadPage.tsx` | Worker, CSV parser, batching, cache invalidation |
+| `src/lib/date-utils.ts` + call site | Chuẩn hóa format GMT+7 |
+| `src/lib/*`, `src/test/*` | Pure helper và regression tests |
+| `supabase/migrations/*` | Chỉ thêm sau SQL audit được duyệt |
+
+### 7. Schema / SQL changes
+Chưa quyết định; bắt buộc xác minh production trước khi drop `agent_code` hoặc legacy request state/column.
+
+### 8. API / Integration changes
+Không dự kiến API ngoài; import phải tương thích RLS và REST limit.
+
+### 9. Test Plan
+1. CSV giữ số 0 đầu, chuỗi ngày và quoted fields.
+2. File 10.000 dòng không block UI; batch lỗi có báo cáo chính xác.
+3. Mọi call site đổi có output `dd/mm/yyyy`, GMT+7.
+4. Legacy record `agent_code`, `step4`, `step5` an toàn trước/sau rollout.
+5. `npm run test` và `npm run verify` pass trong CI/local không timeout.
+
+### 10. Rollout Plan
+SQL audit → refactor/test không destructive → smoke import → migration production chỉ sau backup và xác nhận.
+
+### 11. Notes
+Backlog từ review; chưa được phép code cho đến khi user chọn triển khai. Vite cũng cảnh báo bundle chính lớn; chỉ đánh giá code-splitting nếu profiling cho thấy cần thiết.
 
 ---
 

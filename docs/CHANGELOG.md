@@ -5,10 +5,36 @@
 
 ---
 
-# Changelog - T1 Change Tracker
+## 2026-08-13
 
-> File này dùng để tracking toàn bộ thay đổi/fix trong project.  
-> Mỗi lần sửa code phải ghi vào đây để AI/agent sau có thể đọc lại context.
+### 95. BUG-044: Excel Generator đồng bộ ngày expression cho preview và file xuất
+
+- Sửa stale closure trong `GeneratePanel`: callback đọc data nhận `generateDate` mới nhất.
+- Khi đổi “Ngày áp dụng cho expression”, preview tự cập nhật để khớp base date dùng lúc generate file.
+- Thêm regression test kiểm tra preview và workbook xuất đều dùng `02/01/2026` khi chọn `2026-01-02`.
+
+**Files:** `src/components/excel-generator/GeneratePanel.tsx`, `src/lib/excel-generator.test.ts`, `AGENTS.md`, `KNOWLEDGE.md`, `SMOKE-TEST.md`, `PROGRESS.md`, `README.md` và bug plans.
+
+**Kiểm thử:** `npm.cmd run test` — **7 test files, 98 tests pass**; `npm.cmd run build` pass.
+
+---
+
+## 2026-08-13
+
+### 94. Review toàn bộ codebase và đồng bộ tài liệu
+
+**Mô tả:** Rà soát source, route/navigation, Drive Manager, test configuration và các plan hiện có để sửa các mô tả bị cũ.
+
+- `PLAN-feature-dev.md`: thêm FEAT-038 vào Feature Registry (plan chi tiết đã tồn tại).
+- `PROGRESS.md`: cập nhật mốc thời gian, cấu trúc thư mục, 16 route declarations, Drive Manager và kết quả kiểm tra tái lập.
+- `PLAN-refactor.md`: phản ánh Phase 1–4 đã xong; Phase 5 đã có Vitest/RTL nhưng phần strict type và component/integration test vẫn còn.
+- `SMOKE-TEST.md`: thay checklist Google Drive Admin cũ bằng luồng Drive Manager và ràng buộc `organizer`/`fileOrganizer` đúng với Google Drive.
+- `README.md`: thay nội dung Vite template bằng hướng dẫn TDhome, scripts và links tài liệu.
+- `KNOWLEDGE.md`/`AGENTS.md`: làm rõ `agent_code` là legacy read-only, request contract còn `step4`/`step5`, và Upload Agent chưa có worker/batch/raw CSV parser.
+- `PLAN-feature-dev.md`: tạo backlog `REFACTOR-007` để chuẩn hóa các khác biệt trên.
+- `UI-DESIGN.md` và `PLAN-t1-change-tracker.md`: vẫn là tài liệu legacy; nguồn ưu tiên là code, `KNOWLEDGE.md` và plan active.
+
+**Kiểm thử:** `npm.cmd run build` pass; `npm.cmd run test` pass — **7 test files, 97 tests** (43.95s). `npm.cmd run lint` chưa có kết quả hoàn chỉnh trong môi trường review.
 
 ---
 

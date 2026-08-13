@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { evaluateExpression, replaceExpressionsInCell } from './excel-generator'
+import * as XLSX from 'xlsx'
+import {
+  buildPreview,
+  evaluateExpression,
+  generateWorkbook,
+  parseDateFromInput,
+  replaceExpressionsInCell,
+} from './excel-generator'
 
 describe('excel-generator expression parser', () => {
   describe('evaluateExpression', () => {
@@ -115,6 +122,24 @@ describe('excel-generator expression parser', () => {
     it('handles string with no expressions', () => {
       const result = replaceExpressionsInCell('Hello World', 0, baseDate)
       expect(result).toBe('Hello World')
+    })
+  })
+
+  describe('selected expression date', () => {
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ['Ngày áp dụng'],
+      ['(dd/mm/yyyy)'],
+    ]), 'Sheet1')
+
+    it('uses the selected date for both preview and generated workbook', () => {
+      const selectedDate = parseDateFromInput('2026-01-02')
+      const preview = buildPreview(workbook, [{}], {}, 1, XLSX, undefined, selectedDate)
+      const generated = generateWorkbook(workbook, [{}], {}, 1, XLSX, selectedDate)
+      const generatedRows = XLSX.utils.sheet_to_json<unknown[]>(generated.Sheets.Sheet1, { header: 1, defval: '' })
+
+      expect(preview.rows[0]['(dd/mm/yyyy)']).toBe('02/01/2026')
+      expect(generatedRows[2][0]).toBe('02/01/2026')
     })
   })
 })

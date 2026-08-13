@@ -2,6 +2,8 @@
 
 > File này dùng để mô tả chi tiết toàn bộ giao diện app trước khi code.  
 > Có thể import vào AI design tool để preview trực quan.
+>
+> **Trạng thái: legacy reference.** Nhiều mockup/tokens trong file phản ánh thiết kế cũ. Khi có mâu thuẫn, ưu tiên source hiện tại, `docs/CHANGELOG.md`, `docs/KNOWLEDGE.md` và `src/config/navigation.ts`. Quy trình hiện hành là **B1 → B2 → B3**, branding là **TDhome** / **"Nhà của Tony!"**.
 
 ---
 

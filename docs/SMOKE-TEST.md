@@ -151,6 +151,7 @@
 
 - [ ] Tab "Templates" → danh sách template hiển thị
 - [ ] Tab "Generate" → chọn template, upload data file, preview đúng expression evaluated
+- [ ] Chọn “Ngày áp dụng cho expression” khác hôm nay → preview cập nhật theo ngày chọn; generate file và mở Excel xác nhận expression dùng đúng cùng ngày (BUG-044)
 - [ ] Tab "History" → lịch sử generate hiển thị
 - [ ] Tab "Tra cứu upline" → upload CSV/XLSX chứa `staff_id`, preview trả về T1/T2/T3/Referrer + ranks
 - [ ] Download Excel từ preview → file tải về đúng nội dung
@@ -166,7 +167,7 @@
 
 ---
 
-## 16. Google Drive Admin (FEAT-030/031/032)
+## 16. Drive Manager (FEAT-030–037, BUG-038–043)
 
 > Trang `/admin/google-drive` (chỉ role `admin`). Yêu cầu đã cấu hình: secret `APPS_SCRIPT_WEB_APP_URL` (URL `/exec` hiện hành) + Edge Function `google-apps-script-proxy` đã deploy (có action `detectDriveTypes`) + Apps Script đã dán code `docs/FEAT-030-apps-script.gs` mới nhất (Deploy → New version).
 
@@ -174,7 +175,14 @@
 - [ ] User `admin` thấy menu **Google Drive** (icon HardDrive) trong sidebar
 - [ ] User `operator` / `viewer` **không** thấy menu, vào thẳng URL `/admin/google-drive` bị chặn
 
-### 16.2 Quét folder → Bảng kết quả tương tác (FEAT-032)
+### 16.2 Cây Drive, template và thao tác folder
+- [ ] Tab **Cây Drive** → tạo/chọn một cây Drive, drill-down vào cây và breadcrumb quay lại hoạt động.
+- [ ] Tick một folder → thanh sticky nền đục hiện ở đỉnh bảng với **Cấp quyền** và **Tạo folder theo template**; tick nhiều folder thì chỉ còn action phù hợp.
+- [ ] Tab **Template** → tạo/sửa/lưu template thành công; tạo folder từ template hoạt động ở My Drive và Shared Drive.
+- [ ] Template/folder chỉ cho chọn tối đa **Người quản lý nội dung** (`fileOrganizer`); không cho chọn `organizer` cho folder/file con.
+- [ ] Nếu một quyền trong lúc tạo từ template bị Drive từ chối, app hiển thị cảnh báo chi tiết thay vì báo thành công hoàn toàn.
+
+### 16.3 Quét folder → Bảng kết quả tương tác (FEAT-032)
 - [ ] Tab **Quét folder** → nhập link/ID folder gốc + độ sâu → bấm Quét → bảng kết quả hiển thị
 - [ ] Cột **Loại Drive** hiện badge đúng: `My Drive` (neutral) hoặc `Shared Drive` (primary)
 - [ ] Ô **search** lọc theo tên/đường dẫn realtime
@@ -187,24 +195,24 @@
 - [ ] Bấm **Bỏ chọn** → thanh sticky biến mất, header cột trở về đỉnh khung
 - [ ] Cột **Link** "Mở" → mở folder trên Drive ở tab mới
 
-### 16.3 Cấp quyền linh hoạt — nhập tay (FEAT-031)
-- [ ] Tab **Cấp quyền** → dán item(s) → **click ra ngoài ô** → hiện "Đang phát hiện loại Drive..." rồi badge kết quả
-- [ ] (Nếu lỗi `Action "detectDriveTypes" is not allowed` → Edge Function chưa deploy bản mới)
-- [ ] Dropdown **Quyền** không còn typo "Ngườii" (đúng "Người xem / Người nhận xét / Người chỉnh sửa")
-- [ ] Item **toàn bộ Shared Drive** → dropdown có thêm 2 role: **Người quản lý nội dung (fileOrganizer)** + **Người quản lý (organizer)**; nhãn writer đổi thành "Người đóng góp"
-- [ ] Item **toàn bộ My Drive** → chỉ 3 role chung
-- [ ] Item **lẫn My + Shared** → banner cảnh báo màu vàng + chỉ còn 3 role chung; chọn role chỉ-Shared bị chặn (báo lỗi)
+### 16.4 Cấp quyền linh hoạt (FEAT-031)
+- [ ] Từ Cây Drive hoặc kết quả Quét folder, chọn item(s) → mở form **Cấp quyền** và app hiện loại Drive đã phát hiện.
+- [ ] (Nếu lỗi `Action "detectDriveTypes" is not allowed` → Edge Function chưa deploy bản mới.)
+- [ ] Dropdown **Quyền** không còn typo "Ngườii" (đúng "Người xem / Người nhận xét / Người chỉnh sửa").
+- [ ] Item **toàn bộ Shared Drive** → có thêm **Người quản lý nội dung** (`fileOrganizer`), writer hiện là "Người đóng góp"; **không có `organizer`** cho folder/file con.
+- [ ] Item **toàn bộ My Drive** → chỉ 3 role chung.
+- [ ] Item **lẫn My + Shared** → banner cảnh báo màu vàng + chỉ còn 3 role chung; chọn role chỉ-Shared bị chặn.
 - [ ] Select **Đối tượng = "Người dùng cụ thể"** → hiện ô email (bắt buộc); để trống email → báo lỗi
 - [ ] Select **Đối tượng = "Bất kỳ ai có link"** → ô email **ẩn**, hiện ghi chú quyền anyone
 - [ ] Submit hợp lệ (scope user, ≥1 email) → toast thành công, kết quả trả về từng item `success: true`
 - [ ] Submit scope anyone → folder thực sự thành "ai có link cũng [role]" (kiểm tra trên Drive: Share → General access)
 
-### 16.4 Cấp quyền hàng loạt từ bảng quét (FEAT-031 + 032)
+### 16.5 Cấp quyền hàng loạt từ bảng quét (FEAT-031 + 032)
 - [ ] Trong Modal (mở từ 16.2) → chọn Đối tượng + role + (email nếu user) → **Cấp quyền** → toast thành công, Modal đóng
 - [ ] Item preset đã biết loại Drive sẵn → **không** gọi lại `detectDriveTypes` (không thấy spinner phát hiện)
 - [ ] Nếu các item chọn lẫn 2 loại Drive → Modal hiện banner + giới hạn 3 role chung
 
-### 16.5 Audit log
+### 16.6 Audit log
 - [ ] Mọi thao tác (kể cả `detectDriveTypes`) xuất hiện trong **"Lịch sử thao tác"** với trạng thái Thành công/Thất bại
 - [ ] Thao tác lỗi → cột **Lỗi** hiện message (hover xem full)
 - [ ] Bấm **Làm mới** → bảng log cập nhật
@@ -234,6 +242,7 @@
 
 ### BL-5: Mail Merge Generate
 - [ ] Expression `(ddmmyy)` evaluate đúng ngày
+- [ ] Đổi ngày áp dụng sau khi preview đã hiện → preview và file export cùng đổi sang ngày mới
 - [ ] Expression `([dd-1]mmyy)` evaluate ngày trừ 1 đúng
 - [ ] Expression `(R.num)` đánh số dòng đúng
 - [ ] Inline refs `{{FieldName}}` thay thế đúng

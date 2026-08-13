@@ -1,6 +1,6 @@
 # Plan Refactor Tổng Thể — T1 Change Tracker
 
-> **Status**: `in_progress` — Phase 1, 2 & 3 đã hoàn thành. Phase 4 sẵn sàng bắt đầu.  
+> **Status**: `in_progress` — Phase 1–4 đã hoàn thành; Phase 5 đã có nền tảng test và vẫn còn phần type-safety/component test.
 > **Tổng quan**: Dựa trên audit toàn bộ codebase (src + docs + schema). Chia thành 6 phase, ưu tiên từ critical → polish.
 
 ---
@@ -174,9 +174,11 @@
 
 ---
 
-## Phase 5: Testing & Type Safety (🟢 Medium — Cần nhưng không gấp)
+## Phase 5: Testing & Type Safety (🟢 Medium — đang thực hiện một phần)
 
-### 5.1 Add Vitest + React Testing Library
+**Trạng thái đã xác minh (2026-08-12):** Vitest + React Testing Library đã được cấu hình; repo có 7 test files và `npm run test` pass **97/97**. Chính sách test điều kiện được ghi tại `AGENTS.md`/`KNOWLEDGE.md` (FEAT-033). `tsconfig.app.json` đang bật các kiểm tra unused/fallthrough, nhưng chưa bật `strict`/`strictNullChecks`; phần này vẫn là công việc còn lại.
+
+### 5.1 Add Vitest + React Testing Library ✅ (nền tảng)
 - **Files mới:**
   - `vitest.config.ts`
   - `src/lib/eligibility.test.ts` — Test toàn bộ eligibility rules
@@ -185,14 +187,14 @@
   - `src/hooks/__tests__/useDebounce.test.ts`
 - **Cài đặt:** `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`
 
-### 5.2 Stricter TypeScript
+### 5.2 Stricter TypeScript (còn lại)
 - **Bật lại** (nếu đang tắt hoặc bỏ qua):
   - `noImplicitAny: true`
   - `strictNullChecks: true`
 - **Audit** toàn bộ `any` trong pages → thay bằng proper types từ `types/index.ts`.
 - **Ưu tiên:** `request-actions.ts`, `agent-actions.ts`, `eligibility.ts`.
 
-### 5.3 Add Component/Integration Tests (sau khi Phase 2 & 3 xong)
+### 5.3 Add Component/Integration Tests (còn lại)
 - Test `AgentsPage` + `useAgentsQuery`: search, pagination, filter.
 - Test `CreateRequestModal`: eligibility check, M1 impact display.
 
@@ -232,7 +234,7 @@
 | Phase 2: TanStack Query | 2-3 ngày | Phase 1 xong |
 | Phase 3: Page Decomposition | 2-3 ngày | Phase 2 xong 2 pilot pages |
 | Phase 4: Backend Alignment | 2 ngày | Phase 3 xong |
-| Phase 5: Testing | 2 ngày | Phase 4 xong |
+| Phase 5: Testing & type safety | Còn lại | Nền tảng test đã xong; tiếp tục theo policy khi chạm logic/bug |
 | Phase 6: Polish | 1 ngày | Phase 5 xong |
 | **Tổng** | **~10 ngày** | Làm tuần tự, không parallel |
 
@@ -242,7 +244,7 @@
 
 | Risk | Mitigation |
 |------|------------|
-| Regression khi refactor pages lớn | Làm từng page, test kỹ trước khi chuyển page tiếp theo. Có Vitest sau Phase 5. |
+| Regression khi refactor pages lớn | Làm từng page, test kỹ trước khi chuyển page tiếp theo. Vitest đã có; bổ sung regression test khi fix bug. |
 | TanStack Query cache stale | Dùng `staleTime` hợp lý + invalidate đúng queryKey sau mutation. |
 | RPC eligibility diverge khỏi frontend | Ghi rõ comment "Source of truth = RPC" ở cả 2 nơi. Review đồng bộ khi business rule đổi. |
 | Modal refactor break UX | Test từng modal: backdrop click, Escape, focus trap, scroll lock. |

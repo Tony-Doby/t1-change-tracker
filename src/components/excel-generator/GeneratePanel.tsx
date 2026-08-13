@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import {
   UploadCloud,
   X,
@@ -58,6 +58,7 @@ export default function GeneratePanel({ templates }: Props) {
   const [downloadingSample, setDownloadingSample] = useState(false)
   const [generateDate, setGenerateDate] = useState<string>(new Date().toISOString().split('T')[0])
   const inputRef = useRef<HTMLInputElement>(null)
+  const hasPreview = preview !== null
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === selectedTemplateId),
@@ -178,9 +179,39 @@ export default function GeneratePanel({ templates }: Props) {
         setParsing(false)
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [show, templateWorkbook, selectedTemplate, dataHeaderRow]
+    [show, templateWorkbook, selectedTemplate, dataHeaderRow, generateDate]
   )
+
+  // Keep the preview aligned with the date that will be passed to generateWorkbook.
+  // Without this, a preview built before changing the date can misleadingly show the
+  // previous (usually today's) expression values.
+  useEffect(() => {
+    if (!hasPreview || !templateWorkbook || !selectedTemplate || dataRows.length === 0) return
+
+    let cancelled = false
+    loadXlsx()
+      .then((XLSX) => {
+        if (cancelled) return
+        setPreview(
+          buildPreview(
+            templateWorkbook,
+            dataRows,
+            mapping,
+            selectedTemplate.template_header_row,
+            XLSX,
+            undefined,
+            parseDateFromInput(generateDate)
+          )
+        )
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) show('Lỗi cập nhật preview: ' + ((e as Error).message ?? 'Unknown'), 'error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [dataRows, generateDate, hasPreview, mapping, selectedTemplate, show, templateWorkbook])
 
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true) }, [])
   const onDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(false) }, [])

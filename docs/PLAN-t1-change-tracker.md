@@ -4,6 +4,8 @@
 > **Mục tiêu:** App độc lập theo dõi quy trình thay đổi T1 (Mentor) theo chính sách ERA Vietnam 16/04/2026.  
 > **Ngưởi dùng:** Admin/Operation (do bạn tự tạo user & cấp pass).  
 > **Cập nhật:** 2026-05-25
+>
+> **Trạng thái: kế hoạch lịch sử.** File này giữ bối cảnh ban đầu, không phải nguồn triển khai hiện hành. Ưu tiên `PLAN-feature-dev.md`, `PLAN-bug-fixes.md`, `CHANGELOG.md`, `KNOWLEDGE.md` và source code. Đặc biệt, workflow hiện tại là **B1 → B2 → B3** và unique key là **`staff_id`**, không phải các mô tả 5 bước/`agent_code` cũ trong phần còn lại của file.
 
 ---
 

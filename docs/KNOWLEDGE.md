@@ -49,11 +49,11 @@
 
 ## 2. Business Rules (dễ code sai)
 
-### 2.1 Không có `agent_code`
-- Toàn bộ app chỉ dùng **`staff_id`** làm unique key.
-- Import data upsert theo `staff_id` (onConflict), không phải `agent_code`.
-- Placeholder email: `{{staffId}}`, **không phải** `{{agentCode}}`.
-- UI hiển thị format: `Họ tên - staff_id`.
+### 2.1 `staff_id` là business key; `agent_code` vẫn là field legacy
+- Toàn bộ luồng ghi và import dùng **`staff_id`** làm unique key (`onConflict: 'staff_id'`), không dùng `agent_code` làm khóa.
+- `Agent` vẫn có `agent_code: string | null` trong type/schema v2 và `AgentInfoTab` chỉ **đọc/hiển thị có điều kiện** khi giá trị này khác `staff_id`. Không được thêm logic ghi, upsert hay placeholder mới dựa trên field này nếu chưa có plan migration rõ ràng.
+- Placeholder email chuẩn là `{{staffId}}`, không phải `{{agentCode}}`.
+- UI mặc định hiển thị format `Họ tên - staff_id`.
 
 ### 2.2 Eligibility cấp bậc
 - Chỉ cần **`rank_name != 'ASC'`** (không phân biệt hoa thường).
@@ -69,13 +69,13 @@
 - Bảng `m1_transition_tasks.temp_t1_id` đã `DROP NOT NULL`.
 - Dashboard hiển thị `"Không có T1 tạm"` khi `temp_t1_id = null`.
 
-### 2.5 Quy trình Request chỉ còn 3 bước
-- Workflow: **B1 → B2 → B3**.
+### 2.5 Product workflow là 3 bước, nhưng hợp đồng dữ liệu vẫn hỗ trợ state legacy
+- Workflow người dùng đang hướng tới: **B1 → B2 → B3**.
 - B1: Tạo đề xuất.
 - B2: T1 mới xác nhận + nhập ngày xác nhận.
 - B3: Điểm quyết định (Đồng ý / Hủy) sau 3 ngày làm việc.
-- **Không còn B4, B5** trong UI. DB vẫn giữ cột cũ để tương thích ngược.
-- Chart/Kanban chỉ hiển thị: B1, B2, B3, Hoàn tất, Đã hủy.
+- DB/type vẫn giữ `step4`/`step5` và các timestamp tương ứng để tương thích ngược. Source còn tham chiếu các state này trong `RequestDetailPage`, `DashboardStats`, `StatusChart` và khi hoàn tất request.
+- Vì vậy, không được giả định `step4`/`step5` đã biến mất hoàn toàn khi sửa query, type hoặc thống kê. Chuẩn hóa triệt để là backlog `REFACTOR-007`.
 
 ### 2.6 Ngày làm việc & Tính ngày
 - "Ngày làm việc" = **Thứ 2 đến Thứ 6**.
@@ -106,7 +106,8 @@
 - Định dạng: **`dd/mm/yyyy`** (2 chữ số ngày/tháng).
 - Timezone: **`Asia/Ho_Chi_Minh`** (GMT+7).
 - Dùng `src/lib/date-utils.ts` (`formatDate`, `formatDateTime`).
-- **Không dùng** `toLocaleDateString()` mặc định vì sẽ ra định dạng/thờigian khác.
+- Hướng chuẩn là không dùng `toLocaleDateString()` mặc định vì sẽ ra định dạng/thời gian khác.
+- **Trạng thái review 2026-08-13:** vẫn còn các điểm dùng trực tiếp `toLocaleDateString()`/`toLocaleTimeString()` ở `SendEmailModal`, `DeadlineInfo`, `excel-generator/TemplateManager` và `GenerationHistory`. Khi chạm các file này, chuyển sang helper timezone; không coi quy tắc đã được áp dụng toàn bộ.
 
 ### 3.3 UI-DESIGN.md đã lỗi thời ở một số chỗ
 - UI-DESIGN.md vẫn có giá trị reference nhưng cần biết:
@@ -126,10 +127,11 @@
 
 ## 4. Data & Import Constraints
 
-### 4.1 Upsert theo `staff_id`
-- Upload Excel/CSV: upsert vào bảng `agents` với `onConflict: 'staff_id'`.
-- Validate header trước khi import.
-- Batch insert tối đa 500 dòng/lần để tránh timeout.
+### 4.1 Upload Agent: hiện trạng và ràng buộc
+- Upload Excel/CSV: upsert vào bảng `agents` với `onConflict: 'staff_id'`; có validate header, giới hạn 10.000 dòng / 10MB và preview 10 dòng.
+- **Hiện trạng source:** `UploadPage` dùng `XLSX.read()` cho cả `.csv` và `.xlsx`, parse trên main thread, rồi upsert toàn bộ payload trong một request. Chưa có Web Worker hay batch 500 dòng.
+- Do đó CSV ở trang Upload có thể mất số 0 đầu/date do SheetJS auto-convert. Parser raw-text `parseCsvText()`/`readCsvFile()` chỉ đang được dùng bởi Excel Generator. Không copy guideline của Excel Generator sang Upload nếu chưa refactor.
+- Chuẩn hóa CSV, Web Worker và batching được theo dõi ở `REFACTOR-007`.
 
 ### 4.2 Soft Delete
 - Bảng `agents` và `t1_requests` dùng `deleted_at` (timestamp) cho soft delete.
@@ -228,6 +230,7 @@ it('returns ineligible for ASC rank regardless of case', () => {
 ### 6.4 Chọn ngày generate (FEAT-020)
 - `baseDate` mặc định là ngày hiện tại, user có thể chọn ngày khác qua input date picker trong GeneratePanel.
 - Expression `(dd)`, `(mm)`, `(yy)`... sẽ dùng ngày đã chọn.
+- Khi một callback/effect dùng `generateDate` để build preview, phải khai báo dependency và refresh preview khi ngày đổi. Preview và `generateWorkbook()` phải cùng gọi `parseDateFromInput(generateDate)` (BUG-044).
 
 ### 6.5 `FieldMappingValue` định nghĩa ở 2 nơi — phải sync
 - `src/types/index.ts` và `src/lib/excel-generator.ts` đều định nghĩa `FieldMappingValue`.
@@ -271,6 +274,9 @@ it('returns ineligible for ASC rank regardless of case', () => {
 | ~~Chưa dùng Supabase Realtime~~ | **Đã hoàn thành (2026-06-19)** | `PLAN-feature-dev.md` FEAT-002 |
 | ~~TanStack Query chưa được dùng~~ | **Đã hoàn thành (2026-05-30)** | `PLAN-feature-dev.md` FEAT-004 |
 | Search presets phức tạp bị ẩn | Chưa làm | `PLAN-feature-dev.md` FEAT-005 |
+| Import Agent vẫn dùng SheetJS cho CSV, main thread và một upsert lớn | Chưa làm | `PLAN-feature-dev.md` REFACTOR-007 |
+| Một số UI còn dùng định dạng ngày trực tiếp thay vì helper GMT+7 | Chưa làm | `PLAN-feature-dev.md` REFACTOR-007 |
+| `agent_code` và state `step4`/`step5` còn tồn tại trong runtime contract | Chưa làm | `PLAN-feature-dev.md` REFACTOR-007 |
 | UI-DESIGN.md chưa update hết | Đang theo dõi | Cập nhật dần khi redesign |
 | ~~Excel Generator: Expression parser bị override khi map trùng tên~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-bug-fixes.md` BUG-015 |
 | ~~Excel Generator: Chưa hỗ trợ inline field reference `{{Field}}`~~ | **Đã hoàn thành (2026-06-04)** | `PLAN-feature-dev.md` FEAT-020 |

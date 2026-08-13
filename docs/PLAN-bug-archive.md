@@ -6,6 +6,44 @@
 
 ---
 
+## BUG-044: Excel Generator dùng ngày hiện tại thay vì ngày expression đã chọn
+
+- **Phát hiện**: 2026-08-13
+- **Status**: `fixed` (2026-08-13)
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Preview expression có thể giữ ngày hiện tại sau khi người dùng chọn ngày áp dụng khác; do đó preview không khớp ngày sẽ dùng để tạo file Excel.
+
+### 2. Root Cause
+`parseDataFile` trong `GeneratePanel` là `useCallback` nhưng thiếu `generateDate` trong dependency, nên đóng over state cũ. Preview cũng không tự tạo lại sau khi người dùng đổi ngày.
+
+### 3. Solution
+- Thêm `generateDate` vào dependency callback đọc data.
+- Tự refresh preview khi ngày áp dụng đổi, dùng cùng `parseDateFromInput(generateDate)` với luồng export.
+- Thêm regression test tạo preview và workbook với ngày `2026-01-02`; cả hai phải ra `02/01/2026`.
+
+### 4. Files đã sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/excel-generator/GeneratePanel.tsx` | Đồng bộ callback và preview với ngày expression hiện tại |
+| `src/lib/excel-generator.test.ts` | Regression test preview + generated workbook |
+| `docs/AGENTS.md`, `docs/KNOWLEDGE.md`, `docs/SMOKE-TEST.md` | Quy tắc và checklist regression |
+| `docs/PLAN-bug-fixes.md`, `docs/CHANGELOG.md`, `docs/PROGRESS.md`, `README.md` | Plan, lịch sử và trạng thái kiểm thử |
+
+### 5. Schema / SQL changes
+Không cần.
+
+### 6. Test Results
+- `npm.cmd run test` — **7 file, 98 tests pass**.
+- `npm.cmd run build` — pass.
+
+### 7. Notes
+- Giữ `parseDateFromInput()` để tránh parse UTC làm lệch ngày GMT+7.
+- Không thay đổi cú pháp expression, mapping hay cấu trúc template.
+
+---
+
 ## BUG-001: M1 không được chuyển khi `old_t1_id = null`
 
 - **Phát hiện**: 2026-05-27
@@ -1671,3 +1709,443 @@ Không cần.
 - `expired` task của M1 active vẫn cần hiển thị để user có thể bấm "Ở lại với T2".
 - Chỉ ẩn khi M1 đã `inactive`.
 - Rollback: Revert 2 files trên.
+
+---
+
+## BUG-033: Agent Detail lưu thông tin không tự refresh, phải F5 mới thấy mới
+
+- **Phát hiện**: 2026-06-19
+- **Status**: `fixed`
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+Trang Agent Detail → tab "Thông tin Agent" → bấm "Sửa" → đổi cấp bậc (rank) → bấm "Lưu". UI chuyển về chế độ xem nhưng vẫn hiển thị rank cũ. Phải nhấn F5 refresh toàn bộ trang thì rank mới mới được hiển thị.
+
+### 2. Root Cause
+`AgentInfoTab.tsx` sau khi gọi `supabase.from('agents').update(...)` thành công chỉ gọi `setIsEditing(false)` để chuyển về view mode, nhưng **không invalidate cache** của query `['agent', 'detail', agentId]` đang được dùng ở `AgentDetailPage.tsx`. Vì `useAgentDetailQuery` có `staleTime` 5 phút, dữ liệu cũ vẫn được giữ lại.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Dùng `useQueryClient` trong `AgentInfoTab.tsx`. Sau khi update DB thành công, invalidate:
+- `['agent', 'detail', agent.id]` — buộc `AgentDetailPage` refetch và hiển thị rank mới ngay.
+- `['agents']` — đảm bảo danh sách ở `AgentsPage` cũng cập nhật rank mới.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/agent-detail/AgentInfoTab.tsx` | Import `useQueryClient`, gọi `invalidateQueries` sau khi update thành công |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Vào Agent Detail của 1 agent có rank ASC.
+2. Bấm Sửa → đổi rank sang CS → Lưu.
+3. Verify: UI hiển thị rank "CS" ngay lập tức, không cần F5.
+4. Quay lại AgentsPage → verify cột "Cấp bậc" của agent đó cũng hiển thị "CS".
+5. Build pass. Tests pass.
+
+### 8. Notes
+- Rollback: Revert import `useQueryClient` và 2 dòng `invalidateQueries`.
+
+---
+
+## BUG-035: RequestsPage không tự cập nhật khi tạo / thay đổi request
+
+- **Phát hiện**: 2026-06-19
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Sau khi tạo request mới từ `CreateRequestModal`, badge "Requests" trên sidebar tự động cập nhật (do FEAT-002 Realtime), nhưng khi navigate sang trang Requests, request mới không xuất hiện trong danh sách. Phải nhấn F5 mới thấy.
+
+Tương tự, khi thay đổi status request trong `RequestDetailPage` (chuyển B2, hoàn tất, hủy), quay lại RequestsPage cũng có thể thấy status cũ.
+
+### 2. Root Cause
+1. `CreateRequestModal.tsx` sau khi insert request thành công chỉ gọi `onClose()`, không invalidate query `['requests']`.
+2. `RequestDetailPage.tsx` sau các action thay đổi status chỉ invalidate `['request', 'detail', id]`, không invalidate `['requests']`.
+3. `RequestsPage.tsx` subscribe Realtime chỉ khi đang mở. Khi user tạo/thay đổi request từ trang khác, subscription không active nên cache cũ vẫn còn.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+- Trong `CreateRequestModal.tsx`: sau insert thành công, invalidate `['requests']` và `['layout', 'requestCount']`.
+- Trong `RequestDetailPage.tsx`: sau các action `confirmStep2Date`, `handleConfirmChange`, `handleCancelRequest`, invalidate thêm `['requests']`.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/CreateRequestModal.tsx` | Import `useQueryClient`, invalidate `['requests']` và `['layout', 'requestCount']` sau tạo request thành công |
+| `src/pages/RequestDetailPage.tsx` | Sau các action thay đổi status, invalidate thêm `['requests']` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Từ Agent Detail, tạo request mới → modal đóng → navigate sang RequestsPage → verify request mới hiện ngay, không cần F5.
+2. Từ RequestsPage, mở 1 request đang B1 → chuyển sang B2 → quay lại RequestsPage → verify status cập nhật.
+3. Hoàn tất / hủy 1 request trong RequestDetailPage → quay lại RequestsPage → verify status cập nhật.
+4. Badge sidebar vẫn tự động cập nhật.
+5. Build pass, tests pass.
+
+### 8. Notes
+- Không cần chờ Realtime event; invalidate ngay sau mutation đảm bảo UI đồng bộ.
+- Rollback: Revert các dòng invalidate thêm.
+
+---
+
+## BUG-036: Dashboard B2 chờ phản hồi chấp thuận không cập nhật khi active B2
+
+- **Phát hiện**: 2026-06-19
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Từ Request Detail, chuyển request sang B2 (nhập ngày xác nhận). Sau khi thành công, quay về Dashboard, phần **"B2 chờ phản hồi chấp thuận"** không hiển thị request vừa chuyển. Phải F5 mới thấy.
+
+### 2. Root Cause
+`RequestDetailPage.tsx` sau action `confirmStep2Date` chỉ invalidate `['request', 'detail', id]` và `['requests']`, không invalidate `['dashboard', 'b2Requests']` — query dùng cho `B2PendingAlert` / `B2EligibleList` trong `DashboardPage.tsx`.
+
+Tương tự, các action `handleConfirmChange` và `handleCancelRequest` trong RequestDetailPage cũng cần invalidate dashboard queries để Dashboard stats và B2 list đồng bộ.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Trong `RequestDetailPage.tsx`, sau 3 action thay đổi status (`confirmStep2Date`, `handleConfirmChange`, `handleCancelRequest`), bổ sung invalidate:
+- `['dashboard', 'b2Requests']`
+- `['dashboard', 'stats']`
+- `['dashboard', 'statusCounts']`
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/pages/RequestDetailPage.tsx` | Sau mỗi action thay đổi status, invalidate dashboard queries |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Từ Request Detail của request B1, bấm "Chuyển sang B2" → nhập ngày xác nhận → Lưu.
+2. Quay về Dashboard → verify request xuất hiện trong "B2 chờ phản hồi chấp thuận", không cần F5.
+3. Từ Request Detail, hoàn tất hoặc hủy 1 request B2 → quay về Dashboard → verify request biến mất khỏi B2 pending/alert và stats cập nhật.
+4. Build pass, tests pass.
+
+### 8. Notes
+- Không cần chờ Realtime; invalidate ngay sau mutation đảm bảo Dashboard đồng bộ.
+- Rollback: Revert các dòng invalidate thêm.
+
+---
+
+## BUG-037: Dropdown "Quyền" (Google Drive Admin) sai chính tả "Ngườii" và thuật ngữ chưa khớp Google Drive
+
+- **Phát hiện**: 2026-06-26
+- **Status**: `fixed` (2026-06-26, trong **FEAT-031** — xem `PLAN-feature-dev.md`)
+- **Severity**: `low`
+
+### 1. Mô tả bug
+Trong trang **Google Drive Admin** (`/admin/google-drive`) → tab **Cấp quyền** (`SetPermissionsForm`), dropdown **"Quyền"** hiển thị 3 option bị **sai chính tả "Ngườii"** (thừa chữ *i*):
+- "Ngườii xem (reader)"
+- "Ngườii bình luận (commenter)"
+- "Ngườii chỉnh sửa (writer)"
+
+Ngoài lỗi chính tả, thuật ngữ chưa khớp với nhãn chuẩn tiếng Việt của Google Drive (reader = "Ngườii xem", commenter = "Ngườii nhận xét", writer/editor = "Ngườii chỉnh sửa").
+
+### 2. Root Cause
+Hardcode trong biến `roleOptions` tại `src/components/apps-script/SetPermissionsForm.tsx:12-16`.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Chỉ sửa phần `label` của `roleOptions`, giữ nguyên `value`:
+- "Ngườii xem (reader)" → "Ngườii xem (reader)"
+- "Ngườii bình luận (commenter)" → "Ngườii nhận xét (commenter)"
+- "Ngườii chỉnh sửa (writer)" → "Ngườii chỉnh sửa (writer)"
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/apps-script/SetPermissionsForm.tsx` | Sửa `label` của 3 phần tử `roleOptions` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Mở `/admin/google-drive` → tab "Cấp quyền".
+2. Mở dropdown "Quyền" → verify không còn "Ngườii".
+3. Build pass.
+
+### 8. Notes
+- Đây là pure UI label fix, không ảnh hưởng logic.
+
+---
+
+## BUG-038: Thanh "đã chọn" trong cây Drive thiếu nút "Tạo folder theo template"
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed`
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+Trong **Drive Manager → Cây Drive → [mở 1 cây]**, khi tick checkbox chọn folder, thanh hành động cuối bảng chỉ hiển thị **1 nút "Cấp quyền"**. Không có nút "Tạo folder theo template" cho folder đang chọn.
+
+### 2. Root Cause
+`TreeDetailView.tsx` — khối render thanh selection chỉ có nút "Cấp quyền". Action `createFromTemplate` chỉ được expose trong menu `⋮` từng dòng.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+1. Thêm prop `onCreateFromTemplate` vào `TreeDetailView`.
+2. Trong thanh selection: khi `selectedIds.size === 1`, hiển thị thêm nút **"Tạo folder theo template"**.
+3. Khi `selectedIds.size > 1`: không hiển thị nút này.
+4. Trong `DriveManagerPage.tsx`: truyền `onCreateFromTemplate` xuống `TreeDetailView`, mở `CreateFromTemplateModal`.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/drive-manager/TreeDetailView.tsx` | Thêm prop + nút "Tạo folder theo template" trong thanh selection |
+| `src/pages/DriveManagerPage.tsx` | Truyền `onCreateFromTemplate` xuống `TreeDetailView`, mở modal |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Mở 1 cây Drive → tick 1 folder → verify thanh có cả "Cấp quyền" và "Tạo folder theo template".
+2. Bấm "Tạo folder theo template" → modal mở đúng folder → tạo thành công.
+3. Tick 2+ folder → verify nút bị ẩn/disable.
+4. Build pass.
+
+### 8. Notes
+- Phụ thuộc: muốn tạo được folder từ template thì template phải lưu được (xem **BUG-039**).
+
+---
+
+## BUG-039: Không lưu được template Drive — DB còn cột `levels`, code dùng `root` + lỗi bị nuốt
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Trong **Drive Manager → Template**, mở editor tạo/sửa template, bấm **Lưu** không có tác dụng: template không được lưu, không có thông báo lỗi. Modal đứng im.
+
+### 2. Root Cause
+Lệch schema giữa code và DB:
+- Code dùng cột **`root`** (cây nested `{ name, permissions, children }`).
+- DB bảng `drive_templates` (migration `020_drive_manager.sql`) chỉ có cột **`levels JSONB NOT NULL`**, **không có cột `root`**.
+
+→ `insert`/`update` cột `root` bị PostgREST từ chối. Lỗi không hiển thị vì `handleCreateTemplate` / `handleUpdateTemplate` không có try/catch.
+
+### 3. SQL Verify
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'drive_templates';
+```
+
+### 4. Solution
+**Phần A — DB:**
+Tạo migration `021_drive_templates_root.sql` và chạy tay:
+```sql
+ALTER TABLE public.drive_templates
+  ADD COLUMN IF NOT EXISTS root JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE public.drive_templates ALTER COLUMN levels DROP NOT NULL;
+```
+
+**Phần B — Frontend:**
+Bọc try/catch + toast lỗi trong `handleCreateTemplate` và `handleUpdateTemplate` (`DriveManagerPage.tsx`).
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `webapp/supabase/migrations/021_drive_templates_root.sql` | **MỚI** — ADD COLUMN `root`, DROP NOT NULL `levels` |
+| `src/pages/DriveManagerPage.tsx` | Thêm try/catch + toast lỗi cho create/update template |
+
+### 6. Schema / SQL changes
+Có — xem mục 4 phần A. **Bắt buộc chạy tay** trên Supabase production.
+
+### 7. Test Plan
+1. Chạy ALTER trong Supabase SQL Editor → verify cột `root` tồn tại.
+2. Reload app → Template → "Thêm template" → điền tên + cây → Lưu → toast "Đã tạo template".
+3. Sửa template đã có → Lưu → toast "Đã cập nhật template".
+4. Build pass.
+
+### 8. Notes
+- Sau khi lưu được template, nút ở **BUG-038** mới thực sự dùng được.
+
+---
+
+## BUG-040: `createFolderTree` lỗi "Template thiếu root folder" + không chạy trên Shared Drive
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed`
+- **Severity**: `high`
+
+### 1. Mô tả bug
+Trong Drive Manager, chọn 1 folder Shared Drive → "Tạo folder theo template" → "Tạo folder". Toast báo lỗi generic. Tab Lịch sử ghi nhận:
+1. Ban đầu: `Unknown action: createFolderTree` — do bản Apps Script deploy chưa cập nhật.
+2. Sau đó: **`Template thiếu root folder`** — lỗi logic trong `createFolderTree`.
+
+### 2. Root Cause
+**Lệch contract frontend ↔ Apps Script:**
+- Frontend gửi `template: template.root` — tức **chính node gốc** `{ name, permissions, children }`.
+- Apps Script lại đọc `params.template.root` — lồng thêm 1 lớp → `undefined`.
+
+**Rủi ro Shared Drive:** `createFolderTree` cũ dùng `DriveApp`, hạn chế trên Shared Drive.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Viết lại `createFolderTree` trong `webapp/docs/FEAT-030-apps-script.gs`:
+1. Đọc `params.template` **trực tiếp** làm node gốc.
+2. Thay `DriveApp` → **Advanced Drive Service**: `Drive.Files.create(...)` với `supportsAllDrives: true`.
+3. Áp quyền template qua `Drive.Permissions.create`.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `webapp/docs/FEAT-030-apps-script.gs` | Rewrite `createFolderTree` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. Copy `.gs` mới lên Apps Script → Deploy → Phiên bản mới.
+2. Drive Manager → chọn folder **My Drive** → tạo từ template → verify thành công.
+3. Lặp lại với folder **Shared Drive** → verify thành công.
+
+### 8. Notes
+- Mỗi lần sửa `.gs` phải Deploy → Phiên bản mới mới có hiệu lực.
+- Rollback: revert `createFolderTree` về bản DriveApp + Deploy lại.
+
+---
+
+## BUG-041: Quyền template lệch với Shared Drive — app cho chọn `organizer` + nuốt lỗi áp quyền
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed`
+- **Severity**: `medium`
+
+### 1. Mô tả bug
+Khi tạo folder từ template / cấp quyền trong Drive Manager:
+1. Quyền hiển thị trong app **lệch** với quyền thật trên Shared Drive.
+2. Không set được vai trò **"Ngườii quản lý"** (`organizer`) cho ngườii khác — trên Shared Drive mức cao nhất chỉ là **"Ngườii quản lý nội dung"** (`fileOrganizer`).
+
+### 2. Root Cause
+**Giới hạn nền tảng của Google:** `organizer` chỉ gán được ở cấp Shared Drive (cả ổ), **KHÔNG** gán được cho folder/file con bên trong. API trả lỗi `Organizer role is only valid for shared drives`.
+
+**Lỗi UX của app:**
+- App vẫn cho chọn `organizer` trong editor template và form cấp quyền.
+- Khi `createFolderTree` áp `organizer` lên folder con, Google từ chối nhưng lỗi bị bắt và nuốt âm thầm.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+**A — Bỏ `organizer` khỏi danh sách role chọn được ở cấp folder/template** (giữ tối đa `fileOrganizer`).
+
+**B — Nổi lỗi áp quyền sau khi tạo folder từ template:** đọc `permissionsApplied[].error`; nếu có quyền áp lỗi → toast warning liệt kê folder + email + role lỗi.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/drive-manager/template-editor-utils.ts` | Bỏ `'organizer'` khỏi `DRIVE_ROLES` |
+| `src/components/drive-manager/TemplateEditorModal.tsx` | Đổi default local organizer→fileOrganizer; thêm hint |
+| `src/components/apps-script/SetPermissionsForm.tsx` | `SHARED_ONLY_ROLES` bỏ `'organizer'` |
+| `src/types/index.ts` | Thêm `AppliedPermission`, `CreatedFolderNode`, `CreateFolderTreeResult` |
+| `src/components/drive-manager/create-folder-tree-utils.ts` | **Mới** — pure `collectPermissionFailures` / `formatPermissionFailures` |
+| `src/components/drive-manager/create-folder-tree-utils.test.ts` | **Mới** — regression test |
+| `src/pages/DriveManagerPage.tsx` | `executeAction` thêm `silentSuccess`; `handleCreateFromTemplate` báo warning |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. `npm run build` + `npm run test` pass.
+2. Editor template: dropdown "Quyền" chỉ còn tới "Ngườii quản lý nội dung", không còn "Ngườii quản lý".
+3. Tạo folder từ template trên Shared Drive với template cũ còn `organizer` → toast **warning** liệt kê quyền áp lỗi.
+4. Tạo folder mà mọi quyền áp OK → toast "Đã tạo folder từ template".
+
+### 8. Notes
+- Nếu sau này cần cấp **Manager toàn ổ chung**: thêm action riêng gán `organizer` với `fileId = ID Shared Drive` (gốc ổ).
+
+---
+
+## BUG-042: Thanh "đã chọn" trong cây Drive đặt dưới bảng, không sticky (lệch pattern FEAT-032)
+
+- **Phát hiện**: 2026-06-27
+- **Status**: `fixed`
+- **Severity**: `low`
+
+### 1. Mô tả bug
+Trong `TreeDetailView` (cây Drive), khi tick chọn folder, thanh hành động "đã chọn" hiện **bên dưới bảng**, không sticky. Cây dài → thanh trôi xuống đái trang, khó thao tác.
+
+### 2. Root Cause
+`TreeDetailView` render thanh trong block riêng sau `<DriveTreeTable>`, ngoài hộp cuộn của bảng nên không thể sticky. `ScanResultsTable` (FEAT-032) ngược lại đặt thanh `sticky top-0 z-20` **bên trong** hộp cuộn.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Chuyển thanh vào trong `DriveTreeTable` (nơi có hộp cuộn), `sticky top-0 z-20`, ngay trên `<thead>`; khi có chọn → `<thead>` dùng `top-11`.
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/drive-manager/DriveTreeTable.tsx` | Thêm thanh sticky-top trong hộp cuộn; props mới `onBulkGrant`/`onCreateFromTemplate`/`onClearSelection`; `<thead>` → `top-11` |
+| `src/components/drive-manager/TreeDetailView.tsx` | Bỏ block thanh cũ dưới bảng; truyền handler xuống `DriveTreeTable` |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. `npm run build` + `npm run lint` xanh; `npm run test` pass.
+2. Cây Drive dài: tick 1 folder → thanh "đã chọn" dính đỉnh bảng.
+3. So sánh với tab Quét folder → cùng pattern.
+
+### 8. Notes
+- Thay đổi UI thuần, không đụng logic chọn/filter/action menu.
+
+---
+
+## BUG-043: Thanh sticky "đã chọn" trong suốt — dòng cuộn lộ xuyên qua
+
+- **Phát hiện**: 2026-06-27 (regression của BUG-042)
+- **Status**: `fixed`
+- **Severity**: `low`
+
+### 1. Mô tả bug
+Khi cuộn bảng, nội dung các dòng phía sau **lộ xuyên qua** thanh sticky "đã chọn".
+
+### 2. Root Cause
+Thanh dùng nền `bg-accent-subtle` = token `--accent-primary-subtle: rgba(74, 56, 245, 0.1)` — **alpha 0.1**, trong suốt 90% → dòng cuộn hiện xuyên qua.
+
+### 3. SQL Verify
+Không cần.
+
+### 4. Solution
+Bọc 2 lớp: ngoài `sticky top-0 z-20 bg-bg-primary` (đục) → trong giữ `h-11 … bg-accent-subtle border-b border-accent/20` (tint 0.1 đè lên nền đục).
+
+### 5. Files cần sửa
+| File | Thay đổi |
+|------|----------|
+| `src/components/drive-manager/DriveTreeTable.tsx` | Bọc thanh sticky bằng lớp ngoài `bg-bg-primary` đục |
+| `src/components/apps-script/ScanResultsTable.tsx` | Sửa y hệt cho đồng nhất |
+
+### 6. Schema / SQL changes
+Không cần.
+
+### 7. Test Plan
+1. `npm run build` + `npm run lint` + `npm run test` pass.
+2. Cuộn cây Drive khi đang chọn → thanh sticky đục, không còn lộ chữ phía sau.
+3. Lặp lại ở tab Quét folder.
+
+### 8. Notes
+- Bài học: token `*-subtle` có alpha → không dùng trực tiếp làm nền cho phần tử sticky/overlay; phải có lớp nền đục bên dưới. Đã ghi KNOWLEDGE 8.9.

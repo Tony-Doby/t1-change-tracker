@@ -1,73 +1,38 @@
-# React + TypeScript + Vite
+# TDhome
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Ứng dụng React/Vite theo dõi quy trình thay đổi T1. App dùng Supabase cho Auth, dữ liệu và Edge Functions; Google Drive được quản lý qua Apps Script proxy.
 
-Currently, two official plugins are available:
+## Bắt đầu
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Thiết lập `.env` với:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```env
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
 ```
+
+## Kiểm tra
+
+```bash
+npm run test
+npm run verify
+```
+
+`verify` chạy TypeScript, production build và ESLint. Không commit hoặc deploy nếu chưa có yêu cầu rõ ràng.
+
+Ghi chú trạng thái: review ngày 2026-08-13 xác nhận `npm run build` và `npm run test` (98 tests) pass. Nếu `npm run lint` không kết thúc trong môi trường giới hạn thời gian, hãy chạy lại trong local/CI và chỉ ghi nhận pass khi có kết quả hoàn chỉnh.
+
+## Tài liệu
+
+- [Quy tắc làm việc](docs/AGENTS.md)
+- [Technical knowledge & business rules](docs/KNOWLEDGE.md)
+- [Tiến độ nhanh](docs/PROGRESS.md)
+- [Changelog](docs/CHANGELOG.md)
+- [Feature plans](docs/PLAN-feature-dev.md) và [bug plans](docs/PLAN-bug-fixes.md)
+
+Lưu ý: migration SQL trong `supabase/migrations/` là file local; mọi schema change cho production phải chạy thủ công trong Supabase SQL Editor.

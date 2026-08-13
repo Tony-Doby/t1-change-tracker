@@ -3,7 +3,7 @@
 > File này là **bản tóm tắt nhanh** để nối lại công việc sau khi ngưng.  
 > **Đọc kèm** `AGENTS.md` + `KNOWLEDGE.md` để nắm gotchas & constraints.  
 > **Xem trạng thái feature chi tiết** tại `PLAN-feature-dev.md` → Feature Registry.  
-> Cập nhật: 2026-06-26
+> Cập nhật: 2026-08-13 — review source, integration và tài liệu hiện hành.
 
 ---
 
@@ -35,14 +35,14 @@ npm run test:watch # vitest watch mode
 ```
 webapp/
 ├── src/
-│   ├── components/           # Layout, Toast, Modal, CommandPalette, NotificationDropdown, Skeleton, EmptyState, Pagination, FormField, FormSection...
-│   ├── pages/                # DashboardPage, AgentsPage, AgentDetailPage, RequestsPage, RequestDetailPage, RanksPage, DivisionsPage, UploadPage, TrashPage, HolidaysPage, ActivityLogPage, EmailTemplatesPage...
-│   ├── hooks/                # useAuth, useDebounce, useFocusTrap
+│   ├── components/           # Shared UI + feature folders (agent-detail, dashboard, drive-manager, excel-generator, request-detail...)
+│   ├── pages/                # 16 pages, gồm ChangePasswordPage, ExcelGeneratorPage và DriveManagerPage
+│   ├── hooks/                # useAuth, useDebounce, useFocusTrap, queries/ (TanStack Query hooks)
 │   ├── ui/                   # Twenty primitives: theme, layout, display, input, navigation, feedback
 │   ├── lib/                  # supabase.ts, eligibility.ts, request-actions.ts, agent-actions.ts, date-utils.ts, constants.ts
 │   ├── types/                # index.ts — tất cả TypeScript interfaces
-│   ├── App.tsx               # Routing 13 routes + PageTransition
-│   ├── main.tsx              # QueryClientProvider (TanStack Query) + AuthProvider + ToastProvider
+│   ├── App.tsx               # 16 route declarations + guards ProtectedRoute/AdminRoute + PageTransition
+│   ├── main.tsx              # QueryClientProvider + AuthProvider + ToastProvider + DialogProvider
 │   └── index.css             # Design tokens, animations, print CSS
 ├── supabase/migrations/      # SQL schema + RPC + triggers + RLS
 ├── docs/                     # AGENTS.md, KNOWLEDGE.md, CHANGELOG.md, PLAN-feature-dev.md, PLAN-bug-fixes.md, UI-DESIGN.md, PROGRESS.md (file này)
@@ -74,5 +74,20 @@ Nói với AI những cụm từ trigger sau:
 | *"Search presets server-side"* | FEAT-005 — RPC `search_agents` + bật presets |
 | ~~*"Schema v2 hoàn chỉnh"*~~ | ~~FEAT-006 — UI dùng hết cột mới, upload headers mới~~ |
 | ~~*"Deactivation hoàn chỉnh"*~~ | ~~FEAT-007 — Tab lịch sử chấm dứt ở AgentDetailPage~~ |
+| ~~*"Sidebar gom nhóm + page-tabs"*~~ | ~~FEAT-038 — Agent Panel / Tools / Settings, navigation config tập trung~~ |
 
 > ⚠️ **Tất cả feature trên đều phải lập plan trong `PLAN-feature-dev.md` trước khi code.** Xem `AGENTS.md` section 4.
+
+---
+
+## Trạng thái đã xác minh
+
+- Review 2026-08-13: **164** file source TypeScript/TSX (không gồm test), **7** test file với **98** test case khai báo.
+- `npm.cmd run build`: **pass** (TypeScript + Vite production build) ngày 2026-08-13. Bundle chính là 960 kB minified / 258 kB gzip; Vite cảnh báo chunk vượt 600 kB.
+- `npm.cmd run test`: **pass — 7 test files, 98 tests** ngày 2026-08-13. Lần timeout trước là do giới hạn 60 giây khi chạy chung với các kiểm tra khác, không phải test failure.
+- `npm.cmd run lint` chưa có kết quả hoàn chỉnh trong môi trường review; chạy lại riêng trong local/CI trước khi xác nhận `npm run verify` xanh.
+- Điều hướng sidebar/page-tabs lấy từ `src/config/navigation.ts` (`NAV_GROUPS`); route vẫn khai báo tại `src/App.tsx` và phải khớp path.
+- `/admin/google-drive` hiện là **Drive Manager** (Cây Drive / Quét folder / Template / Lịch sử), thay cho `AppsScriptAdminPage` cũ.
+- Google Drive folder/template chỉ cho chọn tối đa `fileOrganizer`; `organizer` chỉ hợp lệ ở cấp Shared Drive, không áp cho folder/file con.
+- `staff_id` là key ghi/import; `agent_code` vẫn là field legacy read-only trong `Agent` và Agent Detail. Request contract còn `step4`/`step5` dù product flow là B1 → B2 → B3.
+- Upload Agent hiện chưa có Web Worker/batch import và dùng SheetJS cho CSV; xem `REFACTOR-007` trước khi thay đổi luồng này.
